@@ -10,14 +10,18 @@ record SectionRecord(
     string Subject,
     string CourseNumber,
     string SectionNumber,
-    string Title,
-    List<string> instructors,
-    string component,
-    string type,
-    int units
+    string? Title,
+    List<string> Instructors,
+    string? Component,
+    string? Type,
+    int? Units,
+    string? Location,
+    string? Times
+
+
 );
 class MainSearchScraper{
-    static Dictionary<string, SectionRecord> Scrape(string url)
+    public static Dictionary<string, SectionRecord> Scrape(string url)
     {
         var doc = new HtmlDocument();
         doc.Load("samples/cs.html");
@@ -25,7 +29,7 @@ class MainSearchScraper{
         conn.Open();
         conn.Execute("PRAGMA foreign_keys = ON;");
 
-        var header = CleanText(
+        var header = ScraperUtils.CleanText(
             doc.DocumentNode.SelectSingleNode("//h1").InnerText);
 
         var sectionCards = doc.DocumentNode.SelectNodes(
@@ -51,7 +55,7 @@ class MainSearchScraper{
                 Console.WriteLine($"WARNING: Couldent find h3 tags in card: {card.InnerHtml}:");
                 continue;
             }
-            var titleText = CleanText(courseTitle.InnerText);
+            var titleText = ScraperUtils.CleanText(courseTitle.InnerText);
 
             if (! TryParseSectionTitle(titleText, out var subject, out var courseNumber, out var section, out var title))
             {
@@ -65,34 +69,27 @@ class MainSearchScraper{
                 Console.WriteLine($"WARNING: couldent find li tags in {card.InnerHtml}");
                 continue;
             }
-            if (! TryParseSectionInfo(lis, card.InnerHtml , out var instructors, out var component, out var type, out var units)){
-                continue;
-            }
+            ParseSectionInfo(lis, out var instructors, out var component, out var type, out var units);
+            var times = ParseDaysTimes(card);
+            var location = ParseLocation(card);
+
             var id = $"{semester}{year}:{subject}:{courseNumber}:{section}";
-            sections[id] = new SectionRecord($"{semester}{year}", subject, courseNumber, section, title, instructors, component, type, units);
-
-
+            sections[id] = new SectionRecord(
+                $"{semester}{year}", subject, courseNumber,
+                   section, title, instructors, component,
+                   type, units, location, times);
         }
         return sections;
 
     }
-    static string CleanText(string? text)
-    {
-        if (string.IsNullOrEmpty(text)) return "";
 
-        return Regex
-            .Replace(HtmlEntity.DeEntitize(text), @"\s+", " ")
-            .Trim();
-    }
     static string GetFirstSpanText(HtmlNode li)
     {
         var span = li.SelectSingleNode(".//span");
         if (span == null)
-        {
-            Console.WriteLine($"WARNING: Couldent extract span from {li.InnerText}");
             return string.Empty;
-        }
-        return CleanText(span.InnerText);
+
+        return ScraperUtils.CleanText(span.InnerText);
     }
 
     static bool TryParseHeader(string header, out string? semester, out string? year)
@@ -130,16 +127,15 @@ class MainSearchScraper{
         title = titleMatch.Groups["title"].Value;
         return true;
     }
-    static bool TryParseSectionInfo(HtmlNodeCollection lis ,string cardText, out List<string> instructors, out string component, out string type, out int units)
+    static void ParseSectionInfo(HtmlNodeCollection lis, out List<string> instructors, out string? component, out string? type, out int? units)
     {
         instructors = new List<string>();
-        component = type = string.Empty;
-        units = 0;
-        var unitsMissing = false;
+        component = type = null;
+        units = null;
 
         foreach (var li in lis)
         {
-            var liText = CleanText(li.InnerText);
+            var liText = ScraperUtils.CleanText(li.InnerText);
             var parts = liText.Split(':', 2);
             if (parts.Length < 2) continue;
 
@@ -150,12 +146,9 @@ class MainSearchScraper{
                 case "Instructor":
                     foreach (var a in li.SelectNodes(".//a") ?? Enumerable.Empty<HtmlNode>())
                     {
-                        if (string.IsNullOrWhiteSpace(a.InnerText))
-                        {
-                            instructors = new List<string>();
-                            break;
-                        }
-                        instructors.Add(CleanText(a.InnerText));
+                        var name = ScraperUtils.CleanText(a.InnerText);
+                        if (!string.IsNullOrWhiteSpace(name))
+                            instructors.Add(name);       
                     }
                     break;
 
@@ -169,38 +162,53 @@ class MainSearchScraper{
 
                 case "Units":
                     var unitText = GetFirstSpanText(li);
-                    if (unitText == "--") unitsMissing = true; 
-                    else if (double.TryParse(unitText, out var doubleUnits))
+                    if (double.TryParse(unitText, out var doubleUnits))
                         units = (int)doubleUnits;
                     break;
             }
         }
-        // Validation:
-        if (instructors.Count == 0)
-        {
-            Console.WriteLine($"WARNING: Could not parse instructor for {cardText}");
-            return false;
-        }
-        if (component == string.Empty)
-        {
-            Console.WriteLine($"WARNING: Could not parse component for {cardText}");
-            return false;
-        }
-        if (type == string.Empty)
-        {
-            Console.WriteLine($"WARNING: Could not parse type for {cardText}");
-            return false;
-        }
-        if (units == 0)
-        {
-            // Units may be "--" for labs or other non-credit sections
-            if (unitsMissing) return true;
+    }
+    static string? ParseDaysTimes(HtmlNode card)
+    {
+        var table = card.SelectSingleNode(".//table[contains(@class,'time-table')]");
+        if (table == null)
+            return null;
 
-            Console.WriteLine($"WARNING: Could not parse units for {cardText}");
-            return false;
+        var days = table.SelectNodes(".//span[@data-day]");
+        var times = table.SelectNodes(".//span[@data-time]");
+
+        if (days == null || times == null)
+            return null;
+
+        var results = new List<string>();
+
+        for (int i = 0; i < Math.Min(days.Count, times.Count); i++)
+        {
+            var dayText = ScraperUtils.CleanText(days[i].InnerText);
+            var timeText = ScraperUtils.CleanText(times[i].InnerText);
+            results.Add($"{dayText}/{timeText}");
         }
 
-        return true;
+        return results.Count > 0 ? string.Join("; ", results) : null;
+    }
+    static string? ParseLocation(HtmlNode card)
+    {
+        var table = card.SelectSingleNode(".//table[contains(@class,'time-table')]");
+        if (table == null)
+            return null;
+
+        var locations = table.SelectNodes(".//th[@data-building-code]//a");
+        if (locations == null)
+            return null;
+
+        var results = new List<string>();
+
+        foreach (var location in locations)
+        {
+            results.Add(ScraperUtils.CleanText(location.InnerText));
+        }
+
+        return results.Count > 0 ? string.Join(", ", results) : null;
     }
 
 }
