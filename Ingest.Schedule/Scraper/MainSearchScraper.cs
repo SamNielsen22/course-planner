@@ -1,10 +1,5 @@
-﻿using System.Data;
-using Dapper;
-using Microsoft.Data.Sqlite;
-using HtmlAgilityPack;
+﻿using HtmlAgilityPack;
 using System.Text.RegularExpressions;
-using System.Diagnostics;
-using System.Numerics;
 record SectionRecord(
     string Term,
     string Subject,
@@ -17,35 +12,27 @@ record SectionRecord(
     int? Units,
     string? Location,
     string? Times
-
-
 );
 class MainSearchScraper{
-    public static Dictionary<string, SectionRecord> Scrape(string url)
+    public static HashSet<SectionRecord> Scrape(HtmlDocument doc)
     {
-        var doc = new HtmlDocument();
-        doc.Load("samples/cs.html");
-        using IDbConnection conn = new SqliteConnection("Data Source=data/courseplanner.db");
-        conn.Open();
-        conn.Execute("PRAGMA foreign_keys = ON;");
-
         var header = ScraperUtils.CleanText(
-            doc.DocumentNode.SelectSingleNode("//h1").InnerText);
+        doc.DocumentNode.SelectSingleNode("//h1")?.InnerText);
+        var sectionCards = doc.DocumentNode.SelectNodes("//div[contains(@class,'class-info')]");
 
-        var sectionCards = doc.DocumentNode.SelectNodes(
-            "//div[contains(@class,'class-info')]");
+
         if (sectionCards == null)
         {
             Console.WriteLine($"WARNING: Couldent find section cards");
-            return new Dictionary<string, SectionRecord>();
+            return new HashSet<SectionRecord>();
         }
 
         if (! TryParseHeader(header, out var semester, out var year))
         {
             Console.WriteLine($"WARNING: Couldent pase header {header}");
-            return new Dictionary<string, SectionRecord>();
+            return new HashSet<SectionRecord>();
         }
-        var sections = new Dictionary<string, SectionRecord>();
+        var sections = new HashSet<SectionRecord>();
 
         foreach (var card in sectionCards)
         {
@@ -74,10 +61,10 @@ class MainSearchScraper{
             var location = ParseLocation(card);
 
             var id = $"{semester}{year}:{subject}:{courseNumber}:{section}";
-            sections[id] = new SectionRecord(
+            sections.Add(new SectionRecord(
                 $"{semester}{year}", subject, courseNumber,
                    section, title, instructors, component,
-                   type, units, location, times);
+                   type, units, location, times));
         }
         return sections;
 
@@ -112,7 +99,7 @@ class MainSearchScraper{
     static bool TryParseSectionTitle(string h3, out string subject, out string courseNumber, out string section, out string title)
     {
 
-        var titleMatch = Regex.Match(h3, @"^(?<subj>[A-Z]+)\s+(?<num>\d+)\s*-\s*(?<sec>\S+)\s+(?<title>.+)$");
+        var titleMatch = Regex.Match(h3, @"^(?<subj>[A-Z ]+)\s+(?<num>\d+)\s*-\s*(?<sec>\S+)\s+(?<title>.+)$");
         if (!titleMatch.Success)
         {
             Console.WriteLine($"WARNING: Failed to parse section title {h3}");

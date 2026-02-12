@@ -10,4 +10,16 @@ static class ScraperUtils
             .Replace(HtmlEntity.DeEntitize(text), @"\s+", " ")
             .Trim();
     }
+    static readonly HttpClient http = new HttpClient();
+    public static HtmlDocument LoadFromUrl(string url)
+    {
+        Thread.Sleep(300);
+        var html = http.GetStringAsync(url).Result;
+
+        var doc = new HtmlDocument();
+        doc.LoadHtml(html);
+
+        return doc;
+    }
+
 }
