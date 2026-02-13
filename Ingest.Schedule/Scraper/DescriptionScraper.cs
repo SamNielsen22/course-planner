@@ -1,18 +1,19 @@
 using HtmlAgilityPack;
 
-public record CourseDetails(string Description, string Prerequisites);
+public record DetailsRecord(string Description, string Prerequisites);
 
 public static class DescriptionScraper
 {
-    public static CourseDetails Scrape(HtmlDocument doc)
+    public static DetailsRecord Scrape(string url)
     {
-        string description = "";
-        string prerequisites = "";
+        var doc = ScraperUtils.LoadFromUrl(url);
+        var description = "";
+        var prerequisites = "";
 
         var cards = doc.DocumentNode.SelectNodes("//div[contains(@class,'card')]");
 
         if (cards == null)
-            return new CourseDetails(description, prerequisites);
+            return new DetailsRecord(description, prerequisites);
 
         foreach (var card in cards)
         {
@@ -48,6 +49,6 @@ public static class DescriptionScraper
             }
         }
 
-        return new CourseDetails(description, prerequisites);
+        return new DetailsRecord(description, prerequisites);
     }
 }

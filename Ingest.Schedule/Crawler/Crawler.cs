@@ -47,15 +47,15 @@ public class Crawler
         """;
 
         Console.WriteLine($"Fetching subjects from {indexUrl}");
-        var subjects = SubjectScraper.Scrape(ScraperUtils.LoadFromUrl(indexUrl));
-        Console.WriteLine($"Found {subjects.Count} subjects");
+        var queries = SubjectScraper.Scrape(indexUrl);
+        Console.WriteLine($"Found {queries.Count} subjects");
 
-        foreach (var subject in subjects)
+        foreach (var query in queries)
         {
-            var classListUrl = baseUrl + "class_list.html?subject=" + subject;
-            Console.WriteLine($"Scraping subject {subject}: {classListUrl}");
+            var classListUrl = baseUrl + "class_list.html?" + query;
+            Console.WriteLine($"Scraping subject {query.Split("=")[1]}: {classListUrl}");
 
-            var sectionInfo = MainSearchScraper.Scrape(ScraperUtils.LoadFromUrl(classListUrl));
+            var sectionInfo = MainSearchScraper.Scrape(classListUrl);
             Console.WriteLine($" sections: {sectionInfo.Count}");
 
             var seenCourses = new HashSet<string>();
@@ -68,11 +68,11 @@ public class Crawler
                 if (seenCourses.Add(classKey))
                 {
                     var detailsUrl =
-                        baseUrl + "description.html?subj=" + Uri.EscapeDataString(section.Subject) +
-                        "&catno=" + Uri.EscapeDataString(section.CourseNumber) +
-                        "&section=" + Uri.EscapeDataString(section.SectionNumber);
+                        baseUrl + "description.html?subj=" + section.Subject +
+                        "&catno=" + section.CourseNumber +
+                        "&section=" + section.SectionNumber;
 
-                    var details = DescriptionScraper.Scrape(ScraperUtils.LoadFromUrl(detailsUrl));
+                    var details = DescriptionScraper.Scrape(detailsUrl);
 
                     database.Execute(upsertCourseSql, new
                     {

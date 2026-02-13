@@ -1,4 +1,5 @@
 ﻿using HtmlAgilityPack;
+using System.Reflection.Metadata;
 using System.Text.RegularExpressions;
 record SectionRecord(
     string Term,
@@ -14,15 +15,30 @@ record SectionRecord(
     string? Times
 );
 class MainSearchScraper{
-    public static HashSet<SectionRecord> Scrape(HtmlDocument doc)
+    public static HashSet<SectionRecord> Scrape(string url)
     {
+        var doc = ScraperUtils.LoadFromUrl(url);
         var header = ScraperUtils.CleanText(
-        doc.DocumentNode.SelectSingleNode("//h1")?.InnerText);
+        doc.DocumentNode.SelectSingleNode("//h1").InnerText);
         var sectionCards = doc.DocumentNode.SelectNodes("//div[contains(@class,'class-info')]");
-
 
         if (sectionCards == null)
         {
+            var branches = SubjectScraper.Scrape(url);
+
+            if (branches.Count > 0)
+            {
+                var baseUrl = url.Split("subject=")[0];
+                var combined = new HashSet<SectionRecord>();
+                foreach (var branch in branches)
+                {
+                    var classListUrl = baseUrl + branch;
+                    combined.UnionWith(Scrape(classListUrl));
+                }
+
+                return combined;
+            }
+
             Console.WriteLine($"WARNING: Couldent find section cards");
             return new HashSet<SectionRecord>();
         }
@@ -38,7 +54,8 @@ class MainSearchScraper{
         {
             var courseTitle = card.SelectSingleNode(".//h3");
             
-            if (courseTitle == null){
+            if (courseTitle == null)
+            {
                 Console.WriteLine($"WARNING: Couldent find h3 tags in card: {card.InnerHtml}:");
                 continue;
             }
@@ -197,6 +214,7 @@ class MainSearchScraper{
 
         return results.Count > 0 ? string.Join(", ", results) : null;
     }
+
 
 }
 

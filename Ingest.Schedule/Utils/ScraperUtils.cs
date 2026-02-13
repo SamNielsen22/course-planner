@@ -13,7 +13,7 @@ static class ScraperUtils
     static readonly HttpClient http = new HttpClient();
     public static HtmlDocument LoadFromUrl(string url)
     {
-        Thread.Sleep(300);
+        Thread.Sleep(150);
         var html = http.GetStringAsync(url).Result;
 
         var doc = new HtmlDocument();
