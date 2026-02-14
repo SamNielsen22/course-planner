@@ -12,42 +12,29 @@ record SectionRecord(
     string? Type,
     int? Units,
     string? Location,
-    string? Times
+    string? Times,
+    string? Description, 
+    string? Prerequisites
 );
 class MainSearchScraper{
-    public static HashSet<SectionRecord> Scrape(string url)
+    public static HashSet<SectionRecord> Scrape(HtmlDocument doc)
     {
-        var doc = ScraperUtils.LoadFromUrl(url);
-        var header = ScraperUtils.CleanText(
+        var header = HtmlUtils.CleanText(
         doc.DocumentNode.SelectSingleNode("//h1").InnerText);
-        var sectionCards = doc.DocumentNode.SelectNodes("//div[contains(@class,'class-info')]");
-
-        if (sectionCards == null)
-        {
-            var branches = SubjectScraper.Scrape(url);
-
-            if (branches.Count > 0)
-            {
-                var baseUrl = url.Split("subject=")[0];
-                var combined = new HashSet<SectionRecord>();
-                foreach (var branch in branches)
-                {
-                    var classListUrl = baseUrl + branch;
-                    combined.UnionWith(Scrape(classListUrl));
-                }
-
-                return combined;
-            }
-
-            Console.WriteLine($"WARNING: Couldent find section cards");
-            return new HashSet<SectionRecord>();
-        }
-
         if (! TryParseHeader(header, out var semester, out var year))
         {
             Console.WriteLine($"WARNING: Couldent pase header {header}");
             return new HashSet<SectionRecord>();
         }
+
+        var sectionCards = doc.DocumentNode.SelectNodes("//div[contains(@class,'class-info')]");
+        if (sectionCards == null)
+        {
+            Console.WriteLine($"WARNING: Couldent find section cards");
+            return new HashSet<SectionRecord>();
+        }
+
+
         var sections = new HashSet<SectionRecord>();
 
         foreach (var card in sectionCards)
@@ -59,7 +46,7 @@ class MainSearchScraper{
                 Console.WriteLine($"WARNING: Couldent find h3 tags in card: {card.InnerHtml}:");
                 continue;
             }
-            var titleText = ScraperUtils.CleanText(courseTitle.InnerText);
+            var titleText = HtmlUtils.CleanText(courseTitle.InnerText);
 
             if (! TryParseSectionTitle(titleText, out var subject, out var courseNumber, out var section, out var title))
             {
@@ -76,13 +63,13 @@ class MainSearchScraper{
             ParseSectionInfo(lis, out var instructors, out var component, out var type, out var units);
             var times = ParseDaysTimes(card);
             var location = ParseLocation(card);
-
-            var id = $"{semester}{year}:{subject}:{courseNumber}:{section}";
+            
             sections.Add(new SectionRecord(
                 $"{semester}{year}", subject, courseNumber,
                    section, title, instructors, component,
-                   type, units, location, times));
+                   type, units, location, times, null, null)); // Description and prerequisites are in the details page. Records have to be updated later
         }
+
         return sections;
 
     }
@@ -93,7 +80,7 @@ class MainSearchScraper{
         if (span == null)
             return string.Empty;
 
-        return ScraperUtils.CleanText(span.InnerText);
+        return HtmlUtils.CleanText(span.InnerText);
     }
 
     static bool TryParseHeader(string header, out string? semester, out string? year)
@@ -139,7 +126,7 @@ class MainSearchScraper{
 
         foreach (var li in lis)
         {
-            var liText = ScraperUtils.CleanText(li.InnerText);
+            var liText = HtmlUtils.CleanText(li.InnerText);
             var parts = liText.Split(':', 2);
             if (parts.Length < 2) continue;
 
@@ -150,7 +137,7 @@ class MainSearchScraper{
                 case "Instructor":
                     foreach (var a in li.SelectNodes(".//a") ?? Enumerable.Empty<HtmlNode>())
                     {
-                        var name = ScraperUtils.CleanText(a.InnerText);
+                        var name = HtmlUtils.CleanText(a.InnerText);
                         if (!string.IsNullOrWhiteSpace(name))
                             instructors.Add(name);       
                     }
@@ -188,8 +175,8 @@ class MainSearchScraper{
 
         for (int i = 0; i < Math.Min(days.Count, times.Count); i++)
         {
-            var dayText = ScraperUtils.CleanText(days[i].InnerText);
-            var timeText = ScraperUtils.CleanText(times[i].InnerText);
+            var dayText = HtmlUtils.CleanText(days[i].InnerText);
+            var timeText = HtmlUtils.CleanText(times[i].InnerText);
             results.Add($"{dayText}/{timeText}");
         }
 
@@ -209,7 +196,7 @@ class MainSearchScraper{
 
         foreach (var location in locations)
         {
-            results.Add(ScraperUtils.CleanText(location.InnerText));
+            results.Add(HtmlUtils.CleanText(location.InnerText));
         }
 
         return results.Count > 0 ? string.Join(", ", results) : null;

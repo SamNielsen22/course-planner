@@ -1,19 +1,15 @@
 using HtmlAgilityPack;
-
-public record DetailsRecord(string Description, string Prerequisites);
-
 public static class DescriptionScraper
 {
-    public static DetailsRecord Scrape(string url)
+    public static (string Description, string Prerequisites) Scrape(HtmlDocument doc)
     {
-        var doc = ScraperUtils.LoadFromUrl(url);
         var description = "";
         var prerequisites = "";
 
         var cards = doc.DocumentNode.SelectNodes("//div[contains(@class,'card')]");
 
         if (cards == null)
-            return new DetailsRecord(description, prerequisites);
+            return (description, prerequisites);
 
         foreach (var card in cards)
         {
@@ -21,7 +17,7 @@ public static class DescriptionScraper
             if (headerNode == null)
                 continue;
 
-            var headerText = ScraperUtils.CleanText(headerNode.InnerText);
+            var headerText = HtmlUtils.CleanText(headerNode.InnerText);
 
             var bodyNode = card.SelectSingleNode(".//div[contains(@class,'card-body')]");
             if (bodyNode == null)
@@ -33,7 +29,7 @@ public static class DescriptionScraper
                 if (spans == null) continue;
                 foreach (var span in spans)
                 {
-                    var spanText = ScraperUtils.CleanText(span.InnerText);
+                    var spanText = HtmlUtils.CleanText(span.InnerText);
                     if (spanText.StartsWith("Prerequisites:"))
                     {
                         prerequisites = spanText.Substring("Prerequisites:".Length);
@@ -45,10 +41,10 @@ public static class DescriptionScraper
             if (headerText == "Description")
             {
                 var div = bodyNode.SelectSingleNode(".//div");
-                description = ScraperUtils.CleanText(div?.InnerText);
+                description = HtmlUtils.CleanText(div?.InnerText);
             }
         }
 
-        return new DetailsRecord(description, prerequisites);
+        return (description, prerequisites);
     }
 }

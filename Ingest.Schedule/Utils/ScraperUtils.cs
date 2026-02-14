@@ -1,7 +1,7 @@
 using HtmlAgilityPack;
 using System.Text.RegularExpressions;
 
-static class ScraperUtils
+static class HtmlUtils
 {
     public static string CleanText(string? text)
     {
@@ -10,16 +10,6 @@ static class ScraperUtils
             .Replace(HtmlEntity.DeEntitize(text), @"\s+", " ")
             .Trim();
     }
-    static readonly HttpClient http = new HttpClient();
-    public static HtmlDocument LoadFromUrl(string url)
-    {
-        Thread.Sleep(150);
-        var html = http.GetStringAsync(url).Result;
 
-        var doc = new HtmlDocument();
-        doc.LoadHtml(html);
-
-        return doc;
-    }
 
 }

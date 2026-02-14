@@ -3,13 +3,12 @@ using HtmlAgilityPack;
 
 class SubjectScraper
 {    
-    public static List<string> Scrape(string url)
+    public static List<string> Scrape(HtmlDocument doc)
     {
-        var doc = ScraperUtils.LoadFromUrl(url);
         var aTags = doc.DocumentNode.SelectNodes("//a[contains(@href,'class_list.html?subject=')]");
         if (aTags == null)
         {
-            Console.WriteLine($"WARNING: couldent find a tags in suubject page)");
+            Console.WriteLine($"WARNING: couldent find a tags in subject page");
             return new List<string>();
         }
         

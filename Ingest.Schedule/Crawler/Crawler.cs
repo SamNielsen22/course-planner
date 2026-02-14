@@ -1,126 +1,79 @@
-using System.Data;
-using Dapper;
 using HtmlAgilityPack;
-using Microsoft.Data.Sqlite;
 
 public class Crawler
 {
-    public void Run()
+    private string baseUrl = "";
+    static readonly HttpClient http = new HttpClient();
+    public void Run(string url)
     {
-        var baseUrl = "https://class-schedule.app.utah.edu/main/1264/";
+        baseUrl = url;
         var indexUrl = baseUrl + "index.html";
 
-        using IDbConnection database = new SqliteConnection("Data Source=data/courseplanner.db");
-        database.Open();
-        database.Execute("PRAGMA foreign_keys = ON;");
-
-        const string upsertCourseSql = """
-            INSERT INTO courses (subject, course_number, title, description, prerequisites)
-            VALUES (@Subject, @CourseNumber, @Title, @Description, @Prerequisites)
-            ON CONFLICT(subject, course_number) DO UPDATE SET
-              title = excluded.title,
-              description = excluded.description,
-              prerequisites = excluded.prerequisites;
-        """;
-
-        const string upsertSectionSql = """
-            INSERT INTO sections (term, subject, course_number, section_number, component, type, units, location, times)
-            VALUES (@Term, @Subject, @CourseNumber, @SectionNumber, @Component, @Type, @Units, @Location, @Times)
-            ON CONFLICT(term, subject, course_number, section_number) DO UPDATE SET
-              component = excluded.component,
-              type = excluded.type,
-              units = excluded.units,
-              location = excluded.location,
-              times = excluded.times;
-        """;
-
-        const string deleteSectionInstructorsSql = """
-            DELETE FROM section_instructors
-            WHERE term = @Term AND subject = @Subject AND course_number = @CourseNumber AND section_number = @SectionNumber;
-        """;
-
-        const string insertSectionInstructorSql = """
-            INSERT OR IGNORE INTO section_instructors
-              (term, subject, course_number, section_number, instructor)
-            VALUES
-              (@Term, @Subject, @CourseNumber, @SectionNumber, @Instructor);
-        """;
-
         Console.WriteLine($"Fetching subjects from {indexUrl}");
-        var queries = SubjectScraper.Scrape(indexUrl);
+        var queries = SubjectScraper.Scrape(LoadFromUrl(indexUrl));
         Console.WriteLine($"Found {queries.Count} subjects");
 
+        var seenCourses = new HashSet<string>();
         foreach (var query in queries)
         {
             var classListUrl = baseUrl + "class_list.html?" + query;
-            Console.WriteLine($"Scraping subject {query.Split("=")[1]}: {classListUrl}");
+            var classListDoc = LoadFromUrl(classListUrl);
 
-            var sectionInfo = MainSearchScraper.Scrape(classListUrl);
-            Console.WriteLine($" sections: {sectionInfo.Count}");
-
-            var seenCourses = new HashSet<string>();
-
-            using var transaction = database.BeginTransaction();
-
-            foreach (var section in sectionInfo)
+            var alert = classListDoc.DocumentNode.SelectSingleNode(
+                "//div[contains(@class,'alert') and contains(.,'divided by credit and noncredit')]"
+            );
+            if (alert != null) // Some subject pages lead to a credit/noncredit menu
             {
-                var classKey = $"{section.Subject}:{section.CourseNumber}";
-                if (seenCourses.Add(classKey))
+                var extraQueries = SubjectScraper.Scrape(classListDoc);
+                foreach (var extraQuery in extraQueries)
                 {
-                    var detailsUrl =
-                        baseUrl + "description.html?subj=" + section.Subject +
-                        "&catno=" + section.CourseNumber +
-                        "&section=" + section.SectionNumber;
+                    var extraUrl = baseUrl + "class_list.html?" + extraQuery;
 
-                    var details = DescriptionScraper.Scrape(detailsUrl);
+                    var extraSubjectLabel = query.Split('&')[0].Split('=')[1];
+                    Console.WriteLine($"Scraping subject {extraSubjectLabel}: {extraUrl}");
 
-                    database.Execute(upsertCourseSql, new
-                    {
-                        section.Subject,
-                        section.CourseNumber,
-                        section.Title,
-                        details.Description,
-                        details.Prerequisites
-                    }, transaction);
+                    var extraSections = MainSearchScraper.Scrape(LoadFromUrl(extraUrl));
+                    StoreSections(extraSections);
                 }
+                continue;
+            }
+            var subjectLabel = query.Split('&')[0].Split('=')[1];
+            Console.WriteLine($"Scraping subject {subjectLabel}: {classListUrl}");
 
-                database.Execute(upsertSectionSql, new
-                {
-                    section.Term,
-                    section.Subject,
-                    section.CourseNumber,
-                    section.SectionNumber,
-                    section.Component,
-                    section.Type,
-                    section.Units,
-                    section.Location,
-                    section.Times
-                }, transaction);
+            var sections = MainSearchScraper.Scrape(classListDoc);
+            StoreSections(sections);
 
-                database.Execute(deleteSectionInstructorsSql, new
-                {
-                    section.Term,
-                    section.Subject,
-                    section.CourseNumber,
-                    section.SectionNumber
-                }, transaction);
+            
+        }
+    }
+    private static HtmlDocument LoadFromUrl(string url)
+    {
+        Thread.Sleep(200);
+        var html = http.GetStringAsync(url).Result;
+        var doc = new HtmlDocument();
+        doc.LoadHtml(html);
 
-                foreach (var instructor in section.Instructors ?? new List<string>())
-                {
-                    if (string.IsNullOrWhiteSpace(instructor)) continue;
+        return doc;
+    }
+    private void StoreSections(HashSet<SectionRecord> sections)
+    {
+        var seenCourses = new HashSet<string>();
+        foreach (var section in sections)
+        {
+            // Details pages require section for url but contains the same info for all sections
+            var classKey = $"{section.Subject}:{section.CourseNumber}";
+            if (seenCourses.Add(classKey)) // Only gather information once per course
+            {
+                var detailsUrl =
+                baseUrl + "description.html?subj=" + section.Subject +
+                "&catno=" + section.CourseNumber +
+                "&section=" + section.SectionNumber;
 
-                    database.Execute(insertSectionInstructorSql, new
-                    {
-                        section.Term,
-                        section.Subject,
-                        section.CourseNumber,
-                        section.SectionNumber,
-                        Instructor = instructor
-                    }, transaction);
-                }
+                var details = DescriptionScraper.Scrape(LoadFromUrl(detailsUrl));
+                DbStore.StoreSection(section, details);
             }
 
-            transaction.Commit();
         }
+        Console.WriteLine($" sections: {sections.Count}");
     }
 }
