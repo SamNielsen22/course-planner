@@ -1,15 +1,18 @@
 using HtmlAgilityPack;
+public record DetailsRecord(string Description, string Prerequisites);
 public static class DescriptionScraper
 {
-    public static (string Description, string Prerequisites) Scrape(HtmlDocument doc)
+    public static DetailsRecord Scrape(HtmlDocument doc)
     {
         var description = "";
         var prerequisites = "";
 
         var cards = doc.DocumentNode.SelectNodes("//div[contains(@class,'card')]");
 
-        if (cards == null)
-            return (description, prerequisites);
+        if (cards == null){
+            Console.WriteLine("Could not find card in class description");
+            return new DetailsRecord(description, prerequisites);
+        }
 
         foreach (var card in cards)
         {
@@ -45,6 +48,6 @@ public static class DescriptionScraper
             }
         }
 
-        return (description, prerequisites);
+        return new DetailsRecord(description, prerequisites);
     }
 }

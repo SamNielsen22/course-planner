@@ -1,5 +1,6 @@
 <Solution>
   <Project Path="Api/Api.csproj" />
   <Project Path="CoursePlanner.Data/CoursePlanner.Data.csproj" />
+  <Project Path="ScraperTests/ScraperTests.csproj" />
   <Project Path="Ingest.Schedule/Ingest.Schedule.csproj" />
 </Solution>

@@ -4,8 +4,7 @@ using Microsoft.Data.Sqlite;
 
 static class DbStore
 {
-    public static void StoreSection(SectionRecord section,
-    (string Description, string Prerequisites) details)
+    public static void StoreSection(SectionRecord section, DetailsRecord details)
     {
         using IDbConnection database = new SqliteConnection("Data Source=data/courseplanner.db");
         database.Open();
