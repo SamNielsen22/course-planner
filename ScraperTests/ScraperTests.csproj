@@ -1,7 +1,7 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
-    <TargetFramework>net8.0</TargetFramework>
+    <TargetFramework>net10.0</TargetFramework>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
 
@@ -21,6 +21,7 @@
     <Compile Include="..\Ingest.Schedule\Utils\ScraperUtils.cs" Link="Source\ScraperUtils.cs" />
     <Compile Include="..\Ingest.Schedule\Scraper\MainSearchScraper.cs" Link="Source\MainSearchScraper.cs" />
     <Compile Include="..\Ingest.Schedule\Scraper\SubjectScraper.cs" Link="Source\SubjectScraper.cs" />
+    <Compile Include="..\Ingest.Schedule\Scraper\ArchiveScraper.cs" Link="Source\ArchiveScraper.cs" />
     <Compile Include="..\Ingest.Schedule\Scraper\DescriptionScraper.cs" Link="Source\DescriptionScraper.cs" />
   </ItemGroup>
 

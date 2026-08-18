@@ -48,12 +48,23 @@ public class Crawler
     }
     private static HtmlDocument LoadFromUrl(string url)
     {
-        Thread.Sleep(200);
-        var html = http.GetStringAsync(url).Result;
-        var doc = new HtmlDocument();
-        doc.LoadHtml(html);
+        for (var attempt = 1; ; attempt++)
+        {
+            Thread.Sleep(600);
+            try
+            {
+                var html = http.GetStringAsync(url).Result;
+                var doc = new HtmlDocument();
+                doc.LoadHtml(html);
 
-        return doc;
+                return doc;
+            }
+            catch (AggregateException) when (attempt < 5)
+            {
+                Console.WriteLine($"WARNING: request failed, retrying in 30s (attempt {attempt}/5)");
+                Thread.Sleep(30_000);
+            }
+        }
     }
     private void StoreSections(HashSet<SectionRecord> sections)
     {

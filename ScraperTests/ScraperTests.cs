@@ -28,6 +28,19 @@ public class ScraperTests
     }
 
     [Fact]
+    public void ArchiveScraper_FindsMainCampusTerms()
+    {
+        var doc = LoadSample("archives.html");
+
+        var termUrls = ArchiveScraper.Scrape(doc);
+
+        Assert.Contains("https://class-schedule.app.utah.edu/main/1258/", termUrls);
+        Assert.True(termUrls.Count > 20);
+        Assert.DoesNotContain(termUrls, u => u.Contains("/uac/") || u.Contains("/online/"));
+        Assert.All(termUrls, u => Assert.EndsWith("/", u));
+    }
+
+    [Fact]
     public void MainSearchScraper_ParsesSections()
     {
         var doc = LoadSample("cs.html");
