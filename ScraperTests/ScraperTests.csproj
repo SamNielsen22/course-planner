@@ -21,12 +21,16 @@
     <Compile Include="..\Ingest.Schedule\Utils\ScraperUtils.cs" Link="Source\ScraperUtils.cs" />
     <Compile Include="..\Ingest.Schedule\Scraper\MainSearchScraper.cs" Link="Source\MainSearchScraper.cs" />
     <Compile Include="..\Ingest.Schedule\Scraper\SubjectScraper.cs" Link="Source\SubjectScraper.cs" />
-    <Compile Include="..\Ingest.Schedule\Scraper\ArchiveScraper.cs" Link="Source\ArchiveScraper.cs" />
     <Compile Include="..\Ingest.Schedule\Scraper\DescriptionScraper.cs" Link="Source\DescriptionScraper.cs" />
   </ItemGroup>
 
   <ItemGroup>
+    <ProjectReference Include="..\CoursePlanner.Data\CoursePlanner.Data.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
     <None Include="..\samples\*.html" Link="samples\%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
+    <None Include="..\schema.sql" Link="schema.sql" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 
   <ItemGroup>

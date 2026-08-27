@@ -8,3 +8,12 @@ obj/
 *.sqlite
 *.sqlite3
 *.log
+
+node_modules/
+Api/wwwroot/
+
+# Scraped data. Days of crawling, rebuildable from the ingest projects, and
+# far too big for git - the database alone is ~50MB.
+data/
+__pycache__/
+*.pyc

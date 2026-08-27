@@ -1,4 +1,4 @@
-﻿using HtmlAgilityPack;
+using HtmlAgilityPack;
 using System.Reflection.Metadata;
 using System.Text.RegularExpressions;
 record SectionRecord(
@@ -14,7 +14,8 @@ record SectionRecord(
     string? Location,
     string? Times,
     string? Description, 
-    string? Prerequisites
+    string? Prerequisites,
+    int? SeatsAvailable
 );
 class MainSearchScraper{
     public static HashSet<SectionRecord> Scrape(HtmlDocument doc)
@@ -60,14 +61,14 @@ class MainSearchScraper{
                 Console.WriteLine($"WARNING: couldent find li tags in {card.InnerHtml}");
                 continue;
             }
-            ParseSectionInfo(lis, out var instructors, out var component, out var type, out var units);
+            ParseSectionInfo(lis, out var instructors, out var component, out var type, out var units, out var seats);
             var times = ParseDaysTimes(card);
             var location = ParseLocation(card);
             
             sections.Add(new SectionRecord(
                 $"{semester}{year}", subject, courseNumber,
                    section, title, instructors, component,
-                   type, units, location, times, null, null)); // Description and prerequisites are in the details page. Records have to be updated later
+                   type, units, location, times, null, null, seats)); // Description and prerequisites are in the details page. Records have to be updated later
         }
 
         return sections;
@@ -118,11 +119,12 @@ class MainSearchScraper{
         title = titleMatch.Groups["title"].Value;
         return true;
     }
-    static void ParseSectionInfo(HtmlNodeCollection lis, out List<string> instructors, out string? component, out string? type, out int? units)
+    static void ParseSectionInfo(HtmlNodeCollection lis, out List<string> instructors, out string? component, out string? type, out int? units, out int? seatsAvailable)
     {
         instructors = new List<string>();
         component = type = null;
         units = null;
+        seatsAvailable = null;
 
         foreach (var li in lis)
         {
@@ -155,6 +157,13 @@ class MainSearchScraper{
                     var unitText = GetFirstSpanText(li);
                     if (double.TryParse(unitText, out var doubleUnits))
                         units = (int)doubleUnits;
+                    break;
+
+                // The card is rendered twice, once per breakpoint, so this label
+                // appears twice with the same value - the second write is a no-op.
+                case "Seats Available":
+                    if (int.TryParse(GetFirstSpanText(li), out var openSeats))
+                        seatsAvailable = openSeats;
                     break;
             }
         }
