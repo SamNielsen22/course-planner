@@ -1,13 +1,21 @@
 using HtmlAgilityPack;
 using System.Reflection.Metadata;
 using System.Text.RegularExpressions;
+/// <summary>
+/// One instructor as the schedule lists them. Unid is the registrar's person id,
+/// taken from the profile link on the name - it is the identity; the name is only
+/// how it was spelled that term. Unid is null only if the link ever stops carrying
+/// one (it never has, across every campus and term checked).
+/// </summary>
+record InstructorRef(string? Unid, string Name);
+
 record SectionRecord(
     string Term,
     string Subject,
     string CourseNumber,
     string SectionNumber,
     string? Title,
-    List<string> Instructors,
+    List<InstructorRef> Instructors,
     string? Component,
     string? Type,
     int? Units,
@@ -18,6 +26,9 @@ record SectionRecord(
     int? SeatsAvailable
 );
 class MainSearchScraper{
+    // profiles.faculty.utah.edu/u0171400  and  faculty.utah.edu/u0171400/teaching
+    static readonly Regex UnidPattern = new(@"faculty\.utah\.edu/(u\d+)", RegexOptions.Compiled);
+
     public static HashSet<SectionRecord> Scrape(HtmlDocument doc)
     {
         var header = HtmlUtils.CleanText(
@@ -119,9 +130,9 @@ class MainSearchScraper{
         title = titleMatch.Groups["title"].Value;
         return true;
     }
-    static void ParseSectionInfo(HtmlNodeCollection lis, out List<string> instructors, out string? component, out string? type, out int? units, out int? seatsAvailable)
+    static void ParseSectionInfo(HtmlNodeCollection lis, out List<InstructorRef> instructors, out string? component, out string? type, out int? units, out int? seatsAvailable)
     {
-        instructors = new List<string>();
+        instructors = new List<InstructorRef>();
         component = type = null;
         units = null;
         seatsAvailable = null;
@@ -137,11 +148,21 @@ class MainSearchScraper{
             switch (label)
             {
                 case "Instructor":
+                    // The page repeats each instructor once per responsive
+                    // breakpoint, linking to profiles.faculty.utah.edu/<unid>
+                    // and faculty.utah.edu/<unid>/teaching - same person, two
+                    // anchors - so dedupe on the id rather than the spelling.
                     foreach (var a in li.SelectNodes(".//a") ?? Enumerable.Empty<HtmlNode>())
                     {
                         var name = HtmlUtils.CleanText(a.InnerText);
-                        if (!string.IsNullOrWhiteSpace(name))
-                            instructors.Add(name);       
+                        if (string.IsNullOrWhiteSpace(name)) continue;
+
+                        var match = UnidPattern.Match(a.GetAttributeValue("href", ""));
+                        var unid = match.Success ? match.Groups[1].Value : null;
+
+                        var key = unid ?? name;
+                        if (!instructors.Any(i => (i.Unid ?? i.Name) == key))
+                            instructors.Add(new InstructorRef(unid, name));
                     }
                     break;
 

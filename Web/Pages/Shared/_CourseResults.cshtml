@@ -1,0 +1,51 @@
+@model Web.Pages.IndexModel
+
+@if (!Model.Searched)
+{
+}
+else if (Model.Results.Count == 0)
+{
+    <p class="empty">No courses matched <strong>@Model.Q</strong>.</p>
+}
+else
+{
+    <p class="count">
+        @Model.Total.ToString("N0") course@(Model.Total == 1 ? "" : "s")
+        @if (Model.LastPage > 1)
+        {
+            <text>&middot; page @Model.Page of @Model.LastPage</text>
+        }
+    </p>
+    <ul class="course-list">
+        @foreach (var c in Model.Results)
+        {
+            <li>
+                <a class="course-row" asp-page="/Course"
+                   asp-route-subject="@c.Subject" asp-route-number="@c.CourseNumber">
+                    <span class="course-code">@c.Subject @c.CourseNumber</span>
+                    <span class="course-title">@c.Title</span>
+                    <span class="course-gpa">
+                        @if (c.GpaAvg is { } gpa)
+                        {
+                            <strong>@gpa.ToString("0.00")</strong>
+                        }
+                        else
+                        {
+                            <span class="muted">—</span>
+                        }
+                    </span>
+                </a>
+            </li>
+        }
+    </ul>
+    @if (Model.LastPage > 1)
+    {
+        <nav class="pager">
+            <button type="submit" name="pg" value="@(Model.Page - 1)"
+                    disabled="@(!Model.HasPrevious)">&larr; Previous</button>
+            <span class="pager-at">@Model.Page / @Model.LastPage</span>
+            <button type="submit" name="pg" value="@(Model.Page + 1)"
+                    disabled="@(!Model.HasNext)">Next &rarr;</button>
+        </nav>
+    }
+}

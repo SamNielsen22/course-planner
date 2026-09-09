@@ -1,0 +1,84 @@
+@model Web.Pages.InstructorsModel
+
+@if (Model.Total == 0)
+{
+    <p class="empty">No professors matched.</p>
+}
+else
+{
+    <p class="count">
+        @Model.Total.ToString("N0") professor@(Model.Total == 1 ? "" : "s")
+        @if (Model.LastPage > 1)
+        {
+            <text>&middot; page @Model.Page of @Model.LastPage</text>
+        }
+    </p>
+
+        @foreach (var person in Model.Results)
+        {
+            <article class="prof-card">
+                <header class="prof-head">
+                    <a class="prof-name" asp-page="/Instructor" asp-route-unid="@person.Unid">
+                        @Web.Pages.Names.Natural(person.Name)
+                    </a>
+                    <span class="prof-gpa">
+                        @(person.AvgGpa?.ToString("0.00") ?? "N/A")
+                        <span class="unit">avg GPA</span>
+                    </span>
+                </header>
+                @if (!string.IsNullOrWhiteSpace(person.Department))
+                {
+                    <p class="prof-dept">@person.Department</p>
+                }
+
+                <p class="prof-sub">Class grades</p>
+
+                @if (person.Courses.Count == 0)
+                {
+                    <p class="muted small">No grades published.</p>
+                }
+                else
+                {
+                    <div class="class-grid">
+                        @foreach (var course in person.Courses)
+                        {
+                            @* Stays on the person: their page with this class
+                               already chosen, which is the question the tile
+                               raises - how does THIS professor grade it. *@
+                            <a class="class-card" asp-page="/Instructor"
+                               asp-route-unid="@person.Unid"
+                               asp-route-course="@($"{course.Subject} {course.CourseNumber}")">
+                                <span class="class-code">@course.Subject @course.CourseNumber</span>
+                                <span class="class-title">@course.Title</span>
+                                @* Their own average in this class, not the
+                                   course's. A course average is the same number
+                                   on every professor's card and says nothing
+                                   about the person whose card you are reading. *@
+                                <span class="class-gpa">
+                                    @if (course.AvgGpa is { } gpa)
+                                    {
+                                        <text>Average GPA: </text><strong>@gpa.ToString("0.00")</strong>
+                                    }
+                                    else
+                                    {
+                                        <span class="muted">No grades published</span>
+                                    }
+                                </span>
+                            </a>
+                        }
+                    </div>
+                }
+            </article>
+        }
+
+    @if (Model.LastPage > 1)
+    {
+        <nav class="pager">
+            <button type="submit" name="pg" value="@(Model.Page - 1)"
+                    disabled="@(!Model.HasPrevious)">&larr; Previous</button>
+            <span class="pager-at">@Model.Page / @Model.LastPage</span>
+            <button type="submit" name="pg" value="@(Model.Page + 1)"
+                    disabled="@(!Model.HasNext)">Next &rarr;</button>
+        </nav>
+    }
+}

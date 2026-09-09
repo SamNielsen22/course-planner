@@ -1,0 +1,948 @@
+:root {
+  --crimson: #a51c30;
+  --crimson-d: #861427;
+  --crimson-l: #f9ecef;
+
+  --text: #55555e;
+  --text-h: #1c1b20;
+  --label: #8a8a95;
+
+  --bg: #fff;         /* the page itself is white */
+  --card: #e4e4ea;    /* content sits on it in grey cards */
+  --card-soft: #eeeef2;
+  --panel: #fff;      /* panels nested inside a card go back to white */
+  --border: #d2d2da;
+
+
+  --sans: system-ui, "Segoe UI", Roboto, sans-serif;
+  --mono: ui-monospace, Consolas, monospace;
+  /* The wordmark and the home page doors only; the rest of the site stays on
+     the system sans. Falls back to it if the font never loads. */
+  --display: "Plus Jakarta Sans", system-ui, "Segoe UI", Roboto, sans-serif;
+
+  color-scheme: light;
+  font: 16px/1.55 var(--sans);
+  color: var(--text);
+  background: var(--bg);
+  -webkit-font-smoothing: antialiased;
+}
+
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); }
+
+h1, h2, h3 { color: var(--text-h); line-height: 1.25; }
+h1 { font-size: 1.6rem; font-weight: 700; margin: 0 0 1.25rem; }
+h2 { font-size: 1.15rem; font-weight: 600; margin: 2rem 0 .75rem; }
+h3 { font-size: 1rem; font-weight: 600; margin: 0 0 .3rem; }
+h2 .muted { font-weight: 400; font-size: .9rem; }
+
+a { color: var(--crimson); text-decoration: none; }
+a:hover { text-decoration: underline; }
+
+/* ------------------------------------------------------------- chrome */
+
+/* No coloured bar. The wordmark carries the brand, as in the reference. */
+header { background: var(--bg); }
+nav {
+  max-width: 72rem; margin: 0 auto; padding: 1.35rem 1.5rem;
+  display: flex; gap: 2rem; align-items: center; flex-wrap: wrap;
+}
+nav .brand {
+  color: var(--crimson); font-size: 1.4rem; margin-right: auto;
+  font-family: var(--display); font-weight: 800; letter-spacing: -.03em;
+  display: inline-flex; align-items: center; gap: .4rem;
+}
+/* The compass mark, sized to the text beside it so both scale together. */
+.brand-mark { height: 1.35em; width: auto; }
+nav .brand:hover { text-decoration: none; }
+nav a:not(.brand) {
+  color: var(--crimson); font-size: .82rem; font-weight: 600;
+  text-transform: uppercase; letter-spacing: .05em;
+}
+
+main { max-width: 72rem; margin: 0 auto; padding: .5rem 1.5rem 4rem; }
+
+footer {
+  max-width: 72rem; margin: 0 auto;
+  padding: 1.5rem; text-align: center;
+  font-size: .8rem; color: var(--label);
+}
+
+/* -------------------------------------------------------------- cards */
+
+.card {
+  background: var(--card); border: 1px solid var(--border); border-radius: 9px;
+  padding: 1.5rem 1.6rem; margin-bottom: 1.25rem;
+}
+.card > :first-child { margin-top: 0; }
+.card > :last-child { margin-bottom: 0; }
+
+/* A panel nested inside a card, like the professor rows in the reference. */
+
+/* ------------------------------------------------------------ buttons */
+
+.btn {
+  display: inline-block; font: inherit; font-size: .82rem; font-weight: 700;
+  text-transform: uppercase; letter-spacing: .05em;
+  padding: .7rem 1.6rem; border-radius: 999px; cursor: pointer;
+  background: var(--crimson); border: 1px solid var(--crimson); color: #fff;
+  text-align: center; text-decoration: none;
+  transition: background .13s ease, border-color .13s ease;
+}
+.btn:hover { background: var(--crimson-d); border-color: var(--crimson-d); text-decoration: none; }
+.btn.out { background: var(--panel); color: var(--crimson); }
+.btn.out:hover { background: var(--crimson-l); }
+span.btn { cursor: default; }
+span.btn:hover { background: var(--crimson); border-color: var(--crimson); }
+:focus-visible { outline: 2px solid var(--crimson); outline-offset: 2px; }
+
+/* ------------------------------------------------------------ helpers */
+
+/* Small grey capitals, the section markers used in the reference. */
+th {
+  font-size: .7rem; font-weight: 700; text-transform: uppercase;
+  letter-spacing: .07em; color: var(--label);
+}
+
+.crumb { margin: 0 0 1rem; font-size: .85rem; }
+.subtitle { margin: 0 0 1rem; font-size: 1rem; color: var(--text); }
+.count { font-size: .85rem; margin: 0 0 .75rem; color: var(--label); }
+.empty { padding: 2rem 0; color: var(--label); }
+.muted { color: var(--text); opacity: .8; }
+.small { font-size: .8rem; }
+/* Seats available read as ordinary text; only a full section is coloured. */
+.open { font-weight: 600; }
+.code { font-family: var(--mono); white-space: nowrap; }
+
+.row { display: flex; gap: 1rem; align-items: center; flex-wrap: wrap; }
+.row.between { justify-content: space-between; }
+.row.center { justify-content: center; }
+
+/* The course-code badge. */
+
+/* The score block, right-aligned in the reference. */
+
+/* -------------------------------------------------------------- forms */
+
+.filters {
+  display: flex; flex-wrap: wrap; gap: .9rem 1.1rem; align-items: flex-end;
+  background: var(--card); border: 1px solid var(--border); border-radius: 9px;
+  padding: 1.35rem 1.5rem; margin-bottom: 1.25rem;
+}
+.filters label {
+  display: flex; flex-direction: column; gap: .35rem;
+  font-size: .7rem; font-weight: 700; text-transform: uppercase;
+  letter-spacing: .07em; color: var(--label);
+}
+.filters input, .filters select, textarea {
+  font: inherit; font-size: .92rem; padding: .6rem .8rem;
+  border: 1px solid var(--border); border-radius: 7px;
+  background: var(--panel); color: var(--text-h);
+  text-transform: none; letter-spacing: normal;
+}
+.filters input { min-width: 15rem; }
+.filters button {
+  font: inherit; font-size: .82rem; font-weight: 700;
+  text-transform: uppercase; letter-spacing: .05em;
+  padding: .7rem 1.6rem; border-radius: 999px;
+  background: var(--crimson); border: 1px solid var(--crimson);
+  color: #fff; cursor: pointer;
+}
+.filters button:hover { background: var(--crimson-d); }
+
+textarea { width: 100%; font: .85rem/1.5 var(--mono); resize: vertical; }
+
+/* ------------------------------------------------------------- tables */
+
+/* Tables keep their shape, because comparison needs aligned columns, but
+   they sit on a white card like everything else. */
+table {
+  width: 100%; border-collapse: collapse;
+  background: var(--card); border: 1px solid var(--border); border-radius: 9px;
+  overflow: hidden; margin-bottom: 1.25rem;
+}
+th, td {
+  text-align: left; padding: .8rem 1rem;
+  border-bottom: 1px solid var(--border); vertical-align: middle;
+}
+thead th { background: var(--card); }
+tbody tr:last-child td { border-bottom: none; }
+tbody tr:hover { background: var(--panel); }
+td a + a::before { content: ", "; color: var(--text); }
+td.empty { padding: 2.5rem 1rem; text-align: center; }
+tbody tr:hover td.empty { background: var(--card); }
+
+/* ------------------------------------------------------------ notices */
+
+.notice {
+  background: var(--crimson-l); border-left: 3px solid var(--crimson);
+  padding: .9rem 1.1rem; border-radius: 0 7px 7px 0;
+  margin-bottom: 1.25rem; font-size: .9rem;
+}
+.notice.warn { background: #fdf5e7; border-left-color: #b45309; color: #7c4a06; }
+.notice.warn strong { color: #7c4a06; }
+
+/* ------------------------------------------------------------ sidebar */
+
+/* ----------------------------------------------------------- calendar */
+
+.week {
+  display: grid; grid-template-columns: 3.5rem repeat(5, 1fr);
+  background: var(--card); border: 1px solid var(--border);
+  border-radius: 9px; overflow: hidden; font-size: .75rem;
+}
+.week .head {
+  padding: .6rem .4rem; text-align: center;
+  font-size: .7rem; font-weight: 700; text-transform: uppercase;
+  letter-spacing: .06em; color: var(--label);
+  border-bottom: 1px solid var(--border);
+}
+.week .times { border-right: 1px solid var(--border); }
+.week .col { border-right: 1px solid var(--border); position: relative; }
+.week .col:last-child { border-right: none; }
+.week .hour, .week .cell { height: 2.5rem; border-bottom: 1px solid var(--border); }
+.week .hour { font-size: .68rem; padding: .2rem .4rem; text-align: right; color: var(--label); }
+.week .block {
+  position: absolute; left: 3px; right: 3px;
+  background: var(--crimson); color: #fff;
+  border-radius: 5px; padding: .3rem .4rem; overflow: hidden; line-height: 1.25;
+}
+
+@media (max-width: 720px) {
+  table { display: block; overflow-x: auto; }
+  .filters input { min-width: 0; width: 100%; }
+  .with-side { grid-template-columns: 1fr; }
+
+  /* The wordmark takes its own line and the links share the next one, evenly
+     spaced. Left as a single wrapping flex row the links bunched under the
+     brand at odd intervals. */
+  nav {
+    padding: 1rem 1rem .75rem; gap: .5rem;
+    flex-direction: column; align-items: stretch; text-align: center;
+  }
+  nav .brand { margin-right: 0; font-size: 1.25rem; }
+  /* The four links wrap rather than forcing the header wider than the screen:
+     on a 320px phone "Schedule Builder ... About" overflowed by 18px. */
+  nav .links {
+    display: grid; grid-template-columns: repeat(4, 1fr);
+    gap: .35rem; justify-items: center; width: 100%;
+  }
+  nav a:not(.brand) { font-size: .72rem; letter-spacing: .04em; }
+}
+@media (max-width: 380px) {
+  nav .brand { font-size: 1.1rem; }
+  .brand-mark { height: 1.2em; }
+  nav a:not(.brand) { font-size: .68rem; letter-spacing: .02em; }
+  /* Four across is too tight once "Schedule Builder" wraps; two rows of two
+     keeps every label whole. */
+  nav .links { grid-template-columns: repeat(2, 1fr); gap: .3rem .5rem; }
+}
+
+/* ============================================================== home */
+
+/* ============================================================ layout */
+
+.page-head { margin-bottom: 1.5rem; }
+.page-head.center, .center { text-align: center; }
+.page-head.center h1 { font-size: 2.1rem; }
+.stack > * { margin-bottom: .9rem; }
+.stack-tight > * { margin: .5rem 0; }
+.grow { flex: 1 1 18rem; }
+
+.panel {
+  background: var(--card); border: 1px solid var(--border);
+  border-radius: 9px; padding: 1.1rem 1.3rem; margin-bottom: .9rem;
+}
+.panel h3 {
+  font-size: .7rem; font-weight: 700; text-transform: uppercase;
+  letter-spacing: .07em; color: var(--label); margin-bottom: .45rem;
+}
+.panel p { margin: 0; }
+
+.inline-form { display: inline-flex; gap: .5rem; align-items: center; margin-bottom: 1rem; }
+.inline-form select {
+  font: inherit; font-size: .85rem; font-weight: 600;
+  padding: .55rem 1rem; border-radius: 999px;
+  border: 1px solid var(--border); background: var(--card); color: var(--text-h);
+}
+.center .inline-form { justify-content: center; }
+
+.filters label.check {
+  flex-direction: row; align-items: center; gap: .45rem;
+  text-transform: none; letter-spacing: normal; font-size: .85rem;
+  font-weight: 600; color: var(--text-h);
+}
+
+/* ============================================================= chart */
+
+.chart {
+  height: 17rem; margin-bottom: 1.5rem;
+  background: var(--card); border: 1px solid var(--border);
+  border-radius: 11px; padding: 1.25rem 1.5rem 1.25rem 1rem;
+}
+.chart-plot { position: relative; height: 100%; }
+.chart-grid {
+  position: absolute; left: 0; right: 0; height: 1px;
+  background: var(--border); margin-bottom: 1.5rem;
+}
+.chart-bars {
+  position: absolute; inset: 0 0 1.5rem 0;
+  display: flex; align-items: flex-end; justify-content: center; gap: 1.5rem;
+}
+/* Bars shrink rather than overflow: at 4rem fixed with a 1.5rem gap, seven
+   grade buckets needed 434px and ran off a 390px phone. The basis is still
+   4rem, so a wide screen looks exactly as it did. */
+.chart-bar {
+  flex: 0 1 4rem; min-width: 0; height: 100%; display: flex; flex-direction: column;
+  justify-content: flex-end; position: relative;
+}
+@media (max-width: 520px) {
+  .chart { padding-left: .5rem; padding-right: .5rem; }
+  /* Term and section stack instead of running off the edge: the section
+     option carries a professor's name, so it is far wider than the term. */
+  .inline-form { display: flex; flex-wrap: wrap; width: 100%; }
+  .inline-form select { flex: 1 1 100%; max-width: 100%; }
+  .chart-bars { gap: .5rem; }
+  .chart-value { font-size: .66rem; }
+  .chart-label { font-size: .74rem; }
+}
+.chart-fill {
+  background: var(--crimson); border-radius: 4px 4px 0 0;
+  min-height: 2px; position: relative;
+  height: var(--h);
+  animation: grow .45s cubic-bezier(.22, 1, .36, 1) both;
+}
+@keyframes grow { from { height: 0; } to { height: var(--h); } }
+/* Anyone who has asked the system to stop moving things gets the end state. */
+@media (prefers-reduced-motion: reduce) {
+  .chart-fill { animation: none; }
+}
+.chart-value {
+  position: absolute; top: -1.35rem; left: 0; right: 0;
+  text-align: center; font-size: .72rem; font-weight: 700; color: var(--text-h);
+}
+.chart-label {
+  position: absolute; bottom: -1.4rem; left: 0; right: 0;
+  text-align: center; font-size: .82rem; color: var(--text);
+}
+
+/* The three figures under a chart. */
+.stat-row {
+  display: grid; gap: 1rem; margin-bottom: 1.75rem;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  max-width: 30rem;
+}
+.stat {
+  background: var(--card); border: 1px solid var(--border);
+  border-radius: 9px; padding: 1rem 1.2rem; text-align: center;
+}
+/* Four coverage figures, which want the full width rather than the 30rem a
+   pair of chart figures sits in. */
+.stat-row.four { max-width: none; grid-template-columns: repeat(4, minmax(0, 1fr)); }
+/* The six grade figures as one continuous box: a strip on a desktop, two
+   rows of three on a phone, where only the labels wrap. */
+.stat-strip {
+  display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: .5rem;
+  background: var(--card); border: 1px solid var(--border); border-radius: 9px;
+  padding: 1rem 1.2rem; text-align: center; margin-bottom: 1.75rem;
+  align-items: start;
+}
+@media (max-width: 640px) {
+  .stat-row.four { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .stat-strip { grid-template-columns: repeat(3, minmax(0, 1fr)); row-gap: 1rem; }
+}
+@media (max-width: 480px) {
+  .stat-strip { padding: .8rem .4rem; gap: .25rem; row-gap: .9rem; }
+}
+.stat-value { display: block; font-size: 1.6rem; font-weight: 700; color: var(--text-h); }
+.stat-label {
+  display: block; font-size: .7rem; font-weight: 700; text-transform: uppercase;
+  letter-spacing: .07em; color: var(--label); margin-top: .2rem;
+}
+
+/* =================================================== professor search */
+
+/* The search box and its filters. A centred wrapping flex row let each
+   wrapped item centre on its own line, so at middling widths the controls
+   came apart into a ragged stack. A centred block that fills its width keeps
+   them aligned however they wrap. */
+.search-bar {
+  display: flex; justify-content: center; gap: .6rem;
+  margin: 0 auto 1.5rem; flex-wrap: wrap;
+  max-width: 46rem;
+}
+.search-bar input {
+  font: inherit; font-size: 1rem; padding: .8rem 1.2rem;
+  flex: 1 1 16rem; min-width: 0; border-radius: 999px;
+  border: 1px solid var(--border); background: var(--card); color: var(--text-h);
+}
+.search-bar input:focus { background: var(--panel); }
+
+.prof-card {
+  background: var(--panel); border: 1px solid var(--border);
+  border-radius: 11px; padding: 1.25rem 1.4rem;
+}
+.prof-head { display: flex; align-items: center; gap: .7rem; margin-bottom: .9rem; }
+.prof-name { font-size: 1.05rem; font-weight: 700; }
+.prof-gpa { margin-left: auto; font-size: 1.05rem; font-weight: 700; color: var(--text-h); }
+.prof-gpa .unit {
+  font-size: .68rem; font-weight: 700; text-transform: uppercase;
+  letter-spacing: .06em; color: var(--label);
+}
+.prof-sub {
+  font-size: .7rem; font-weight: 700; text-transform: uppercase;
+  letter-spacing: .07em; color: var(--label); margin: 0 0 .6rem;
+}
+
+.class-grid {
+  display: grid; gap: .7rem;
+  grid-template-columns: repeat(auto-fill, 15.5rem);
+  grid-auto-rows: minmax(6rem, auto);   /* a fixed 6rem clipped any card with a gen-ed tag */
+}
+.class-card {
+  display: flex; flex-direction: column; gap: .3rem; overflow: hidden;
+  background: var(--card); border: 1px solid var(--border);
+  border-radius: 9px; padding: .8rem .95rem; color: var(--text);
+  transition: background .13s ease;
+}
+.class-card:hover { text-decoration: none; background: var(--card-soft); }
+.class-code {
+  align-self: flex-start; font-family: var(--mono);
+  font-size: .68rem; font-weight: 700; letter-spacing: .02em;
+  background: var(--crimson); color: #fff; border-radius: 4px; padding: .16rem .45rem;
+}
+/* Clamped, so a long title cannot push one tile out of line with its
+   neighbours now that they share a fixed height. */
+.class-title {
+  font-size: .92rem; font-weight: 600; color: var(--crimson); line-height: 1.3;
+  display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;
+  overflow: hidden;
+  /* overflow:hidden makes this a shrinkable flex item, and in a card that is
+     also overflow:hidden the title was the thing squeezed to nothing whenever
+     a gen-ed tag added a line below it. The clamp bounds it; flex must not. */
+  flex-shrink: 0;
+}
+.class-gpa { margin-top: auto; font-size: .78rem; color: var(--label); }
+.class-gpa strong { color: var(--text-h); }
+
+@media (max-width: 860px) {
+  .with-sidebar { grid-template-columns: 1fr; }
+  .sidebar { position: static; flex-direction: row; flex-wrap: wrap; }
+  .sidebar label { flex: 1 1 10rem; }
+}
+
+/* ==================================================== search bar + refine */
+
+.search-bar select {
+  font: inherit; font-size: .92rem; font-weight: 600;
+  padding: .8rem 1.1rem; border-radius: 999px;
+  border: 1px solid var(--border); background: var(--card); color: var(--text-h);
+  /* Grows to share a row, but never stretches across the page when it is the
+     only thing that wrapped. */
+  flex: 1 1 9rem; min-width: 0; max-width: 15rem;
+}
+
+/* Secondary controls: present, but visibly not the main event. */
+
+.gened {
+  display: inline-block; margin-left: .5rem;
+  font-size: .68rem; font-weight: 700; letter-spacing: .04em;
+  background: var(--crimson-l); color: var(--crimson);
+  border-radius: 4px; padding: .1rem .4rem;
+}
+
+/* ========================================================= builder layout */
+
+.build-head h2 { margin: 0 0 .9rem; }
+.small-btn { font-size: .72rem; padding: .5rem 1.1rem; }
+
+/* Inside a grey panel the tables go white, so the rows stay legible. */
+
+/* The landing page is the wordmark and four doors, nothing else - so it sits in
+   the middle of the viewport rather than floating in the top quarter. */
+main:has(> .hero) {
+  min-height: calc(100vh - 7rem);
+  display: flex; flex-direction: column; justify-content: center;
+}
+.hero { text-align: center; padding: 0 0 2.25rem; }
+.hero h1 {
+  font-size: 2.9rem; margin-bottom: 0; color: var(--crimson);
+  font-family: var(--display); font-weight: 800; letter-spacing: -.035em; line-height: 1.1;
+  display: inline-flex; align-items: center; gap: .3em; flex-wrap: wrap;
+  justify-content: center;
+}
+.hero-mark { height: 1.5em; width: auto; }
+
+@media (max-width: 860px) {
+  .builder { grid-template-columns: 1fr; }
+}
+
+/* ============================================================ home page */
+
+/* Equal-width buttons: four destinations of equal standing should not be sized
+   by how long their names happen to be. */
+.home-buttons {
+  display: grid; gap: 1rem; justify-content: center;
+  grid-template-columns: repeat(auto-fit, minmax(14rem, 14rem));
+}
+.home-buttons .btn { padding: .95rem 1rem; font-family: var(--display); }
+
+/* A back button that looks like the link it replaced. */
+.back {
+  font: inherit; font-size: .85rem; color: var(--crimson);
+  background: none; border: none; padding: 0; cursor: pointer;
+}
+.back:hover { text-decoration: underline; }
+
+/* ================================================== one-line filter row */
+
+.filters.one-line { gap: .75rem; align-items: flex-end; flex-wrap: nowrap; }
+.filters.one-line > * { min-width: 0; }
+.filters.one-line input, .filters.one-line select { min-width: 0; width: 100%; }
+
+/* A select sizes itself to its longest option, and one designation reads
+   "Methods Requirement: Quantitative Intensive" - left alone it took a third of
+   the row and squeezed the course box down to five characters. Every dropdown
+   is capped, and the text box is the one field that grows. */
+.filters.one-line label { flex: 0 1 9rem; }
+.filters.one-line select { text-overflow: ellipsis; }
+.filters.one-line .grow { flex: 3 1 16rem; }
+.filters input[type="checkbox"] { accent-color: var(--crimson); width: 1rem; height: 1rem; }
+/* The checkbox is a control, not a field, so it does not carry a label above
+   it - and without this it sat a whole label-height away from its neighbours. */
+.filters input[type="checkbox"] { accent-color: var(--crimson); width: 1rem; height: 1rem; }
+.filters.one-line .check {
+  flex: 0 0 auto; flex-direction: row; align-items: center; gap: .4rem;
+  text-transform: none; letter-spacing: normal;
+  font-size: .8rem; font-weight: 600; color: var(--text-h);
+  white-space: nowrap; padding-bottom: .65rem;
+}
+@media (max-width: 1100px) {
+  .filters.one-line { flex-wrap: wrap; }
+  .filters.one-line label { flex: 1 1 9rem; }
+}
+
+/* ==================================================== add-a-course cards */
+
+.section-cards {
+  display: grid; gap: 1rem; margin-bottom: 1.5rem;
+  grid-template-columns: 1fr;
+}
+.section-card {
+  position: relative;
+  border: 1px solid var(--border); border-radius: 11px;
+  overflow: hidden; background: var(--panel);
+  transition: border-color .13s ease, box-shadow .13s ease;
+}
+.section-card:hover { box-shadow: 0 2px 12px rgb(0 0 0 / .07); }
+.sc-row {
+  display: block; padding: .85rem 1.1rem;
+  border-bottom: 1px solid var(--border); color: var(--text);
+}
+.section-card > :last-child { border-bottom: none; }
+
+/* ---- the heading: what this is ---- */
+.sc-head {
+  background: var(--card-soft); text-align: center;
+  padding-right: 2.6rem; padding-left: 2.6rem;
+}
+.sc-code {
+  display: block; font-family: var(--mono);
+  font-size: 1.25rem; font-weight: 700; color: var(--crimson);
+  letter-spacing: -.01em;
+}
+.sc-section {
+  display: block; font-size: .68rem; font-weight: 700;
+  text-transform: uppercase; letter-spacing: .08em;
+  color: var(--label); margin-top: .15rem;
+}
+.sc-title {
+  display: block; font-size: 1rem; font-weight: 600;
+  color: var(--text-h); margin-top: .35rem; line-height: 1.3;
+}
+
+/* ---- when and where ---- */
+.sc-prof { margin: 0; text-align: center; font-size: 1rem; font-weight: 600; }
+.sc-when {
+  margin: .3rem 0 0; text-align: center;
+  font-size: .85rem; color: var(--text); font-variant-numeric: tabular-nums;
+}
+.sc-facts {
+  margin: .35rem 0 0; text-align: center;
+  font-size: .75rem; font-weight: 700;
+  text-transform: uppercase; letter-spacing: .05em;
+}
+/* White: the meeting details are the plain facts of the section, and tinting
+   them made a third band competing with the header and the prerequisites. */
+.sc-meet { background: var(--panel); }
+
+/* Mirrors the add control across the header. Reserved padding on both sides of
+   .sc-head already keeps the title clear of them. */
+.sc-units {
+  position: absolute; top: .7rem; left: .8rem; z-index: 1;
+  font-size: .68rem; font-weight: 700;
+  text-transform: uppercase; letter-spacing: .05em;
+  color: var(--label);
+}
+
+/* ---- prerequisites: registrar prose, so it needs room to breathe and a cap
+        so one long string cannot dwarf the rest of the card ---- */
+.sc-prereq { background: var(--card-soft); }
+/* No overflow cap here: it would clip the tooltip a course code raises. Cards
+   sit one per row, so a long prerequisite string costs height, not layout. */
+.sc-prereq p { margin: .3rem 0 0; font-size: .84rem; line-height: 1.45; }
+.sc-label {
+  font-size: .66rem; font-weight: 700; text-transform: uppercase;
+  letter-spacing: .07em; color: var(--label);
+}
+
+/* ---- the two figures, side by side so the comparison is immediate ---- */
+/* No rule above the figures: they belong with the section they describe, and a
+   line there split one thought into two. */
+/* Centred and narrow: the two numbers are read against each other, and a full
+   card width between them made that a saccade rather than a glance. */
+.sc-grades {
+  display: grid; grid-template-columns: auto auto; gap: 2.5rem;
+  justify-content: center; margin-top: .6rem;
+}
+.sc-head + .sc-row { border-bottom: none; }
+.sc-fig { display: flex; flex-direction: column; gap: .15rem; text-align: center; }
+.sc-value {
+  font-size: 1.35rem; font-weight: 700; color: var(--text-h);
+  font-variant-numeric: tabular-nums; line-height: 1.1;
+}
+
+/* ================================================ cards of equal height */
+
+/* auto-rows: 1fr makes every card in a row the same height whatever it holds,
+   so a professor with one class does not sit in a card half the size of one
+   with four. */
+
+/* ============================================================== paging */
+
+.pager { display: flex; justify-content: center; align-items: center; gap: 1rem; margin: 1.5rem 0 2rem; }
+.pager button {
+  font: inherit; font-size: .78rem; font-weight: 700;
+  text-transform: uppercase; letter-spacing: .05em;
+  padding: .6rem 1.4rem; border-radius: 999px; cursor: pointer;
+  background: var(--panel); border: 1px solid var(--crimson); color: var(--crimson);
+}
+.pager button:hover:not(:disabled) { background: var(--crimson-l); }
+.pager button:disabled { opacity: .35; cursor: default; border-color: var(--border); color: var(--label); }
+.pager-at { font-size: .82rem; color: var(--label); font-variant-numeric: tabular-nums; }
+
+/* A full section is a different answer from a nearly empty one, so it does not
+   share the neutral grey used for merely quiet fields. */
+.full { color: var(--crimson); font-weight: 700; }
+
+/* ============================================================== dialog */
+
+.modal {
+  border: 1px solid var(--border); border-radius: 12px;
+  padding: 0; background: var(--panel); color: var(--text);
+  max-width: 26rem; width: calc(100% - 2rem);
+}
+.modal::backdrop { background: rgb(0 0 0 / .35); }
+.modal-form { display: flex; flex-direction: column; gap: .9rem; padding: 1.5rem 1.6rem; }
+.modal-form h2 { margin: 0; font-size: 1.15rem; }
+.modal-form label {
+  display: flex; flex-direction: column; gap: .35rem;
+  font-size: .7rem; font-weight: 700; text-transform: uppercase;
+  letter-spacing: .07em; color: var(--label);
+}
+.modal-form input, .modal-form select {
+  font: inherit; font-size: .92rem; padding: .6rem .8rem;
+  border: 1px solid var(--border); border-radius: 7px;
+  background: var(--panel); color: var(--text-h);
+  text-transform: none; letter-spacing: normal;
+}
+.modal-times { display: grid; grid-template-columns: 1fr 1fr; gap: .8rem; }
+.modal-actions { display: flex; justify-content: flex-end; gap: .6rem; margin-top: .3rem; }
+.modal-actions .btn { font-size: .75rem; padding: .6rem 1.3rem; }
+
+/* A remove control inside a table row: an action, not a destination. */
+td form { display: inline; }
+
+/* Floated over the heading's top-right corner. The heading text is centred, so
+   the button needs padding reserved for it or a long title runs underneath. */
+/* A bare glyph rather than a button-shaped thing: one character, in the card's
+   corner, that flips between adding and removing. */
+.sc-corner {
+  position: absolute; top: .3rem; right: .7rem; z-index: 1;
+  font: inherit; font-size: 1.9rem; font-weight: 400; line-height: 1;
+  padding: 0 .2rem; cursor: pointer;
+  background: none; border: none; color: var(--crimson);
+  transition: color .12s ease, transform .12s ease;
+}
+.sc-corner:hover { color: var(--crimson-d); transform: scale(1.15); }
+.sc-corner:disabled { opacity: .4; cursor: default; transform: none; }
+
+/* ============================================================== links */
+
+/* Underlined at rest so it reads as a link, clean on hover so the pointer and
+   the darkening carry the affordance instead. */
+.link {
+  color: var(--crimson); text-decoration: underline;
+  text-underline-offset: .15em; text-decoration-thickness: 1px;
+  cursor: pointer; transition: color .12s ease;
+}
+.link:hover, .link:focus-visible {
+  text-decoration: none; color: var(--crimson-d);
+}
+
+/* =============================================================== cart */
+
+/* No align-items: start here. The cart column must STRETCH to the height of the
+   results beside it, because a sticky box can only travel inside its parent -
+   a content-height column gives it nowhere to go. */
+.with-cart { display: grid; grid-template-columns: 1fr 21rem; gap: 1.5rem; }
+
+.cart {
+  position: sticky; top: 1rem;
+  display: flex; flex-direction: column;
+  /* Sized to its content, never taller than the viewport. A fixed 100vh left a
+     tall empty box with the button stranded at the bottom whenever the schedule
+     was short - which is most of the time. */
+  max-height: calc(100vh - 2rem);
+  background: var(--panel); border: 1px solid var(--border);
+  /* No overflow:hidden here. It was only rounding the corners, but any overflow
+     on an ancestor makes that ancestor the sticky footer's scrollport - and a
+     box that never scrolls means the footer never sticks. The children round
+     their own corners instead. */
+  border-radius: 12px;
+}
+.cart-head {
+  border-radius: 11px 11px 0 0;
+  display: flex; align-items: center; justify-content: space-between; gap: .6rem;
+  padding: .85rem 1rem; background: var(--card);
+  border-bottom: 1px solid var(--border); flex: none;
+}
+.cart-title {
+  font-size: .72rem; font-weight: 700; text-transform: uppercase;
+  letter-spacing: .07em; color: var(--label);
+}
+.cart-count {
+  min-width: 1.6rem; padding: .12rem .5rem; border-radius: 999px;
+  background: var(--crimson); color: #fff;
+  font-size: .82rem; font-weight: 700; text-align: center;
+}
+
+/* The list is the only part that scrolls, so the heading and the button stay
+   put however long the schedule gets. */
+/* The list is the only part that scrolls, so the heading and the button stay
+   put however long the schedule gets. */
+.cart-body { flex: 1; min-height: 0; overflow-y: auto; padding: .8rem; }
+/* Directly below the list. No stickiness needed: the panel is only as tall as
+   its contents, so the button is never stranded away from them. */
+.cart-foot {
+  flex: none; padding: .8rem;
+  background: var(--panel); border-top: 1px solid var(--border);
+  border-radius: 0 0 11px 11px;
+}
+.cart-foot .btn { display: block; text-align: center; }
+
+.cart-none { margin: 0; font-size: .85rem; color: var(--label); line-height: 1.5; }
+.cart-plus { color: var(--crimson); font-weight: 700; }
+
+.cart-list { list-style: none; margin: 0; padding: 0; }
+.cart-list li {
+  position: relative; padding: .65rem 1.6rem .65rem .1rem;
+  border-bottom: 1px solid var(--border);
+}
+.cart-list li:last-child { border-bottom: none; }
+.cart-what { display: flex; align-items: baseline; gap: .5rem; }
+.cart-code { font-family: var(--mono); font-weight: 700; font-size: .92rem; color: var(--crimson); }
+.cart-sec { font-size: .68rem; font-weight: 700; text-transform: uppercase;
+            letter-spacing: .05em; color: var(--label); }
+.cart-title-line { margin: .1rem 0 0; font-size: .82rem; color: var(--text-h); }
+.cart-when { margin: .15rem 0 0; font-size: .75rem; color: var(--label); }
+
+.cart-drop {
+  position: absolute; top: .5rem; right: 0;
+  font: inherit; font-size: 1.1rem; line-height: 1; color: var(--label);
+  background: none; border: none; padding: .1rem .3rem; cursor: pointer;
+  transition: color .12s ease;
+}
+.cart-drop:hover { color: var(--crimson); }
+.cart-drop:disabled { opacity: .4; cursor: default; }
+
+/* ================================================= cart breaks + tabs */
+
+.cart-breaks {
+  margin-top: .9rem; padding-top: .8rem; border-top: 1px solid var(--border);
+  font-size: .78rem; color: var(--label);
+}
+/* First in the panel now, so it carries no rule above it - the divider belongs
+   between the two lists, not at the top of the box. */
+.cart-first { margin-top: 0; padding-top: 0; border-top: none; }
+.cart-courses { margin-top: .9rem; padding-top: .8rem; border-top: 1px solid var(--border); }
+.cart-breaks-head {
+  display: flex; align-items: center; justify-content: space-between;
+  gap: .5rem; margin-bottom: .4rem;
+}
+.cart-sub {
+  font-size: .68rem; font-weight: 700; text-transform: uppercase;
+  letter-spacing: .07em; color: var(--label);
+}
+.cart-addbreak {
+  font: inherit; font-size: .72rem; font-weight: 700;
+  color: var(--crimson); background: none; border: none;
+  padding: .1rem .2rem; cursor: pointer;
+}
+.cart-addbreak:hover { text-decoration: underline; }
+.cart-dropbreak {
+  position: absolute; top: .5rem; right: 0;
+  font: inherit; font-size: 1.1rem; line-height: 1; color: var(--label);
+  background: none; border: none; padding: .1rem .3rem; cursor: pointer;
+}
+.cart-dropbreak:hover { color: var(--crimson); }
+.cart-none.small { font-size: .78rem; }
+
+/* A bar fixed to the foot of the screen, the way a phone app switches views -
+   always reachable by thumb, and it does not scroll away with the content. */
+.tabs { display: none; }
+.tab {
+  flex: 1; font: inherit; font-size: .78rem; font-weight: 700;
+  text-transform: uppercase; letter-spacing: .05em;
+  padding: .9rem .5rem; cursor: pointer;
+  background: none; border: none; border-top: 3px solid transparent;
+  color: var(--label);
+}
+.tab-on { color: var(--crimson); border-top-color: var(--crimson); background: var(--crimson-l); }
+.tab-count {
+  display: inline-block; min-width: 1.3rem; padding: 0 .35rem; margin-left: .2rem;
+  border-radius: 999px; background: var(--crimson); color: #fff; font-size: .72rem;
+}
+
+@media (max-width: 900px) {
+  .tabs {
+    display: flex; position: fixed; left: 0; right: 0; bottom: 0; z-index: 50;
+    background: var(--panel); border-top: 1px solid var(--border);
+    box-shadow: 0 -2px 12px rgb(0 0 0 / .08);
+  }
+  /* Room for the bar, so the last card is not sitting underneath it. */
+  main { padding-bottom: 5rem; }
+  .with-cart { grid-template-columns: 1fr; }
+  /* The filters drive the results, so they belong to that tab alone. */
+  form.on-cart .filters { display: none; }
+  .cart { position: static; height: auto; max-height: none; }
+  /* Only the chosen tab is in the document; the other is not merely hidden,
+     so a long results list cannot scroll past an off-screen panel. */
+  .with-cart.show-results #cart-slot { display: none; }
+  .with-cart.show-cart #results { display: none; }
+}
+
+.note {
+  margin: -.75rem 0 1.75rem; padding: .7rem .9rem;
+  background: var(--card); border-left: 3px solid var(--label);
+  border-radius: 0 7px 7px 0; font-size: .82rem; color: var(--text);
+  max-width: 40rem;
+}
+
+/* A prerequisite course code, hoverable for its full title. Tinted and
+   underlined so it reads as interactive at a glance rather than only once the
+   pointer happens to land on it. */
+.course-ref {
+  position: relative;
+  display: inline-block;
+  text-decoration: none;
+  color: var(--crimson);
+  font-weight: 600;
+  cursor: pointer;
+}
+.course-ref:hover, .course-ref:focus-visible { text-decoration: underline; }
+
+/* Drawn here rather than by the browser: the native title attribute waits about
+   a second, which is long enough that most people never discover it. */
+.course-ref::after {
+  content: attr(data-title);
+  position: absolute; bottom: calc(100% + .35rem); left: 50%;
+  transform: translateX(-50%);
+  display: none; z-index: 30;
+  padding: .35rem .6rem; border-radius: 6px;
+  background: var(--crimson); color: #fff;
+  font-size: .78rem; font-weight: 600; line-height: 1.3;
+  white-space: nowrap; max-width: 20rem; overflow: hidden; text-overflow: ellipsis;
+  box-shadow: 0 2px 10px rgb(0 0 0 / .12);
+  pointer-events: none;
+}
+.course-ref:hover::after, .course-ref:focus-visible::after { display: block; }
+
+/* The professor cards stack one per row. */
+#results .prof-card + .prof-card { margin-top: 1rem; }
+
+/* The week grid needs room for a block's label and time. */
+.week .hour, .week .cell { height: 3rem; }
+.week .col { min-height: 0; }
+.block-label { display: block; font-weight: 700; font-size: .72rem; }
+.block-time { display: block; font-size: .66rem; opacity: .85; }
+/* Breaks are the constraint, not the content, so they read as a backdrop. */
+.block-break {
+  background: var(--label); color: #fff;
+}
+.clash-list { margin: .4rem 0 0; padding-left: 1.1rem; font-size: .85rem; }
+.clash-list li { margin: .15rem 0; }
+
+/* A clash has to be distinguishable from an ordinary block, and the ordinary
+   block is already crimson - so conflicts get a brighter red plus an outline,
+   which reads as wrong rather than merely as another class. */
+.block-clash {
+  background: #d92038;
+  outline: 2px solid #7c0d1c;
+  outline-offset: -2px;
+  z-index: 2;
+}
+.cart-clash { background: var(--crimson-l); box-shadow: inset 3px 0 0 var(--crimson); padding-left: .5rem; }
+.cart-clash .cart-code { color: var(--crimson-d); }
+
+/* The panel on a course page is prose, so its codes need a little more air
+   between lines than the tighter card layout does. */
+.prereq-prose { line-height: 1.8; }
+
+/* At full width the links keep their original spacing; the wrapper is only
+   there so the narrow layout has something to distribute. */
+nav .links { display: flex; gap: 2rem; align-items: center; }
+
+.prof-dept {
+  margin: -.4rem 0 .7rem; font-size: .78rem; color: var(--label);
+}
+/* Below this the three controls stop competing for one line: the box takes
+   the full width and the two filters share the row beneath it. */
+@media (max-width: 560px) {
+  .search-bar { gap: .5rem; }
+  .search-bar input { flex: 1 1 100%; }
+  .search-bar select { flex: 1 1 0; }
+}
+
+/* Heading and the one line that qualifies it - which term, how many results. */
+.page-head { margin-bottom: 1.5rem; }
+.page-head h1 { margin: 0; }
+.page-sub { margin: .3rem 0 0; font-size: .9rem; color: var(--label); }
+
+/* The opening line of a page of prose - larger than the body, still quiet. */
+.lede { font-size: 1.05rem; line-height: 1.65; max-width: 46rem; }
+
+/* ================================================= course lookup results */
+
+/* One course per bar - code, title, average - not the tiles the
+   professor cards use. A lookup reads like a list, not a gallery. */
+.course-list { list-style: none; margin: 0; padding: 0; }
+.course-list li + li { border-top: 1px solid var(--border); }
+/* Code, title, average - one line at every width. The code column sizes to
+   its content rather than a fixed 8rem, so on a phone the title keeps the
+   room it needs and truncates rather than the row breaking into three. */
+.course-row {
+  display: grid; align-items: baseline; gap: 1rem;
+  grid-template-columns: max-content minmax(0, 1fr) auto;
+  padding: .7rem .5rem; color: var(--text); text-decoration: none;
+  border-radius: 6px; transition: background .12s ease;
+}
+.course-row:hover { background: var(--card-soft); text-decoration: none; }
+.course-code { font-family: var(--mono); font-weight: 700; color: var(--crimson); }
+.course-title { color: var(--text-h); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.course-gpa { text-align: right; color: var(--text-h); }
+@media (max-width: 640px) {
+  .course-row { gap: .6rem; padding: .7rem .15rem; }
+  .course-code { font-size: .85rem; }
+  .course-title { font-size: .92rem; }
+}

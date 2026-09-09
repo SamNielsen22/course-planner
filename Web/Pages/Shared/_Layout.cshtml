@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8"/>
+    <meta name="viewport" content="width=device-width, initial-scale=1"/>
+    <title>@ViewData["Title"] - Utah Course Compass</title>
+    <link rel="icon" href="/favicon.svg"/>
+    @* Plus Jakarta Sans for the wordmark and the home page buttons only - the
+       rest of the site stays on the system sans. Two weights, so the load is
+       small. SIL Open Font License. display=swap so the name renders in the
+       fallback first rather than sitting invisible. *@
+    <link rel="preconnect" href="https://fonts.googleapis.com"/>
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
+    <link rel="stylesheet"
+          href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@@700;800&display=swap"/>
+    <link rel="stylesheet" href="~/css/site.css" asp-append-version="true"/>
+</head>
+<body>
+<header>
+    <nav>
+        <a class="brand" asp-page="/Home">
+            <img class="brand-mark" src="/logo.svg" alt="" width="34" height="25"/>
+            Utah Course Compass
+        </a>
+        <span class="links">
+            <a asp-page="/BuilderAdd">Schedule Builder</a>
+            <a asp-page="/Index">Courses</a>
+            <a asp-page="/Instructors">Professors</a>
+            <a asp-page="/About">About</a>
+        </span>
+    </nav>
+</header>
+
+<main>
+    @RenderBody()
+</main>
+
+<footer>
+    <p>Utah Course Compass &middot; grade data from the University of Utah&rsquo;s public grade summary. Unofficial, and not affiliated with the University.</p>
+</footer>
+
+@await RenderSectionAsync("Scripts", required: false)
+</body>
+</html>

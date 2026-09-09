@@ -1,12 +1,22 @@
-"""Load gpa.csv into the sections table.
+"""Load the GPA csv into the grade tables, routed by grain.
 
-Grade rows match sections on (term, subject, course_number, section_number).
-This only ever UPDATEs - it cannot create a section row, having no schedule
-information - so grade rows with no matching section are reported rather than
-silently dropped. gpa.csv stays the source of truth: rerun this once the
-schedule crawler covers the missing terms and the rows land.
+The csv carries two of the three grains, told apart by the section column:
 
-Safe to rerun; every write is an idempotent overwrite of the same columns.
+    section != '(all)'  ->  section_grades      one section, one term
+    section == '(all)'  ->  course_term_grades  one course, one term
+
+Separate tables because they have different keys and neither can be derived
+from the other: any grade group under five students is suppressed, so summing
+the sections undercounts the course. The third grain - course_grades, one
+course across all terms - comes from its own all-terms pass and is not in
+this csv.
+
+Nothing is matched against the schedule. Grades come from the Tableau dashboard
+and sections from the class schedule; the dashboard covers terms the crawler
+does not, and the previous version could only UPDATE an existing section row,
+so those rows were counted as "unmatched" and thrown away every run.
+
+Safe to rerun: every write is an idempotent overwrite of the same primary key.
 """
 
 import csv
@@ -16,17 +26,16 @@ from collections import Counter
 from pathlib import Path
 
 # Paths are relative to the repo root - run everything from there.
-CSV_PATH = Path("data/gpa.csv")
+CSV_PATH = Path("data/gpa2.csv")
 DB_PATH = Path("data/courseplanner.db")
 
-KEY_COLUMNS = ["term", "subject", "course_number", "section_number"]
-
-# The scraper writes the whole-course row under this section, from the
-# dashboard's own no-section-pinned figures. It goes to course_grades, not
-# sections - it is not a section and must not look like one.
+# The scraper writes the whole-course row under this section name, and the
+# all-terms pass writes its rows under this term. A row carrying both is the
+# third grain: one course, every term pooled.
 COURSE_SECTION = "(all)"
+ALL_TERMS = "(all)"
 
-# gpa.csv column -> sections column. Stats are REAL, headcounts are INTEGER.
+# csv column -> grades column. Stats are REAL, headcounts are INTEGER.
 STAT_COLUMNS = {
     "avg_gpa": "gpa_avg",
     "p25": "gpa_p25",
@@ -34,52 +43,11 @@ STAT_COLUMNS = {
     "p75": "gpa_p75",
     "std_dev": "gpa_std_dev",
 }
-COUNT_COLUMNS = {
-    "grade_a": "grade_a",
-    "grade_b": "grade_b",
-    "grade_c": "grade_c",
-    "grade_d": "grade_d",
-    "grade_e": "grade_e",
-    "grade_cr": "grade_cr",
-    "grade_nc": "grade_nc",
-    "grade_w": "grade_w",
-    "grade_other": "grade_other",
-}
-ALL_COLUMNS = list(STAT_COLUMNS.values()) + list(COUNT_COLUMNS.values())
-
-
-def ensure_columns(database):
-    """Add the grade columns to sections if they aren't there yet."""
-    existing = {row[1] for row in database.execute("PRAGMA table_info(sections)")}
-    added = []
-    for column in STAT_COLUMNS.values():
-        if column not in existing:
-            database.execute(f"ALTER TABLE sections ADD COLUMN {column} REAL")
-            added.append(column)
-    for column in COUNT_COLUMNS.values():
-        if column not in existing:
-            database.execute(f"ALTER TABLE sections ADD COLUMN {column} INTEGER")
-            added.append(column)
-    return added
-
-
-def ensure_course_grades(database):
-    """Create course_grades if this database predates it. Mirrors schema.sql."""
-    database.execute("""
-        CREATE TABLE IF NOT EXISTS course_grades (
-          term           TEXT NOT NULL,
-          subject        TEXT NOT NULL,
-          course_number  TEXT NOT NULL,
-          gpa_avg REAL, gpa_p25 REAL, gpa_p50 REAL, gpa_p75 REAL, gpa_std_dev REAL,
-          grade_a INTEGER, grade_b INTEGER, grade_c INTEGER, grade_d INTEGER,
-          grade_e INTEGER, grade_cr INTEGER, grade_nc INTEGER, grade_w INTEGER,
-          grade_other INTEGER,
-          PRIMARY KEY (term, subject, course_number),
-          FOREIGN KEY (subject, course_number)
-            REFERENCES courses(subject, course_number)
-        )""")
-    database.execute("CREATE INDEX IF NOT EXISTS idx_course_grades_course "
-                     "ON course_grades(subject, course_number)")
+COUNT_COLUMNS = {name: name for name in (
+    "grade_a", "grade_b", "grade_c", "grade_d", "grade_e",
+    "grade_cr", "grade_nc", "grade_w", "grade_other")}
+VALUE_COLUMNS = list(STAT_COLUMNS.values()) + list(COUNT_COLUMNS.values())
+KEY_COLUMNS = ["term", "subject", "course_number", "section_number"]
 
 
 def normalize_term(term):
@@ -116,7 +84,7 @@ def to_count(value):
 
 
 def read_csv(path):
-    """CSV rows keyed by section, newest row winning. Empty rows are dropped."""
+    """Rows keyed by (term, subject, course, section), last row winning."""
     graded, blank, duplicates = {}, 0, 0
     with open(path, newline="") as handle:
         for row in csv.DictReader(handle):
@@ -147,92 +115,86 @@ def read_csv(path):
 
 
 def load(database, graded):
-    """Update matching sections. Returns the keys that had nowhere to go."""
-    known = set(database.execute(
-        f"SELECT {', '.join(KEY_COLUMNS)} FROM sections"))
-    matched = {key: stats for key, stats in graded.items() if key in known}
+    """Route each row to the table for its grain. Returns (sections, courses).
 
-    assignments = ", ".join(f"{column} = ?" for column in ALL_COLUMNS)
-    conditions = " AND ".join(f"{column} = ?" for column in KEY_COLUMNS)
+    The section column is what tells them apart: a real section number is a
+    section-grain row, '(all)' is the whole-course row for that term."""
+    sections, courses, totals = {}, {}, {}
+    for key, stats in graded.items():
+        term, subject, catnbr, section = key
+        if term == ALL_TERMS and section == COURSE_SECTION:
+            totals[(subject, catnbr)] = stats       # all terms, whole course
+        elif section == COURSE_SECTION:
+            courses[key[:3]] = stats                # one term, whole course
+        else:
+            sections[key] = stats                   # one term, one section
+
+    write(database, "section_grades",
+          ["term", "subject", "course_number", "section_number"], sections)
+    write(database, "course_term_grades",
+          ["term", "subject", "course_number"], courses)
+    write(database, "course_grades", ["subject", "course_number"], totals)
+    return len(sections), len(courses), len(totals)
+
+
+def write(database, table, key_columns, rows):
+    """One idempotent overwrite per primary key."""
+    columns = ", ".join(key_columns + VALUE_COLUMNS)
+    holes = ", ".join("?" * (len(key_columns) + len(VALUE_COLUMNS)))
     database.executemany(
-        f"UPDATE sections SET {assignments} WHERE {conditions}",
-        [tuple(stats[column] for column in ALL_COLUMNS) + key
-         for key, stats in matched.items()])
-
-    return len(matched), [key for key in graded if key not in known]
+        f"INSERT OR REPLACE INTO {table} ({columns}) VALUES ({holes})",
+        [key + tuple(stats[column] for column in VALUE_COLUMNS)
+         for key, stats in rows.items()])
 
 
-def load_courses(database, graded):
-    """Write the whole-course rows. Keyed (term, subject, course_number), so
-    unlike the section rows these only need the course to exist - which is why
-    they land even for courses whose individual sections the crawler missed.
-
-    Rewritable: rerunning overwrites the same row rather than duplicating it."""
-    known = set(database.execute("SELECT subject, course_number FROM courses"))
-    matched = {key: stats for key, stats in graded.items() if key[1:] in known}
-
-    columns = ", ".join(ALL_COLUMNS)
-    holes = ", ".join("?" * (3 + len(ALL_COLUMNS)))
-    database.executemany(
-        f"INSERT OR REPLACE INTO course_grades "
-        f"(term, subject, course_number, {columns}) VALUES ({holes})",
-        [key + tuple(stats[column] for column in ALL_COLUMNS)
-         for key, stats in matched.items()])
-
-    return len(matched), [key for key in graded if key[1:] not in known]
-
-
-def report(csv_path, graded, blank, duplicates, updated, unmatched):
-    print(f"read {len(graded) + blank} rows from {csv_path.name}")
+def report(csv_paths, graded, blank, duplicates, sections, courses, totals):
+    names = ", ".join(p.name for p in csv_paths)
+    print(f"read {len(graded) + blank} rows from {names}")
     print(f"  {len(graded):>6} with grades or headcounts")
     print(f"  {blank:>6} with none published (labs, discussions) - skipped")
     if duplicates:
-        print(f"  {duplicates:>6} repeated section keys - last row won")
+        print(f"  {duplicates:>6} repeated keys - last row won")
     print()
-    print(f"updated   {updated} sections")
-    print(f"unmatched {len(unmatched)} rows had no section row to attach to")
-
-    if not unmatched:
-        return
-    print("\n  unmatched by term:")
-    for term, count in sorted(Counter(key[0] for key in unmatched).items()):
+    print(f"section_grades     {sections:>7,} rows")
+    print(f"course_term_grades {courses:>7,} rows")
+    print(f"course_grades      {totals:>7,} rows")
+    print("\n  by term:")
+    for term, count in sorted(Counter(key[0] for key in graded).items()):
         print(f"    {term:<12} {count}")
-    print("\n  first few:")
-    for term, subject, course, section in unmatched[:5]:
-        print(f"    {term} {subject} {course}-{section}")
-    print("\n  These stay in gpa.csv - rerun once the crawler covers them.")
 
 
 def main():
+    """LoadGpa.py [database] [csv ...]
+
+    Several csvs can be given, so the per-term sweep and the all-terms pass
+    load together. They key differently and never collide."""
     database_path = Path(sys.argv[1]) if len(sys.argv) > 1 else DB_PATH
-    csv_path = Path(sys.argv[2]) if len(sys.argv) > 2 else CSV_PATH
+    csv_paths = [Path(a) for a in sys.argv[2:]] or [CSV_PATH]
     if not database_path.exists():
         sys.exit(f"no database at {database_path}")
-    if not csv_path.exists():
-        sys.exit(f"no csv at {csv_path}")
+    for path in csv_paths:
+        if not path.exists():
+            sys.exit(f"no csv at {path}")
 
-    graded, blank, duplicates = read_csv(csv_path)
-    courses = {key[:3]: stats for key, stats in graded.items()
-               if key[3] == COURSE_SECTION}
-    sections = {key: stats for key, stats in graded.items()
-                if key[3] != COURSE_SECTION}
+    graded, blank, duplicates = {}, 0, 0
+    for path in csv_paths:
+        rows, empty, repeats = read_csv(path)
+        overlap = set(rows) & set(graded)
+        if overlap:
+            print(f"warning: {len(overlap)} keys in {path.name} were already "
+                  f"read from an earlier file - the later one wins")
+        graded.update(rows)
+        blank += empty
+        duplicates += repeats
 
     database = sqlite3.connect(database_path)
     try:
-        added = ensure_columns(database)
-        ensure_course_grades(database)
-        if added:
-            print(f"added columns to sections: {', '.join(added)}\n")
-        updated, unmatched = load(database, sections)
-        written, no_course = load_courses(database, courses)
+        sections, courses, totals = load(database, graded)
         database.commit()
     finally:
         database.close()
 
-    report(csv_path, sections, blank, duplicates, updated, unmatched)
-    print(f"\ncourse_grades {written} whole-course rows written")
-    if no_course:
-        print(f"              {len(no_course)} had no course row to attach to")
+    report(csv_paths, graded, blank, duplicates, sections, courses, totals)
 
 
 if __name__ == "__main__":

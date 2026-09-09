@@ -1,0 +1,98 @@
+@page
+@model InstructorModel
+@{
+    ViewData["Title"] = Model.Display;
+}
+
+@* Wherever you arrived from - a search, a section list, a course page -
+   is where back should return you. A fixed link only ever guesses. *@
+<p class="crumb"><button type="button" class="back" onclick="history.back()">&larr; Back</button></p>
+
+<div class="page-head">
+    <h1>@Model.Display</h1>
+</div>
+
+@* Pooled by default: a single term of a single class is usually one section,
+   a small sample of how someone grades - but it is also the one grain whose
+   percentiles are the dashboard's own rather than reconstructed. *@
+<form method="get" class="inline-form">
+    <input type="hidden" name="unid" value="@Model.Unid"/>
+    @if (!Model.ShowSections)
+    {
+        <input type="hidden" name="from" value="builder"/>
+    }
+    <select name="term" onchange="location.replace(location.pathname + '?' + new URLSearchParams(new FormData(this.form)))" aria-label="Term">
+        <option value="">All terms</option>
+        @foreach (var t in Model.Terms)
+        {
+            <option value="@t" selected="@(t == Model.Term)">@Terms.Display(t)</option>
+        }
+    </select>
+    <select name="course" onchange="location.replace(location.pathname + '?' + new URLSearchParams(new FormData(this.form)))" aria-label="Class">
+        <option value="">All classes</option>
+        @foreach (var c in Model.Courses.Where(c => c.AvgGpa is not null))
+        {
+            var code = $"{c.Subject} {c.CourseNumber}";
+            <option value="@code" selected="@(code == Model.Course)">@code</option>
+        }
+    </select>
+    @* Always present, so it is obvious a section can be chosen; live once a
+       term and a class are picked. Hidden for visitors from the builder - see
+       InstructorModel.ShowSections. *@
+    @if (!Model.ShowSections)
+    {
+    }
+    else if (!Model.ClassChosen)
+    {
+        <select name="section" disabled aria-label="Section">
+            <option>Choose a term and class first</option>
+        </select>
+    }
+    else if (Model.GradedSections.Count == 0)
+    {
+        <select name="section" disabled aria-label="Section">
+            <option>No section grades published</option>
+        </select>
+    }
+    else
+    {
+        <select name="section" onchange="location.replace(location.pathname + '?' + new URLSearchParams(new FormData(this.form)))" aria-label="Section">
+            <option value="">All sections</option>
+            @foreach (var s in Model.GradedSections)
+            {
+                <option value="@s.SectionNumber" selected="@(s.SectionNumber == Model.SectionNumber)">Section @s.SectionNumber</option>
+            }
+        </select>
+    }
+    <noscript><button type="submit">Go</button></noscript>
+</form>
+
+<partial name="_GradeChart" model="Model.Grades"/>
+
+@if (Model.Grades.Any)
+{
+    @* One section is the dashboard's own figures. Anything pooled has its
+       deviation combined exactly and its percentiles reconstructed -
+       GradeReconstruction; the About page explains. *@
+    <partial name="_GradeStats" model="Model.Grades"/>
+
+    @* The average covers every student; the bars only show groups of five or
+       more. When they diverge this far the chart is materially incomplete, and
+       the page should say so rather than leave two numbers arguing. *@
+    @if (Model.Grades.HasHiddenGrades)
+    {
+        <p class="note">
+            The bars total fewer students than the average is computed over. The
+            University withholds any grade group with fewer than five students,
+            so small groups of lower grades are missing from the chart while
+            still counting toward the average.
+        </p>
+    }
+}
+
+<div class="center stack-tight">
+    <a class="btn out" href="@Model.RateMyProfessorUrl" target="_blank" rel="noopener noreferrer">
+        Search on Rate My Professor
+    </a>
+    <p class="muted">Professor reviews coming soon!</p>
+</div>

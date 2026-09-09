@@ -1,0 +1,49 @@
+@model CoursePlanner.Data.GradeDistribution
+@{
+    // An empty bucket is not a result, it is an absence. Dropping it keeps the
+    // chart to the outcomes that actually happened, and stops CR/NC occupying
+    // half the width of every course that never used them.
+    var bars = Model.Bars.Where(b => b.Count > 0).ToList();
+    var peak = bars.Count == 0 ? 0 : bars.Max(b => b.Count);
+    var step = peak switch
+    {
+        <= 10 => 2,
+        <= 40 => 10,
+        <= 100 => 25,
+        <= 400 => 100,
+        <= 1000 => 250,
+        _ => 500
+    };
+    var ceiling = Math.Max(step, (int)(Math.Ceiling(peak / (double)step) * step));
+    var ticks = Enumerable.Range(0, ceiling / step + 1).Select(i => i * step).Reverse().ToList();
+}
+
+@if (bars.Count == 0)
+{
+    <p class="empty">No grades published for this selection.</p>
+}
+else
+{
+    <div class="chart">
+        <div class="chart-plot">
+            @foreach (var tick in ticks)
+            {
+                <div class="chart-grid" style="bottom: @(tick * 100.0 / ceiling)%"></div>
+            }
+            <div class="chart-bars">
+                @foreach (var (label, count) in bars)
+                {
+                    <div class="chart-bar" title="@label: @count">
+                        @* The height is set as a custom property and the animation
+                           grows into it, so a redraw after a filter change reads as
+                           the same bars moving rather than a new chart appearing. *@
+                        <div class="chart-fill" style="--h: @(count * 100.0 / ceiling)%">
+                            <span class="chart-value">@count</span>
+                        </div>
+                        <span class="chart-label">@label</span>
+                    </div>
+                }
+            </div>
+        </div>
+    </div>
+}

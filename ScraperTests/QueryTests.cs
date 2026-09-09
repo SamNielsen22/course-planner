@@ -32,23 +32,64 @@ public class TestDatabase : IDisposable
         """);
 
         db.Execute("""
-            INSERT INTO sections (term, subject, course_number, section_number, component, type, units, location, times, seats_available, gpa_avg) VALUES
-              ('Fall2026','CS','2420','001','Lecture','In Person',4,'WEB L103','TuTh/02:00PM-03:20PM',  12,  3.10),
-              ('Fall2026','CS','2420','002','Lecture','In Person',4,'WEB L104','MoWe/09:00AM-10:20AM',   0,  2.90),
-              ('Fall2026','CS','2420','003','Laboratory','In Person',NULL,'WEB L130','Fr/09:40AM-10:30AM', -2, NULL),
-              ('Fall2026','CS','3100','001','Lecture','In Person',3,'WEB 1230','Mo/09:00AM-10:00AM; We/01:00PM-02:00PM', 5, 3.40),
-              ('Fall2026','ANTH','1010','001','Lecture','In Person',3,'GC 1900','MoWe/12:00PM-01:00PM',  7,  3.30),
-              ('Fall2026','ANTH','1010','090','Lecture','Online',   3, NULL,     NULL,                    9,  3.20),
-              ('Spring2026','CS','2420','001','Lecture','In Person',4,'WEB L103','TuTh/02:00PM-03:20PM', 30, 3.05);
+            INSERT INTO sections (term, subject, course_number, section_number, component, type, units, location, times, seats_available) VALUES
+              ('Fall2026','CS','2420','001','Lecture','In Person',4,'WEB L103','TuTh/02:00PM-03:20PM',  12),
+              ('Fall2026','CS','2420','002','Lecture','In Person',4,'WEB L104','MoWe/09:00AM-10:20AM',   0),
+              ('Fall2026','CS','2420','003','Laboratory','In Person',NULL,'WEB L130','Fr/09:40AM-10:30AM', -2),
+              ('Fall2026','CS','3100','001','Lecture','In Person',3,'WEB 1230','Mo/09:00AM-10:00AM; We/01:00PM-02:00PM', 5),
+              ('Fall2026','ANTH','1010','001','Lecture','In Person',3,'GC 1900','MoWe/12:00PM-01:00PM',  7),
+              ('Fall2026','ANTH','1010','090','Lecture','Online',   3, NULL,     NULL,                    9),
+              ('Spring2026','CS','2420','001','Lecture','In Person',4,'WEB L103','TuTh/02:00PM-03:20PM', 30);
+        """);
+
+        // One table per grain. CS 2420-003 has no grades at all - a lab
+        // publishes none - which is what the LEFT JOIN is for.
+        db.Execute("""
+            INSERT INTO section_grades (term, subject, course_number, section_number, gpa_avg) VALUES
+              ('Fall2026','CS','2420','001',3.10),
+              ('Fall2026','CS','2420','002',2.90),
+              ('Fall2026','CS','3100','001',3.40),
+              ('Fall2026','ANTH','1010','001',3.30),
+              ('Fall2026','ANTH','1010','090',3.20),
+              ('Spring2026','CS','2420','001',3.05);
+        """);
+
+        // The rollups are NOT the sum of the finer grain - suppression hides
+        // groups under five students at whichever level is on screen.
+        db.Execute("""
+            INSERT INTO course_term_grades (term, subject, course_number, gpa_avg, grade_a) VALUES
+              ('Fall2026','CS','2420',3.02,118),
+              ('Spring2026','CS','2420',3.05,101);
         """);
 
         db.Execute("""
-            INSERT INTO section_instructors (term, subject, course_number, section_number, instructor) VALUES
-              ('Fall2026','CS','2420','001','Kopta, Daniel'),
-              ('Fall2026','CS','2420','001','Parker, Erin'),
-              ('Fall2026','CS','2420','002','Parker, Erin'),
-              ('Fall2026','CS','3100','001','Kopta, Daniel'),
-              ('Fall2026','ANTH','1010','001','Brown, Noelle');
+            INSERT INTO course_grades (subject, course_number, gpa_avg, grade_a) VALUES
+              ('CS','2420',3.03,219);
+        """);
+
+        db.Execute("""
+            INSERT INTO instructors (unid, display_name) VALUES
+              ('u0011111','Kopta, Daniel'),
+              ('u0022222','Parker, Erin'),
+              ('u0033333','Brown, Noelle'),
+              -- Two different people, one name. Nothing but the uNID separates
+              -- them, and both teach the same subject.
+              ('u0044444','Nguyen, Khoi'),
+              ('u0055555','Nguyen, Khoi');
+        """);
+
+        db.Execute("""
+            INSERT INTO section_instructors (term, subject, course_number, section_number, instructor_unid) VALUES
+              ('Fall2026','CS','2420','001','u0011111'),
+              ('Fall2026','CS','2420','001','u0022222'),
+              ('Fall2026','CS','2420','002','u0022222'),
+              ('Fall2026','CS','3100','001','u0011111'),
+              ('Fall2026','ANTH','1010','001','u0033333'),
+              -- Same name, same section: keyed on the name these would collide
+              -- and one would be lost. Not on ANTH 1010-090 - that section is
+              -- deliberately instructor-free for FindSections' empty-list test.
+              ('Fall2026','CS','2420','002','u0044444'),
+              ('Fall2026','CS','2420','002','u0055555');
         """);
     }
 
@@ -152,8 +193,8 @@ public class QueryTests : IClassFixture<TestDatabase>
 
         var lecture = Assert.Single(sections, s => s.SectionNumber == "001");
         Assert.Equal(2, lecture.Instructors.Count);
-        Assert.Contains("Kopta, Daniel", lecture.Instructors);
-        Assert.Contains("Parker, Erin", lecture.Instructors);
+        Assert.Contains(lecture.Instructors, i => i.Name == "Kopta, Daniel");
+        Assert.Contains(lecture.Instructors, i => i.Name == "Parker, Erin");
     }
 
     [Fact]
@@ -181,8 +222,10 @@ public class QueryTests : IClassFixture<TestDatabase>
     {
         var instructors = queries.SearchInstructors(null, "Fall2026");
 
-        // Two sections each, so the tie breaks on name; one section sorts last.
-        Assert.Equal(new[] { "Kopta, Daniel", "Parker, Erin", "Brown, Noelle" },
+        // Two sections each, so the tie breaks on name; one-section people sort
+        // last. Both Nguyens appear - same name, different people.
+        Assert.Equal(new[] { "Kopta, Daniel", "Parker, Erin",
+                             "Brown, Noelle", "Nguyen, Khoi", "Nguyen, Khoi" },
                      instructors.Select(i => i.Name));
     }
 
@@ -196,12 +239,38 @@ public class QueryTests : IClassFixture<TestDatabase>
     }
 
     [Fact]
+    public void SearchInstructors_KeepsTwoPeopleWhoShareANameApart()
+    {
+        // The whole reason identity is the uNID. Grouped on the name these two
+        // merge into one entry with two sections, and a professor page then
+        // shows one person the other's teaching.
+        var found = queries.SearchInstructors("Nguyen", "Fall2026");
+
+        Assert.Equal(2, found.Count);
+        Assert.Equal(new[] { "u0044444", "u0055555" },
+                     found.Select(i => i.Unid).OrderBy(u => u));
+        Assert.All(found, i => Assert.Equal(1, i.SectionCount));
+    }
+
+    [Fact]
+    public void GetInstructorSections_SeparatesInstructorsSharingASection()
+    {
+        // Both teach CS 2420-002. Keyed on the name, the section_instructors
+        // primary key would have collided and only one row would exist.
+        var one = queries.GetInstructorSections("Fall2026", "u0044444");
+        var two = queries.GetInstructorSections("Fall2026", "u0055555");
+
+        Assert.Equal("2420", Assert.Single(one).CourseNumber);
+        Assert.Equal("2420", Assert.Single(two).CourseNumber);
+    }
+
+    [Fact]
     public void GetInstructorSections_ReturnsOnlyThatInstructorsSectionsInThatTerm()
     {
-        var teaching = queries.GetInstructorSections("Fall2026", "Kopta, Daniel");
+        var teaching = queries.GetInstructorSections("Fall2026", "u0011111");
 
         Assert.Equal(2, teaching.Count);
-        Assert.All(teaching, s => Assert.Contains("Kopta, Daniel", s.Instructors));
+        Assert.All(teaching, s => Assert.Contains(s.Instructors, i => i.Name == "Kopta, Daniel"));
         Assert.All(teaching, s => Assert.Equal("Fall2026", s.Term));
     }
 

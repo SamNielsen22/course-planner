@@ -5,6 +5,9 @@ public class Crawler
     private string baseUrl = "";
     static readonly HttpClient http = new HttpClient();
 
+    // Attempts per page before it is given up on and skipped.
+    const int MaxAttempts = 5;
+
     static readonly Dictionary<string, DetailsRecord> detailsByCourse = new();
     public void Run(string url)
     {
@@ -17,9 +20,18 @@ public class Crawler
             Console.WriteLine($"Resuming term {termCode}: skipping {alreadyCrawled.Count} subjects already crawled");
 
         Console.WriteLine($"Fetching subjects from {indexUrl}");
-        var queries = SubjectScraper.Scrape(LoadFromUrl(indexUrl));
+        var indexDoc = LoadFromUrl(indexUrl);
+        if (indexDoc is null)
+        {
+            // Without the index there are no subjects to walk. Give up on this
+            // term rather than the whole crawl - the other eighteen are fine.
+            Console.WriteLine($"SKIPPING TERM {termCode}: subject index would not load");
+            return;
+        }
+        var queries = SubjectScraper.Scrape(indexDoc);
         Console.WriteLine($"Found {queries.Count} subjects");
 
+        var skipped = 0;
         var seenCourses = new HashSet<string>();
         foreach (var query in queries)
         {
@@ -29,6 +41,14 @@ public class Crawler
 
             var classListUrl = baseUrl + "class_list.html?" + query;
             var classListDoc = LoadFromUrl(classListUrl);
+            if (classListDoc is null)
+            {
+                // Left unmarked in crawl_progress on purpose, so a later run
+                // picks it up once the registrar's page recovers.
+                Console.WriteLine($"  ! {subjectLabel} skipped - page would not load");
+                skipped++;
+                continue;
+            }
 
             var alert = classListDoc.DocumentNode.SelectSingleNode(
                 "//div[contains(@class,'alert') and contains(.,'divided by credit and noncredit')]"
@@ -36,16 +56,26 @@ public class Crawler
             if (alert != null) // Some subject pages lead to a credit/noncredit menu
             {
                 var extraQueries = SubjectScraper.Scrape(classListDoc);
+                var whole = true;
                 foreach (var extraQuery in extraQueries)
                 {
                     var extraUrl = baseUrl + "class_list.html?" + extraQuery;
 
                     Console.WriteLine($"Scraping subject {subjectLabel}: {extraUrl}");
 
-                    var extraSections = MainSearchScraper.Scrape(LoadFromUrl(extraUrl));
-                    StoreSections(extraSections);
+                    var extraDoc = LoadFromUrl(extraUrl);
+                    if (extraDoc is null)
+                    {
+                        Console.WriteLine($"  ! part of {subjectLabel} would not load");
+                        whole = false;
+                        continue;
+                    }
+                    StoreSections(MainSearchScraper.Scrape(extraDoc));
                 }
-                DbStore.MarkSubjectDone(termCode, subjectLabel);
+                // Only marked done if every part loaded; a partial subject must
+                // be walked again rather than remembered as complete.
+                if (whole) DbStore.MarkSubjectDone(termCode, subjectLabel);
+                else skipped++;
                 continue;
             }
             Console.WriteLine($"Scraping subject {subjectLabel}: {classListUrl}");
@@ -53,9 +83,11 @@ public class Crawler
             var sections = MainSearchScraper.Scrape(classListDoc);
             StoreSections(sections);
             DbStore.MarkSubjectDone(termCode, subjectLabel);
-
-            
         }
+
+        if (skipped > 0)
+            Console.WriteLine($"Term {termCode}: {skipped} subject(s) skipped and "
+                              + "left unmarked - rerun to pick them up");
     }
     /// <summary>
     /// Refresh seat counts for one term and nothing else. Costs one request per
@@ -68,7 +100,13 @@ public class Crawler
         var indexUrl = baseUrl + "index.html";
 
         Console.WriteLine($"Fetching subjects from {indexUrl}");
-        var queries = SubjectScraper.Scrape(LoadFromUrl(indexUrl));
+        var indexDoc = LoadFromUrl(indexUrl);
+        if (indexDoc is null)
+        {
+            Console.WriteLine("subject index would not load - no seats refreshed");
+            return 0;
+        }
+        var queries = SubjectScraper.Scrape(indexDoc);
         Console.WriteLine($"Found {queries.Count} subjects");
 
         var updated = 0;
@@ -76,6 +114,11 @@ public class Crawler
         {
             var subjectLabel = query.Split('&')[0].Split('=')[1];
             var classListDoc = LoadFromUrl(baseUrl + "class_list.html?" + query);
+            if (classListDoc is null)
+            {
+                Console.WriteLine($"  {subjectLabel}: page would not load - skipped");
+                continue;
+            }
 
             var alert = classListDoc.DocumentNode.SelectSingleNode(
                 "//div[contains(@class,'alert') and contains(.,'divided by credit and noncredit')]"
@@ -84,7 +127,10 @@ public class Crawler
             var documents = new List<HtmlDocument>();
             if (alert != null)   // a credit/noncredit menu, not a class list
                 foreach (var extraQuery in SubjectScraper.Scrape(classListDoc))
-                    documents.Add(LoadFromUrl(baseUrl + "class_list.html?" + extraQuery));
+                {
+                    var extraDoc = LoadFromUrl(baseUrl + "class_list.html?" + extraQuery);
+                    if (extraDoc is not null) documents.Add(extraDoc);
+                }
             else
                 documents.Add(classListDoc);
 
@@ -99,9 +145,23 @@ public class Crawler
         return updated;
     }
 
-    private static HtmlDocument LoadFromUrl(string url)
+    /// <summary>
+    /// Fetch a page, or null if it will not load.
+    /// </summary>
+    /// <remarks>
+    /// Returns null rather than throwing once the retries are spent. It used to
+    /// throw, and because nothing upstream caught it the process died: on
+    /// 2026-09-04 the registrar's own Fall 2026 NURS page began returning a
+    /// 500 - their application error page, "the help desk has been notified" -
+    /// and that one broken page killed a nineteen-term crawl 133 subjects in.
+    ///
+    /// A page that stays broken would kill it again on every rerun, so the
+    /// crawl could never finish however many times it was started. One
+    /// unreadable page has to cost one page.
+    /// </remarks>
+    private static HtmlDocument? LoadFromUrl(string url)
     {
-        for (var attempt = 1; ; attempt++)
+        for (var attempt = 1; attempt <= MaxAttempts; attempt++)
         {
             Thread.Sleep(3000);
             try
@@ -112,13 +172,21 @@ public class Crawler
 
                 return doc;
             }
-            catch (AggregateException error) when (attempt < 5)
+            catch (AggregateException error)
             {
-                Console.WriteLine($"WARNING: {error.InnerException?.Message ?? error.Message}");
-                Console.WriteLine($"         retrying in 30s (attempt {attempt}/5)");
+                var reason = error.InnerException?.Message ?? error.Message;
+                if (attempt == MaxAttempts)
+                {
+                    Console.WriteLine($"GIVING UP on {url}");
+                    Console.WriteLine($"         {reason}");
+                    return null;
+                }
+                Console.WriteLine($"WARNING: {reason}");
+                Console.WriteLine($"         retrying in 30s (attempt {attempt}/{MaxAttempts})");
                 Thread.Sleep(30_000);
             }
         }
+        return null;
     }
     private void StoreSections(HashSet<SectionRecord> sections)
     {
@@ -136,7 +204,17 @@ public class Crawler
                     "&catno=" + section.CourseNumber +
                     "&section=" + section.SectionNumber;
 
-                    details = DescriptionScraper.Scrape(LoadFromUrl(detailsUrl));
+                    // A description that will not load costs the description,
+                    // not the section: the schedule row is still worth storing.
+                    // Left empty rather than cached as a wrong value, and not
+                    // memoised, so the next run fetches it again.
+                    var detailsDoc = LoadFromUrl(detailsUrl);
+                    if (detailsDoc is null)
+                    {
+                        DbStore.StoreSection(section, new DetailsRecord("", "", ""));
+                        continue;
+                    }
+                    details = DescriptionScraper.Scrape(detailsDoc);
                 }
                 detailsByCourse[classKey] = details;
             }

@@ -9,6 +9,13 @@
   <ItemGroup>
     <PackageReference Include="Dapper" Version="2.1.66" />
     <PackageReference Include="Microsoft.Data.Sqlite" Version="10.0.2" />
+
+    <!-- Microsoft.Data.Sqlite 10.0.2 pulls SQLitePCLRaw 2.1.11 transitively,
+         which carries GHSA-2m69-gcr7-jv3q (high). A direct reference outranks
+         the transitive one and pins the native SQLite build to a patched
+         version. Drop this once Microsoft.Data.Sqlite ships one itself. -->
+    <PackageReference Include="SQLitePCLRaw.bundle_e_sqlite3" Version="2.1.13" />
+    <PackageReference Include="SQLitePCLRaw.lib.e_sqlite3" Version="2.1.13" />
   </ItemGroup>
 
 </Project>

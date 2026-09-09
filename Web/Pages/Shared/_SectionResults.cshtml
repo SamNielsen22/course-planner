@@ -1,0 +1,139 @@
+@model Web.Pages.BuilderAddModel
+@inject Web.Pages.PrereqMarkup Prereqs
+
+@if (Model.Total == 0)
+{
+    <p class="empty">No sections matched.</p>
+}
+else
+{
+    <p class="count">
+        @Model.Total.ToString("N0") section@(Model.Total == 1 ? "" : "s")
+        @if (Model.LastPage > 1)
+        {
+            <text>&middot; page @Model.Page of @Model.LastPage</text>
+        }
+    </p>
+
+    <div class="section-cards">
+        @foreach (var s in Model.Results)
+        {
+            <article class="section-card">
+                @* The action sits in the corner of the heading rather than in a
+                   row of its own: it belongs to the card, not to the last thing
+                   on it, and a full-width button at the bottom read as the end
+                   of the content. *@
+                @{ var key = $"{Model.Term}|{s.Subject}|{s.CourseNumber}|{s.SectionNumber}"; }
+                @if (Model.Picked.Contains(key))
+                {
+                    <button class="sc-corner drop-section" type="button"
+                            title="Remove this section from your schedule"
+                            aria-label="Remove @s.Subject @s.CourseNumber section @s.SectionNumber"
+                            data-key="@key">&minus;</button>
+                }
+                else
+                {
+                    <button class="sc-corner add-section" type="button"
+                            title="Add this section to your schedule"
+                            aria-label="Add @s.Subject @s.CourseNumber section @s.SectionNumber"
+                            data-term="@Model.Term" data-subject="@s.Subject"
+                            data-number="@s.CourseNumber" data-section="@s.SectionNumber">+</button>
+                }
+
+                @if (s.Units is { } units)
+                {
+                    <span class="sc-units">@units unit@(units == 1 ? "" : "s")</span>
+                }
+
+                <div class="sc-row sc-head">
+                    @* from=builder: the course page hides its section picker for these. The
+                       builder plans a future term, which has no section grades to pick. *@
+                    <a class="sc-code link" asp-page="/Course" asp-route-from="builder"
+                       asp-route-subject="@s.Subject" asp-route-number="@s.CourseNumber">@s.Subject @s.CourseNumber</a>
+                    <span class="sc-section">Section @s.SectionNumber</span>
+                    <span class="sc-title">@s.Title</span>
+                </div>
+
+                @* Who teaches it, then how they grade it. The two figures sit
+                   directly under the name because the comparison they invite is
+                   "this professor versus the course", and that only reads if the
+                   name is next to them. *@
+                <div class="sc-row">
+                    <p class="sc-prof">
+                        @if (s.Instructors.Count == 0)
+                        {
+                            <span class="muted">No professor listed</span>
+                        }
+                        else
+                        {
+                            foreach (var i in s.Instructors)
+                            {
+                                @* from=builder: the professor page hides its section picker
+                                   for these - that picker belongs to the professor search. *@
+                                <a class="link" asp-page="/Instructor" asp-route-unid="@i.Unid"
+                                   asp-route-course="@($"{s.Subject} {s.CourseNumber}")"
+                                   asp-route-from="builder">@Web.Pages.Names.Natural(i.Name)</a>
+                            }
+                        }
+                    </p>
+
+                    <div class="sc-grades">
+                        <div class="sc-fig">
+                            <span class="sc-label">Course average</span>
+                            <span class="sc-value">@(s.CourseAvgGpa?.ToString("0.00") ?? "—")</span>
+                        </div>
+                        <div class="sc-fig">
+                            <span class="sc-label">This professor</span>
+                            <span class="sc-value">@(s.InstructorAvgGpa?.ToString("0.00") ?? "—")</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="sc-row sc-meet">
+                    <p class="sc-when">
+                        @(string.IsNullOrWhiteSpace(s.Times) ? "No meeting time" : s.Times)
+                        @if (!string.IsNullOrWhiteSpace(s.Location))
+                        {
+                            <text>&middot; @s.Location</text>
+                        }
+                    </p>
+                    <p class="sc-facts">
+                        @if (s.SeatsAvailable is { } seats)
+                        {
+                            <span class="@(seats > 0 ? "open" : "full")">
+                                @(seats > 0 ? $"{seats} seat{(seats == 1 ? "" : "s")} open" : "Full")
+                            </span>
+                        }
+                    </p>
+                </div>
+
+                @* Registrar prose, shown verbatim. It is the only version that is
+                   certainly correct, and a student can read it faster than we can
+                   explain a parse of it. *@
+                <div class="sc-row sc-prereq">
+                    <span class="sc-label">Prerequisites</span>
+                    @if (string.IsNullOrWhiteSpace(s.Prerequisites))
+                    {
+                        <p class="muted">None listed</p>
+                    }
+                    else
+                    {
+                        <p>@Prereqs.Annotate(s.Prerequisites)</p>
+                    }
+                </div>
+
+            </article>
+        }
+    </div>
+
+    @if (Model.LastPage > 1)
+    {
+        <nav class="pager">
+            <button type="submit" name="pg" value="@(Model.Page - 1)"
+                    disabled="@(!Model.HasPrevious)">&larr; Previous</button>
+            <span class="pager-at">@Model.Page / @Model.LastPage</span>
+            <button type="submit" name="pg" value="@(Model.Page + 1)"
+                    disabled="@(!Model.HasNext)">Next &rarr;</button>
+        </nav>
+    }
+}

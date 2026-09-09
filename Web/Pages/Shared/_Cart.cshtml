@@ -1,0 +1,82 @@
+@model Web.Schedule.BuiltSchedule
+@{ var clashing = Web.Schedule.Meetings.Conflicting(Model); }
+
+@* A running view of the schedule, sticky beside the results so it stays in
+   sight while they are scrolled. Everything in it can be taken back out here,
+   which is the whole reason it is worth showing. *@
+<aside class="cart" id="cart">
+    <header class="cart-head">
+        <span class="cart-title">Your schedule</span>
+        <span class="cart-count">@Model.Sections.Count</span>
+    </header>
+
+    <div class="cart-body">
+        @* Breaks constrain the same schedule the sections go into, so they are
+           added from the same panel rather than a page away. *@
+        <div class="cart-breaks cart-first">
+            <div class="cart-breaks-head">
+                <span class="cart-sub">Breaks</span>
+                <button class="cart-addbreak" type="button" title="Add a break">+ Add</button>
+            </div>
+
+            @if (Model.Breaks.Count == 0)
+            {
+                <p class="cart-none small">Hours to keep free.</p>
+            }
+            else
+            {
+                <ul class="cart-list">
+                    @foreach (var b in Model.Breaks)
+                    {
+                        <li>
+                            <div class="cart-what"><span class="cart-code">@b.Name</span></div>
+                            <p class="cart-when">@b.Days @b.From&ndash;@b.Until</p>
+                            <button class="cart-dropbreak" type="button" data-id="@b.Id"
+                                    title="Remove this break"
+                                    aria-label="Remove the break @b.Name">&times;</button>
+                        </li>
+                    }
+                </ul>
+            }
+        </div>
+        <div class="cart-courses">
+        @if (Model.Sections.Count == 0)
+        {
+            <p class="cart-none">
+                Nothing added yet. Use the <span class="cart-plus">+</span> on a
+                section to put it here.
+            </p>
+        }
+        else
+        {
+            <ul class="cart-list">
+                @foreach (var s in Model.Sections)
+                {
+                    <li class="@(clashing.Contains(s.Key) ? "cart-clash" : "")">
+                        <div class="cart-what">
+                            <span class="cart-code">@s.Code</span>
+                            <span class="cart-sec">Section @s.SectionNumber</span>
+                        </div>
+                        <p class="cart-title-line">@s.Title</p>
+                        <p class="cart-when">
+                            @(string.IsNullOrWhiteSpace(s.Times) ? "No meeting time" : s.Times)
+                            @if (!string.IsNullOrWhiteSpace(s.Professor))
+                            {
+                                <text>&middot; @s.Professor</text>
+                            }
+                        </p>
+                        <button class="cart-drop" type="button" data-key="@s.Key"
+                                title="Remove from your schedule"
+                                aria-label="Remove @s.Code section @s.SectionNumber">&times;</button>
+                    </li>
+                }
+            </ul>
+        }
+        </div>
+
+    </div>
+
+    <footer class="cart-foot">
+        <a class="btn small-btn" asp-page="/BuilderSchedule">Generate schedule</a>
+    </footer>
+</aside>

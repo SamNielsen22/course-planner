@@ -1,0 +1,29 @@
+@model CoursePlanner.Data.GradeDistribution
+
+@* The six figures in one strip: size, centre, then the shape. *@
+<div class="stat-strip">
+    <div class="stat-part">
+        <span class="stat-value">@Model.Total.ToString("N0")</span>
+        <span class="stat-label">Students</span>
+    </div>
+    <div class="stat-part">
+        <span class="stat-value">@Figures.Gpa(Model.AvgGpa)</span>
+        <span class="stat-label">Average GPA</span>
+    </div>
+    <div class="stat-part">
+        <span class="stat-value">@Figures.Gpa(Model.P25)</span>
+        <span class="stat-label">25th percentile</span>
+    </div>
+    <div class="stat-part">
+        <span class="stat-value">@Figures.Gpa(Model.P50)</span>
+        <span class="stat-label">50th percentile</span>
+    </div>
+    <div class="stat-part">
+        <span class="stat-value">@Figures.Gpa(Model.P75)</span>
+        <span class="stat-label">75th percentile</span>
+    </div>
+    <div class="stat-part">
+        <span class="stat-value">@Figures.Gpa(Model.StdDev)</span>
+        <span class="stat-label">Std deviation</span>
+    </div>
+</div>

@@ -1,0 +1,79 @@
+@page "/courses"
+@model IndexModel
+@{
+    ViewData["Title"] = "Courses";
+}
+
+<div class="page-head">
+    <h1>Find a course</h1>
+</div>
+
+@* One page, not two. The search bar stays put and the results below it are
+   replaced as you type, so refining a search never costs a round trip through
+   a separate results page. Submitting still works with scripting off. *@
+<form method="get" id="search">
+    <div class="search-bar">
+        <input name="q" value="@Model.Q" placeholder="CS 2420, calculus, ACCTG&hellip;"
+               autocomplete="off" autofocus aria-label="Search courses"/>
+        <noscript><button type="submit">Search</button></noscript>
+    </div>
+
+    @* Inside the form, so the pager's buttons submit through it. *@
+    <div id="results">
+        <partial name="_CourseResults" model="Model"/>
+    </div>
+</form>
+
+@section Scripts {
+<script>
+(function () {
+    const form = document.getElementById('search');
+    const results = document.getElementById('results');
+    let timer, latest = 0, page = @Model.Page;
+
+    async function refresh() {
+        const params = new URLSearchParams(new FormData(form));
+        // Page is tracked here rather than in a hidden input: the pager buttons
+        // are also named "page", so form.elements['page'] returns a list of
+        // three and assigning to it does nothing at all.
+        params.set('pg', page);
+        const mine = ++latest;
+        const response = await fetch('?handler=Rows&' + params, {
+            headers: { 'X-Requested-With': 'fetch' }
+        });
+        // Responses can land out of order; only the newest may paint.
+        if (!response.ok || mine !== latest) return;
+        results.innerHTML = await response.text();
+        history.replaceState(null, '', '?' + params);
+    }
+
+    // Any change to the search itself starts again from the first page.
+    form.addEventListener('input', function () {
+        page = 1;
+        clearTimeout(timer);
+        timer = setTimeout(refresh, 180);
+    });
+    // 'change' is for the selects and checkboxes. On the text box it also fires
+    // on blur - i.e. the mousedown of a click on a result - which re-rendered the
+    // results between mousedown and mouseup and ate the click. Typing is
+    // already covered by 'input'.
+    form.addEventListener('change', function (event) {
+        if (event.target.name === 'q') return;
+        page = 1; refresh();
+    });
+    form.addEventListener('submit', function (event) {
+        event.preventDefault();
+        clearTimeout(timer);
+        refresh();
+    });
+    results.addEventListener('click', function (event) {
+        const button = event.target.closest('button[name="pg"]');
+        if (!button || button.disabled) return;
+        event.preventDefault();
+        page = parseInt(button.value, 10);
+        refresh();
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+    });
+})();
+</script>
+}

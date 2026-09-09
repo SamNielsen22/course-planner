@@ -1,0 +1,115 @@
+@page
+@model BuilderScheduleModel
+@{
+    ViewData["Title"] = "Generated schedule";
+}
+
+<p class="crumb"><a asp-page="/BuilderAdd">&larr; Schedule builder</a></p>
+
+<div class="page-head">
+    <h1>Your schedule</h1>
+    @if (Model.Schedule.Sections.Count > 0)
+    {
+        <p class="page-sub">@Terms.Display(Model.Schedule.Sections[0].Term)</p>
+    }
+</div>
+
+@if (Model.Schedule.Sections.Count == 0)
+{
+    <p class="empty">
+        Nothing in your schedule yet.
+        <a asp-page="/BuilderAdd">Add a course</a> to see it laid out here.
+    </p>
+}
+else
+{
+    @* Clashes are reported, not prevented. The schedule is the student's own and
+       they may have put two things at the same hour deliberately - but they
+       should not have to spot it on the grid themselves. *@
+    @if (Model.Clashes.Count > 0)
+    {
+        <div class="notice warn">
+            <strong>@Model.Clashes.Count time conflict@(Model.Clashes.Count == 1 ? "" : "s").</strong>
+            <ul class="clash-list">
+                @foreach (var (a, b) in Model.Clashes)
+                {
+                    <li>
+                        @a.Label and @b.Label overlap on @BuilderScheduleModel.DayName(a.Day),
+                        @BuilderScheduleModel.Clock(Math.Max(a.Start, b.Start))&ndash;@BuilderScheduleModel.Clock(Math.Min(a.End, b.End))
+                    </li>
+                }
+            </ul>
+        </div>
+    }
+
+    <div class="week">
+        <div class="head"></div>
+        @foreach (var day in Model.Days)
+        {
+            <div class="head">@BuilderScheduleModel.DayName(day)</div>
+        }
+
+        <div class="times">
+            @foreach (var hour in Model.Hours)
+            {
+                <div class="hour">@BuilderScheduleModel.Clock(hour * 60)</div>
+            }
+        </div>
+
+        @foreach (var day in Model.Days)
+        {
+            <div class="col">
+                @foreach (var hour in Model.Hours)
+                {
+                    <div class="cell"></div>
+                }
+                @foreach (var block in Model.Blocks.Where(b => b.Day == day))
+                {
+                    var (top, height) = Model.Position(block);
+                    <div class="block @(block.IsBreak ? "block-break" : "") @(Model.InConflict.Contains(block) ? "block-clash" : "")"
+                         style="top: @top.ToString("0.##")%; height: @height.ToString("0.##")%"
+                         title="@block.Label &middot; @BuilderScheduleModel.Clock(block.Start)-@BuilderScheduleModel.Clock(block.End)">
+                        <span class="block-label">@block.Label</span>
+                        <span class="block-time">@BuilderScheduleModel.Clock(block.Start)</span>
+                    </div>
+                }
+            </div>
+        }
+    </div>
+
+    <table>
+        <thead>
+        <tr>
+            <th>Course</th>
+            <th>Section</th>
+            <th>Professor</th>
+            <th>Days &amp; time</th>
+            <th>Location</th>
+        </tr>
+        </thead>
+        <tbody>
+        @foreach (var s in Model.Schedule.Sections)
+        {
+            <tr>
+                <td class="code">
+                    <a asp-page="/Course" asp-route-subject="@s.Subject" asp-route-number="@s.CourseNumber">@s.Code</a>
+                </td>
+                <td class="code">@s.SectionNumber</td>
+                <td>@(s.Professor ?? "—")</td>
+                <td class="muted">@(s.Times ?? "—")</td>
+                <td class="muted">@(s.Location ?? "—")</td>
+            </tr>
+        }
+        </tbody>
+    </table>
+
+    @if (Model.Unscheduled.Count > 0)
+    {
+        <p class="note">
+            @Model.Unscheduled.Count section@(Model.Unscheduled.Count == 1 ? "" : "s")
+            publish no meeting time, so @(Model.Unscheduled.Count == 1 ? "it does" : "they do")
+            not appear on the grid:
+            @string.Join(", ", Model.Unscheduled.Select(s => $"{s.Code}-{s.SectionNumber}")).
+        </p>
+    }
+}

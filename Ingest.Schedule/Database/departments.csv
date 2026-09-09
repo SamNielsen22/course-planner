@@ -1,0 +1,241 @@
+subject,department
+ACCTG,School of Accounting
+AEROS,Reserve Officer Training Corps
+ANAT,School of Medicine
+ANES,Anesthesiology
+ANTH,Anthropology
+ARAB,World Languages and Cultures
+ARCH,School of Architecture
+ART,Art & Art History
+ARTH,Art & Art History
+ARTX,Art & Art History
+ASL,World Languages and Cultures
+ASTP,Asian Studies Program
+ASTR,Physics & Astronomy
+ATFA,College of Fine Arts
+ATHL,Health & Kinesiology
+ATMOS,Atmospheric Sciences
+ATSM,Physical Therapy & Athletic Training
+BALLE,College of Fine Arts
+BART,College of Fine Arts
+BCOR,School of Business
+BENN,University of Utah
+BIO C,Biochemistry
+BIOL,School of Biological Sciences
+BLCHM,Biochemistry
+BME,Biomedical Engineering
+BMI,Biomedical Informatics
+BUS,School of Business
+CAMB,School of Medicine
+CC,Undergraduate Studies
+CECRT,"Education, Culture & Society"
+CERM,Art & Art History
+CH EN,Chemical Engineering
+CHEM,Chemistry
+CHIN,World Languages and Cultures
+CL CV,World Languages and Cultures
+CLCS,World Languages and Cultures
+CMP,School of Computing
+COMM,Communication
+COMMC,Communication
+COMP,School of Computing
+CRIM,Sociology and Criminology
+CS,School of Computing
+CSD,Communication Sciences & Disorders
+CTLE,University of Utah
+CVEEN,Civil & Environmental Engineering
+CVP,University of Utah
+DANC,Dance
+DENT,School of Dentistry
+DERM,Dermatology
+DES,Multi-Disciplinary Design
+DESGR,Multi-Disciplinary Design
+DISAB,"Ethnic, Gender & Disability Studies"
+DPLO,Political Science
+DRAW,Art & Art History
+DS,School of Computing
+EAE,Games
+EAS,Writing & Rhetoric Studies
+ECE,Electrical & Computer Engineering
+ECON,Economics
+ECS,"Education, Culture & Society"
+ED PS,Educational Psychology
+EDTEC,College of Education
+EDU,College of Education
+EHUM,Environmental Humanities Program
+ELI,World Languages and Cultures
+ELP,Educational Leadership & Policy
+EMER,Emergency Medicine
+ENGIN,College of Engineering
+ENGL,English
+ENTP,Entrepreneurship & Strategy
+ENV,"School of Environment, Society & Sustainability"
+ENVST,"School of Environment, Society & Sustainability"
+ESSF,Health & Kinesiology
+ESSFC,Health & Kinesiology
+ETHNC,"Ethnic, Gender & Disability Studies"
+FA,College of Fine Arts
+FCS,Family & Consumer Studies
+FCSC,Family & Consumer Studies
+FILM,Film & Media Arts
+FINAN,Finance
+FP MD,Family Medicine & Public Health
+FRNCH,World Languages and Cultures
+GAMES,Games
+GEO,Geology & Geophysics
+GEOG,"School of Environment, Society & Sustainability"
+GERM,World Languages and Cultures
+GERON,Gerontology Program
+GLOBL,University of Utah
+GNDR,"Ethnic, Gender & Disability Studies"
+GREEK,World Languages and Cultures
+H EDU,Health & Kinesiology
+H EDUC,Health & Kinesiology
+H GEN,Human Genetics
+HEBR,World Languages and Cultures
+HINDI,World Languages and Cultures
+HIST,History
+HKR,Health & Kinesiology
+HLTH,College of Health
+HNKLY,Political Science
+HONOR,Honors College
+HPSCI,University of Utah
+HSP,College of Health
+HUM,College of Humanities
+IAGE,University of Utah
+INTL,University of Utah
+INTMD,Internal Medicine
+IS,Operations & Information Systems
+ITAL,World Languages and Cultures
+JAPAN,World Languages and Cultures
+KINES,Health & Kinesiology
+KOREA,World Languages and Cultures
+LAS,Latin American Studies Program
+LATIN,World Languages and Cultures
+LAW,College of Law
+LAWC,College of Law
+LDRSP,University of Utah
+LEAP,Undergraduate Studies
+LING,Linguistics
+LINGC,Linguistics
+MATH,Mathematics
+MBA,School of Business
+MBIOL,School of Medicine
+MD CH,Medicinal Chemistry
+MD ID,School of Medicine
+MD LB,Pathology
+MDCRC,School of Medicine
+MDEL,School of Medicine
+ME EN,Mechanical Engineering
+MET E,Metallurgical Engineering
+MG EN,Mining Engineering
+MGT,Management
+MHA,Population Health Science
+MID E,Middle East Studies Program
+MIL S,Reserve Officer Training Corps
+MKTG,Marketing
+MSE,Materials Science & Engineering
+MST,Materials Science & Engineering
+MUSC,School of Music
+MUSE,University of Utah
+NEURO,Neurology
+NEUSC,Neurobiology
+NSURG,Neurosurgery
+NUCL,College of Engineering
+NUIP,Nutrition & Integrative Physiology
+NURS,College of Nursing
+NV SC,Reserve Officer Training Corps
+OBST,Obstetrics & Gynecology
+OC TH,Occupational & Recreational Therapies
+OEHS,Occ. Environmental Health
+ONCSC,Oncological Sciences
+OPHTH,Ophthalmology
+ORTHO,Orthopaedics
+OSC,Operations & Information Systems
+PADMN,School of Public Affairs
+PAS,Physician Asst Ed & Science
+PATH,Pathology
+PBHLT,Family Medicine & Public Health
+PCS,Professional Science Masters
+PCTH,Pharmacology and Toxicology
+PED,Pediatrics
+PERS,World Languages and Cultures
+PH MD,Physical Medicine & Rehabilitation
+PH TH,Physical Therapy & Athletic Training
+PH TX,Pharmacology and Toxicology
+PHARM,College of Pharmacy
+PHCEU,Molecular Pharmaceutics
+PHIL,Philosophy
+PHOTO,Art & Art History
+PHS,Population Health Science
+PHYS,Physics & Astronomy
+PHYSL,Nutrition & Integrative Physiology
+POLS,Political Science
+PREP,Undergraduate Studies
+PRINT,Art & Art History
+PROEA,College of Engineering
+PROED,College of Education
+PRT,"Parks, Recreation, and Tourism"
+PRTL,"Parks, Recreation, and Tourism"
+PRTS,"Parks, Recreation, and Tourism"
+PRTW,"Parks, Recreation, and Tourism"
+PSY,Psychology
+PSYCT,Psychiatry
+PTGSE,Art & Art History
+PUBPL,School of Public Affairs
+QAMO,Quantitative Analysis Mkts & Org
+QUEST,Undergraduate Studies
+RDLGY,Radiology
+RDONC,Radiation Oncology
+RECTH,Occupational & Recreational Therapies
+REDEV,City & Metropolitan Planning
+RELS,World Languages and Cultures
+RHSCI,College of Health
+ROBOT,School of Computing
+RUSS,World Languages and Cultures
+SBS,College of Social & Behavioral Science
+SCI,College of Science
+SCLPT,Art & Art History
+SIME,Mining Engineering
+SOC,Sociology and Criminology
+SP ED,Special Education
+SPAN,World Languages and Cultures
+SR EL,Undergraduate Studies
+STAT,Mathematics
+STRAT,Entrepreneurship & Strategy
+SURG,Surgery
+SUST,"School of Environment, Society & Sustainability"
+SW,College of Social Work
+SWC,College of Social Work
+THEA,Theatre
+UGS,Undergraduate Studies
+UUHED,University of Utah
+UUHSC,University of Utah
+WLC,World Languages and Cultures
+WRTG,Writing & Rhetoric Studies
+NAHTL,World Languages and Cultures
+NAVJO,World Languages and Cultures
+QUECH,World Languages and Cultures
+SAMOA,World Languages and Cultures
+TONGA,World Languages and Cultures
+VIET,World Languages and Cultures
+LLART,Continuing Education
+LLCFT,Continuing Education
+LLFW,Continuing Education
+LLHG,Continuing Education
+LLHL,Continuing Education
+LLLAN,Continuing Education
+LLMT,Continuing Education
+LLPOT,Continuing Education
+LLREC,Continuing Education
+LLWRC,Continuing Education
+OSHER,Continuing Education
+YEART,Continuing Education
+YECU,Continuing Education
+YEEMT,Continuing Education
+YEHS,Continuing Education
+YELAN,Continuing Education
+YESCI,Continuing Education
+YESPR,Continuing Education
+YETEC,Continuing Education
+YEYAE,Continuing Education

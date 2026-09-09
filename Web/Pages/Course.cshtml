@@ -1,0 +1,117 @@
+@page "/course/{subject}/{number}"
+@model CourseModel
+@inject Web.Pages.PrereqMarkup Prereqs
+@{
+    ViewData["Title"] = $"{Model.Subject} {Model.Number}";
+}
+
+@* Back returns you to wherever you came from - a search, a section card, a
+   professor page. A fixed link only ever guesses one of them. *@
+<p class="crumb"><button type="button" class="back" onclick="history.back()">&larr; Back</button></p>
+
+<div class="page-head">
+    <h1>@Model.Subject @Model.Number</h1>
+    @if (Model.Title is not null)
+    {
+        <p class="subtitle">@Model.Title</p>
+    }
+</div>
+
+<div class="stack">
+    <section class="panel">
+        <h3>Description</h3>
+        @if (!string.IsNullOrWhiteSpace(Model.Info?.Description))
+        {
+            <p>@Model.Info!.Description</p>
+        }
+        else
+        {
+            <p class="muted">No description published.</p>
+        }
+    </section>
+
+    <section class="panel">
+        <h3>Prerequisites</h3>
+        @if (!string.IsNullOrWhiteSpace(Model.Info?.Prerequisites))
+        {
+            <p class="prereq-prose">@Prereqs.Annotate(Model.Info!.Prerequisites)</p>
+        }
+        else
+        {
+            <p class="muted">None listed.</p>
+        }
+    </section>
+</div>
+
+@* Pooled across every term by default: one term of one course is often a
+   single small section, and the shape only becomes readable once the terms
+   are put together. *@
+<form method="get" class="inline-form">
+    @if (!Model.ShowSections)
+    {
+        <input type="hidden" name="from" value="builder"/>
+    }
+    <select name="term" onchange="location.replace(location.pathname + '?' + new URLSearchParams(new FormData(this.form)))" aria-label="Term">
+        <option value="">All terms</option>
+        @foreach (var t in Model.Terms)
+        {
+            <option value="@t" selected="@(t == Model.Term)">@Terms.Display(t)</option>
+        }
+    </select>
+    @* Always present, so it is obvious a section can be chosen; live once a
+       term is picked. Listed by professor, since that is how a student
+       remembers which one they were in. Hidden when the visitor arrived from
+       the builder - see CourseModel.ShowSections. *@
+    @if (!Model.ShowSections)
+    {
+    }
+    else if (Model.Term is null)
+    {
+        <select name="section" disabled aria-label="Section">
+            <option>Choose a term first</option>
+        </select>
+    }
+    else if (Model.GradedSections.Count == 0)
+    {
+        <select name="section" disabled aria-label="Section">
+            <option>No section grades published</option>
+        </select>
+    }
+    else
+    {
+        <select name="section" onchange="location.replace(location.pathname + '?' + new URLSearchParams(new FormData(this.form)))" aria-label="Section">
+            <option value="">All sections</option>
+            @foreach (var s in Model.GradedSections)
+            {
+                <option value="@s.SectionNumber" selected="@(s.SectionNumber == Model.SectionNumber)">
+                    @CourseModel.Professor(s) &middot; Section @s.SectionNumber
+                </option>
+            }
+        </select>
+    }
+    <noscript><button type="submit">Go</button></noscript>
+</form>
+
+<partial name="_GradeChart" model="Model.Grades"/>
+
+@if (Model.Grades.Any)
+{
+    @* For a term or a section these are the dashboard's own figures. Across
+       terms the deviation pools exactly and the percentiles are reconstructed
+       from the term rows - GradeReconstruction - until the all-terms grain is
+       scraped, when the published figure takes over. *@
+    <partial name="_GradeStats" model="Model.Grades"/>
+
+    @* The average covers every student; the bars only show groups of five or
+       more. When they diverge this far the chart is materially incomplete, and
+       the page should say so rather than leave two numbers arguing. *@
+    @if (Model.Grades.HasHiddenGrades)
+    {
+        <p class="note">
+            The bars total fewer students than the average is computed over. The
+            University withholds any grade group with fewer than five students,
+            so small groups of lower grades are missing from the chart while
+            still counting toward the average.
+        </p>
+    }
+}

@@ -1,0 +1,269 @@
+@page "/builder"
+@model BuilderAddModel
+@{
+    ViewData["Title"] = "Add a course";
+}
+
+@* The term field was removed, so nothing on the page said which term these
+   sections belong to. Everything here - the results, the schedule, the
+   conflicts - is scoped to it. It is stated once, under the heading, rather
+   than repeated on the cart beside it. *@
+<div class="page-head">
+    <h1>Schedule builder</h1>
+    <p class="page-sub">Browsing @Terms.Display(Model.Term ?? "") sections</p>
+</div>
+
+@* One screen rather than four steps: each choice stays visible while the next
+   is made, the results update underneath, and any filter can be changed without
+   starting over. Everything is optional, so the order is the user's to pick. *@
+@Html.AntiForgeryToken()
+
+<form method="get" id="search">
+    @* One field rather than a subject dropdown beside a course field. Those two
+       did the same job by different means, could contradict each other, and the
+       dropdown ran to 200-odd codes. What is typed is inferred: an exact subject
+       code filters by subject, anything else is matched against numbers and
+       titles. *@
+    <div class="filters one-line">
+        <label class="grow">
+            Search
+            <input name="q" value="@Model.Q" autocomplete="off" autofocus
+                   placeholder="Subject, Course Name or Course Code&hellip;"/>
+        </label>
+
+        <label>
+            Requirement
+            <select name="req">
+                <option value="">Any</option>
+                @foreach (var d in Model.Designations)
+                {
+                    <option value="@d" selected="@(d == Model.Req)">@d</option>
+                }
+            </select>
+        </label>
+
+        <label>
+            Sort by
+            <select name="sort">
+                <option value="name" selected="@(Model.Sort == "name")">Course number</option>
+                <option value="gpa" selected="@(Model.Sort == "gpa")">Highest average grade</option>
+                <option value="time" selected="@(Model.Sort == "time")">Earliest in the day</option>
+                <option value="time_desc" selected="@(Model.Sort == "time_desc")">Latest in the day</option>
+            </select>
+        </label>
+
+        <label class="check">
+            <input type="checkbox" name="open" value="true" checked="@Model.Open"/>
+            <input type="hidden" name="open" value="false"/>
+            Open seats only
+        </label>
+
+        <label class="check">
+            <input type="checkbox" name="noClash" value="true" checked="@Model.NoClash"/>
+            <input type="hidden" name="noClash" value="false"/>
+            No time conflicts
+        </label>
+
+        <noscript><button type="submit">Search</button></noscript>
+    </div>
+
+    <div class="tabs" role="tablist">
+        <button type="button" class="tab tab-on" data-tab="results" role="tab">Results</button>
+        <button type="button" class="tab" data-tab="cart" role="tab">
+            Your schedule <span class="tab-count">@Model.Cart.Sections.Count</span>
+        </button>
+    </div>
+
+    <div class="with-cart show-results">
+        <div id="results">
+            <partial name="_SectionResults" model="Model"/>
+        </div>
+
+        <div id="cart-slot">
+            <partial name="_Cart" model="Model.Cart"/>
+        </div>
+    </div>
+</form>
+
+<dialog id="break-dialog" class="modal">
+    <form id="break-form" class="modal-form">
+        <h2>Add a break</h2>
+        <label>
+            Name
+            <input name="name" placeholder="Lunch, work, practice&hellip;"/>
+        </label>
+        <label>
+            Days
+            <select name="days">
+                <option value="">Every weekday</option>
+                <option value="MoWeFr">Mon, Wed, Fri</option>
+                <option value="TuTh">Tue, Thu</option>
+                <option value="Mo">Monday</option>
+                <option value="Tu">Tuesday</option>
+                <option value="We">Wednesday</option>
+                <option value="Th">Thursday</option>
+                <option value="Fr">Friday</option>
+            </select>
+        </label>
+        <div class="modal-times">
+            <label>From<input name="from" type="time" value="12:00" required/></label>
+            <label>Until<input name="until" type="time" value="13:00" required/></label>
+        </div>
+        <div class="modal-actions">
+            <button class="btn out" type="button" id="break-cancel">Cancel</button>
+            <button class="btn" type="submit">Add break</button>
+        </div>
+    </form>
+</dialog>
+
+@section Scripts {
+<script>
+(function () {
+    const form = document.getElementById('search');
+    const results = document.getElementById('results');
+    let timer, latest = 0, page = @Model.Page;
+
+    async function refresh() {
+        const params = new URLSearchParams(new FormData(form));
+        // Page is tracked here rather than in a hidden input: the pager buttons
+        // are also named "page", so form.elements['page'] returns a list of
+        // three and assigning to it does nothing at all.
+        params.set('pg', page);
+        const mine = ++latest;
+        const response = await fetch('?handler=Rows&' + params, {
+            headers: { 'X-Requested-With': 'fetch' }
+        });
+        // Responses can land out of order; only the newest may paint.
+        if (!response.ok || mine !== latest) return;
+        results.innerHTML = await response.text();
+        history.replaceState(null, '', '?' + params);
+    }
+
+    const cartSlot = document.getElementById('cart-slot');
+    async function refreshCart() {
+        const response = await fetch('?handler=Cart', {
+            headers: { 'X-Requested-With': 'fetch' }
+        });
+        if (!response.ok) return;
+        cartSlot.innerHTML = await response.text();
+
+        // The tab badge lives outside the swapped panel, so it has to be told.
+        // Without this it kept whatever count the page was first rendered with,
+        // which on a fresh visit is always zero.
+        const fresh = cartSlot.querySelector('.cart-count');
+        const badge = document.querySelector('.tab-count');
+        if (fresh && badge) badge.textContent = fresh.textContent.trim();
+    }
+
+    // Delegated, so these survive the panel being replaced.
+    const dialog = document.getElementById('break-dialog');
+    const breakForm = document.getElementById('break-form');
+
+    cartSlot.addEventListener('click', async function (event) {
+        const remove = event.target.closest('.cart-drop');
+        if (remove) { event.preventDefault(); drop(remove, remove.dataset.key); return; }
+
+        const dropBreak = event.target.closest('.cart-dropbreak');
+        if (dropBreak) {
+            event.preventDefault();
+            dropBreak.disabled = true;
+            const response = await post('DropBreak', { id: dropBreak.dataset.id });
+            if (response.ok) { refresh(); refreshCart(); } else dropBreak.disabled = false;
+            return;
+        }
+
+        if (event.target.closest('.cart-addbreak')) dialog.showModal();
+    });
+
+    document.getElementById('break-cancel').addEventListener('click', () => dialog.close());
+    breakForm.addEventListener('submit', async function (event) {
+        event.preventDefault();
+        const data = Object.fromEntries(new FormData(breakForm));
+        const response = await post('AddBreak', data);
+        if (response.ok) { dialog.close(); breakForm.reset(); refresh(); refreshCart(); }
+    });
+
+    // Tabs, on narrow screens only. The classes are inert at desktop width.
+    const columns = document.querySelector('.with-cart');
+    document.querySelector('.tabs').addEventListener('click', function (event) {
+        const tab = event.target.closest('.tab');
+        if (!tab) return;
+        document.querySelectorAll('.tab').forEach(t => t.classList.toggle('tab-on', t === tab));
+        const onCart = tab.dataset.tab === 'cart';
+        columns.classList.toggle('show-results', !onCart);
+        columns.classList.toggle('show-cart', onCart);
+        form.classList.toggle('on-cart', onCart);
+    });
+
+    // Any change to the search itself starts again from the first page.
+    form.addEventListener('input', function () {
+        page = 1;
+        clearTimeout(timer);
+        timer = setTimeout(refresh, 180);
+    });
+    // 'change' is for the selects and checkboxes. On the text box it also fires
+    // on blur - i.e. the mousedown of a click on a result - which re-rendered the
+    // results between mousedown and mouseup and ate the click. Typing is
+    // already covered by 'input'.
+    form.addEventListener('change', function (event) {
+        if (event.target.name === 'q') return;
+        page = 1; refresh();
+    });
+    form.addEventListener('submit', function (event) {
+        event.preventDefault();
+        clearTimeout(timer);
+        refresh();
+    });
+    function token() {
+        const field = document.querySelector('input[name="__RequestVerificationToken"]');
+        return field ? field.value : '';
+    }
+
+    async function post(handler, body) {
+        return fetch('?handler=' + handler, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/x-www-form-urlencoded',
+                'RequestVerificationToken': token()
+            },
+            body: new URLSearchParams(body)
+        });
+    }
+
+    // Removing changes the results as well as the cart: the control flips back
+    // to a plus, and with the clash filter on, freeing a slot can let other
+    // sections reappear.
+    async function drop(button, key) {
+        button.disabled = true;
+        const response = await post('Drop', { key });
+        if (response.ok) { refresh(); refreshCart(); } else button.disabled = false;
+    }
+
+    // Adding a section posts on its own; the surrounding form is a GET search
+    // and must not be submitted by it.
+    results.addEventListener('click', async function (event) {
+        const remove = event.target.closest('button.drop-section');
+        if (remove) { event.preventDefault(); drop(remove, remove.dataset.key); return; }
+
+        const add = event.target.closest('button.add-section');
+        if (add) {
+            event.preventDefault();
+            add.disabled = true;
+            const response = await post('Add', {
+                term: add.dataset.term, subject: add.dataset.subject,
+                number: add.dataset.number, section: add.dataset.section
+            });
+            if (response.ok) { refresh(); refreshCart(); } else add.disabled = false;
+            return;
+        }
+
+        const button = event.target.closest('button[name="pg"]');
+        if (!button || button.disabled) return;
+        event.preventDefault();
+        page = parseInt(button.value, 10);
+        refresh();
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+    });
+})();
+</script>
+}
