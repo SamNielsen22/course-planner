@@ -1,17 +1,20 @@
 @page
 @model BuilderScheduleModel
 @{
-    ViewData["Title"] = "Generated schedule";
+    ViewData["Title"] = "Your Schedule";
+    ViewData["NoIndex"] = true;
 }
 
-<p class="crumb"><a asp-page="/BuilderAdd">&larr; Schedule builder</a></p>
-
-<div class="page-head">
-    <h1>Your schedule</h1>
-    @if (Model.Schedule.Sections.Count > 0)
-    {
-        <p class="page-sub">@Terms.Display(Model.Schedule.Sections[0].Term)</p>
-    }
+@* The same arrow the builder wears, back to it. *@
+<div class="page-head page-head-back">
+    <a class="back-arrow" asp-page="/BuilderAdd" aria-label="Schedule builder" title="Schedule builder">&larr;</a>
+    <div>
+        <h1>@(Model.Schedule.Name ?? "Your Schedule")</h1>
+        @if (Model.Schedule.Sections.Count > 0)
+        {
+            <p class="page-sub">@Terms.Display(Model.Schedule.Sections[0].Term)@(Campus.Label(Model.Schedule.Campus) is { } campus ? " · " + campus : "")</p>
+        }
+    </div>
 </div>
 
 @if (Model.Schedule.Sections.Count == 0)
@@ -30,11 +33,18 @@ else
     {
         <div class="notice warn">
             <strong>@Model.Clashes.Count time conflict@(Model.Clashes.Count == 1 ? "" : "s").</strong>
+            @* A course that is in the schedule more than once is named by section,
+               or two lines about different sections read as one repeated. *@
+            @{
+                var repeated = Model.Blocks.Where(x => !x.IsBreak).GroupBy(x => x.Label)
+                    .Where(g => g.Select(x => x.Detail).Distinct().Count() > 1).Select(g => g.Key).ToHashSet();
+                string Who(Placed x) => repeated.Contains(x.Label) ? $"{x.Label} {x.Detail.ToLowerInvariant()}" : x.Label;
+            }
             <ul class="clash-list">
                 @foreach (var (a, b) in Model.Clashes)
                 {
                     <li>
-                        @a.Label and @b.Label overlap on @BuilderScheduleModel.DayName(a.Day),
+                        @Who(a) and @Who(b) overlap on @BuilderScheduleModel.DayName(a.Day),
                         @BuilderScheduleModel.Clock(Math.Max(a.Start, b.Start))&ndash;@BuilderScheduleModel.Clock(Math.Min(a.End, b.End))
                     </li>
                 }
@@ -42,11 +52,17 @@ else
         </div>
     }
 
-    <div class="week">
+    @* minmax(0, 1fr), not 1fr: a plain 1fr column will not shrink below its
+       widest word, so on a phone "WEDNESDAY" forced the grid past the edge
+       and the last columns were clipped away. Narrow screens get "Wed". *@
+    <div class="week" style="grid-template-columns: 3.5rem repeat(@Model.Days.Count, minmax(0, 1fr))">
         <div class="head"></div>
         @foreach (var day in Model.Days)
         {
-            <div class="head">@BuilderScheduleModel.DayName(day)</div>
+            <div class="head">
+                <span class="day-long">@BuilderScheduleModel.DayName(day)</span>
+                <span class="day-short">@BuilderScheduleModel.DayName(day)[..3]</span>
+            </div>
         }
 
         <div class="times">
@@ -97,19 +113,34 @@ else
                 <td class="code">@s.SectionNumber</td>
                 <td>@(s.Professor ?? "—")</td>
                 <td class="muted">@(s.Times ?? "—")</td>
-                <td class="muted">@(s.Location ?? "—")</td>
+                <td class="muted">
+                    @if (s.Location is null) { <text>—</text> } else { @Model.Buildings.Annotate(s.Location) }
+                </td>
             </tr>
         }
         </tbody>
     </table>
 
-    @if (Model.Unscheduled.Count > 0)
+    @* Into the student's own calendar: weekly events for the whole term, days
+       off skipped. The term's dates come from the academic calendar; a term
+       it does not know cannot be exported honestly, so the button stays away. *@
+    @if (Model.Calendar is { } dates && Model.Blocks.Any(b => !b.IsBreak))
+    {
+        <div class="center stack-tight">
+            <a class="btn" asp-page-handler="Ics">Save to calendar</a>
+            <p class="muted">
+                An .ics file for Google Calendar, Apple Calendar or Outlook.
+                Classes repeat weekly from @dates.FirstDay.ToString("MMMM d") to
+                @dates.LastDay.ToString("MMMM d"), skipping @dates.HolidayNames.
+            </p>
+        </div>
+    }
+    else if (Model.Calendar is null)
     {
         <p class="note">
-            @Model.Unscheduled.Count section@(Model.Unscheduled.Count == 1 ? "" : "s")
-            publish no meeting time, so @(Model.Unscheduled.Count == 1 ? "it does" : "they do")
-            not appear on the grid:
-            @string.Join(", ", Model.Unscheduled.Select(s => $"{s.Code}-{s.SectionNumber}")).
+            Calendar export needs the term's class dates, which are not on file
+            for @Terms.Display(Model.Schedule.Sections[0].Term).
         </p>
     }
+
 }

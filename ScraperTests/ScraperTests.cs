@@ -213,6 +213,50 @@ public class ScraperTests
                    s => Assert.Matches(@"^[A-Za-z-]+/\d{2}:\d{2}[AP]M-\d{2}:\d{2}[AP]M", s.Times!));
     }
 
+    // The Asia Campus and UOnline schedules are the same page with a different
+    // heading: sections 3xx in UAC rooms, and 29x with no room at all.
+    [Fact]
+    public void MainSearchScraper_ParsesAnAsiaCampusPage()
+    {
+        var sections = MainSearchScraper.Scrape(LoadSample("uac_cs.html"));
+
+        var lab = Assert.Single(sections, s => s.Subject == "CS" && s.CourseNumber == "1400" && s.SectionNumber == "302");
+        Assert.Equal("Fall2026", lab.Term);
+        Assert.Equal("UAC 513", lab.Location);
+        Assert.Contains(lab.Instructors, i => i.Unid == "u6024385");
+        Assert.All(sections, s => Assert.StartsWith("3", s.SectionNumber));
+    }
+
+    [Fact]
+    public void MainSearchScraper_ParsesAUOnlinePage()
+    {
+        var sections = MainSearchScraper.Scrape(LoadSample("online_econ.html"));
+
+        var history = Assert.Single(sections, s => s.CourseNumber == "1740" && s.SectionNumber == "290");
+        Assert.Equal("Fall2026", history.Term);
+        Assert.Null(history.Location);
+        Assert.Equal(2, history.Instructors.Count);
+        Assert.Equal(19, history.SeatsAvailable);
+    }
+
+    // The registrar's server cuts a few pages off partway through a card, the
+    // same pages every time. The cards before the cut are whole and kept; the
+    // one the cut fell in has no lines and is dropped rather than stored empty.
+    [Fact]
+    public void ACutOffPageKeepsItsWholeCardsAndDropsTheUnfinishedOne()
+    {
+        var html = File.ReadAllText(Path.Combine(AppContext.BaseDirectory, "samples", "uac_film_cutoff.html"));
+        Assert.DoesNotContain("</html>", html);                       // it really is cut off
+        var doc = new HtmlDocument();
+        doc.LoadHtml(CutOffPage.DropUnfinishedCard(html));
+
+        var sections = MainSearchScraper.Scrape(doc);
+
+        Assert.Equal(11, sections.Count);
+        Assert.DoesNotContain(sections, s => s.CourseNumber == "2920");   // the card the cut fell in
+        Assert.Contains(sections, s => s.CourseNumber == "2650" && s.SectionNumber == "301");
+    }
+
     private static HtmlDocument LoadSample(string fileName)
     {
         var path = Path.Combine(AppContext.BaseDirectory, "samples", fileName);

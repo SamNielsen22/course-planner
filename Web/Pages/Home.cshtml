@@ -2,6 +2,8 @@
 @model HomeModel
 @{
     ViewData["Title"] = "Home";
+    ViewData["Description"] = "University of Utah course grades by professor, a schedule builder with conflict checking, and calendar export, from the University's published grade data.";
+    ViewData["Canonical"] = "/";
     Layout = "_LayoutBare";
 }
 
@@ -13,7 +15,7 @@
 </div>
 
 <div class="home-buttons">
-    <a class="btn" asp-page="/BuilderAdd">Schedule Builder</a>
+    <a class="btn" asp-page="/Schedules">Schedule Builder</a>
     <a class="btn" asp-page="/Index">Courses</a>
     <a class="btn" asp-page="/Instructors">Professors</a>
     <a class="btn" asp-page="/About">About</a>

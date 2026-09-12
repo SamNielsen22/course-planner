@@ -1,0 +1,25 @@
+@page "/account/login"
+@model Web.Pages.Account.LoginModel
+@{
+    ViewData["Title"] = "Sign In";
+    ViewData["NoIndex"] = true;
+    ViewData["ReturnUrl"] = Model.ReturnUrl;
+}
+
+<div class="page-head">
+    <h1>Sign In</h1>
+    <p class="page-sub">Save your schedule and keep it across devices.</p>
+</div>
+
+<div class="account">
+    <div asp-validation-summary="All" class="errors"></div>
+    @if (Model.Providers.Count > 0)
+    {
+        <partial name="_ExternalLogins" model="Model.Providers"/>
+        <p class="muted small">New here? Signing in with Google creates your account.</p>
+    }
+    else
+    {
+        <p class="muted">Sign-in isn't available just yet. Check back soon.</p>
+    }
+</div>

@@ -1,66 +1,48 @@
-@page
+@page "/professor/{unid}/{slug?}/{course?}"
 @model InstructorModel
 @{
-    ViewData["Title"] = Model.Display;
+    ViewData["Title"] = Model.PageTitle;
+    ViewData["Description"] = Model.Description;
+    ViewData["Canonical"] = Model.Canonical;
 }
 
 @* Wherever you arrived from - a search, a section list, a course page -
    is where back should return you. A fixed link only ever guesses. *@
-<p class="crumb"><button type="button" class="back" onclick="history.back()">&larr; Back</button></p>
-
-<div class="page-head">
-    <h1>@Model.Display</h1>
+<div class="page-head page-head-back">
+    <button type="button" class="back-arrow" onclick="history.back()" aria-label="Back" title="Back">&larr;</button>
+    <div>
+        <h1>@Model.Display</h1>
+        @if (Model.Course is not null)
+        {
+            <p class="page-sub">@Model.Course@(Model.ClassTitle is null ? "" : " · " + Model.ClassTitle)</p>
+        }
+    </div>
 </div>
 
-@* Pooled by default: a single term of a single class is usually one section,
-   a small sample of how someone grades - but it is also the one grain whose
-   percentiles are the dashboard's own rather than reconstructed. *@
-<form method="get" class="inline-form">
-    <input type="hidden" name="unid" value="@Model.Unid"/>
-    @if (!Model.ShowSections)
-    {
-        <input type="hidden" name="from" value="builder"/>
-    }
-    <select name="term" onchange="location.replace(location.pathname + '?' + new URLSearchParams(new FormData(this.form)))" aria-label="Term">
-        <option value="">All terms</option>
+@* The chart is always one section's - the grain where every figure is the
+   registrar's own. A term (their latest by default) and a class are always
+   chosen; the section picker appears only when that pair has more than one. *@
+@* The pickers always browse from the person's own address: a class address
+   names its class in the path, which would otherwise outrank the dropdown. *@
+<form method="get" class="inline-form" action="@Model.Base">
+    <select name="term" onchange="location.replace(this.form.action + '?' + new URLSearchParams(new FormData(this.form)))" aria-label="Term">
         @foreach (var t in Model.Terms)
         {
             <option value="@t" selected="@(t == Model.Term)">@Terms.Display(t)</option>
         }
     </select>
-    <select name="course" onchange="location.replace(location.pathname + '?' + new URLSearchParams(new FormData(this.form)))" aria-label="Class">
-        <option value="">All classes</option>
-        @foreach (var c in Model.Courses.Where(c => c.AvgGpa is not null))
+    <select name="course" onchange="location.replace(this.form.action + '?' + new URLSearchParams(new FormData(this.form)))" aria-label="Class">
+        @foreach (var code in Model.Classes)
         {
-            var code = $"{c.Subject} {c.CourseNumber}";
             <option value="@code" selected="@(code == Model.Course)">@code</option>
         }
     </select>
-    @* Always present, so it is obvious a section can be chosen; live once a
-       term and a class are picked. Hidden for visitors from the builder - see
-       InstructorModel.ShowSections. *@
-    @if (!Model.ShowSections)
+    @if (Model.Sections.Count > 1)
     {
-    }
-    else if (!Model.ClassChosen)
-    {
-        <select name="section" disabled aria-label="Section">
-            <option>Choose a term and class first</option>
-        </select>
-    }
-    else if (Model.GradedSections.Count == 0)
-    {
-        <select name="section" disabled aria-label="Section">
-            <option>No section grades published</option>
-        </select>
-    }
-    else
-    {
-        <select name="section" onchange="location.replace(location.pathname + '?' + new URLSearchParams(new FormData(this.form)))" aria-label="Section">
-            <option value="">All sections</option>
-            @foreach (var s in Model.GradedSections)
+        <select name="section" onchange="location.replace(this.form.action + '?' + new URLSearchParams(new FormData(this.form)))" aria-label="Section">
+            @foreach (var s in Model.Sections)
             {
-                <option value="@s.SectionNumber" selected="@(s.SectionNumber == Model.SectionNumber)">Section @s.SectionNumber</option>
+                <option value="@s.Key" selected="@(s.Key == Model.SectionKey)">@s.Label</option>
             }
         </select>
     }
@@ -71,9 +53,7 @@
 
 @if (Model.Grades.Any)
 {
-    @* One section is the dashboard's own figures. Anything pooled has its
-       deviation combined exactly and its percentiles reconstructed -
-       GradeReconstruction; the About page explains. *@
+    @* One section, so these are the published figures - all six. *@
     <partial name="_GradeStats" model="Model.Grades"/>
 
     @* The average covers every student; the bars only show groups of five or

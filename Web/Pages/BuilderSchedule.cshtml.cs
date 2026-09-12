@@ -1,4 +1,6 @@
+using System.Text;
 using Web.Schedule;
+using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.RazorPages;
 
 namespace Web.Pages;
@@ -6,15 +8,18 @@ namespace Web.Pages;
 /// <summary>One block on the week grid: what it is and where it sits.</summary>
 public record Placed(string Label, string Detail, string Day, int Start, int End, bool IsBreak);
 
-public class BuilderScheduleModel(ScheduleStore store) : PageModel
+/// <summary>Personal - YOUR schedule - so no cache, shared or private, may keep a copy.</summary>
+[ResponseCache(NoStore = true)]
+public class BuilderScheduleModel(ScheduleStore store, Buildings buildings) : PageModel
 {
-    private static readonly string[] Weekdays = ["Mo", "Tu", "We", "Th", "Fr"];
-
     public BuiltSchedule Schedule { get; private set; } = new();
     public List<Placed> Blocks { get; private set; } = [];
 
-    /// <summary>Sections in the schedule that publish no meeting time at all.</summary>
-    public List<PickedSection> Unscheduled { get; private set; } = [];
+    /// <summary>For the location column: a building code carries its full name on hover.</summary>
+    public Buildings Buildings => buildings;
+
+    /// <summary>The term's class dates, when the academic calendar has them - what the export needs.</summary>
+    public AcademicCalendar.TermDates? Calendar { get; private set; }
 
     /// <summary>Pairs that overlap. The schedule is the student's own, so a clash
     /// is reported rather than prevented - they may have added it deliberately.</summary>
@@ -25,16 +30,18 @@ public class BuilderScheduleModel(ScheduleStore store) : PageModel
 
     /// <summary>The grid's first and last hour, from the schedule rather than a
     /// fixed 8-to-4: an evening seminar has to appear somewhere.</summary>
-    public int FirstHour { get; private set; } = 8;
-    public int LastHour { get; private set; } = 17;
+    private int FirstHour { get; set; } = 8;
+    private int LastHour { get; set; } = 17;
 
     public IEnumerable<int> Hours => Enumerable.Range(FirstHour, LastHour - FirstHour + 1);
-    public IReadOnlyList<string> Days => Weekdays;
+
+    /// <summary>Monday to Friday, plus a weekend day only when something meets on it.</summary>
+    public IReadOnlyList<string> Days { get; private set; } = Meeting.Week[..5];
 
     public static string DayName(string code) => code switch
     {
-        "Mo" => "Monday", "Tu" => "Tuesday", "We" => "Wednesday",
-        "Th" => "Thursday", "Fr" => "Friday", _ => code
+        "Mo" => "Monday", "Tu" => "Tuesday", "We" => "Wednesday", "Th" => "Thursday",
+        "Fr" => "Friday", "Sa" => "Saturday", "Su" => "Sunday", _ => code
     };
 
     public static string Clock(int minutes)
@@ -54,17 +61,39 @@ public class BuilderScheduleModel(ScheduleStore store) : PageModel
         return (Math.Max(0, top), Math.Max(1.5, height));
     }
 
-    public void OnGet()
+    public void OnGet() => Load();
+
+    /// <summary>
+    /// The schedule as an .ics file to import into a calendar. Personal, so
+    /// never cached. Sent inline rather than as an attachment: an iPhone then
+    /// shows the "Add All" sheet at once instead of parking the file in
+    /// Downloads, while a desktop browser, which cannot display a calendar,
+    /// downloads it under the term's name either way.
+    /// </summary>
+    public IActionResult OnGetIcs()
+    {
+        Load();
+        if (Schedule.Sections.Count == 0) return RedirectToPage();
+
+        var site = $"{Request.Scheme}://{Request.Host}";
+        var text = Ics.Build(Schedule, buildings, site, DateTimeOffset.UtcNow);
+        Response.Headers.CacheControl = "no-store";
+
+        var disposition = new Microsoft.Net.Http.Headers.ContentDispositionHeaderValue("inline");
+        disposition.SetHttpFileName(Terms.Display(Schedule.Sections[0].Term).Replace(' ', '-') + "-classes.ics");
+        Response.Headers.ContentDisposition = disposition.ToString();
+        return File(Encoding.UTF8.GetBytes(text), "text/calendar; charset=utf-8");
+    }
+
+    private void Load()
     {
         Schedule = store.Current;
+        if (Schedule.Sections.Count > 0) Calendar = AcademicCalendar.For(Schedule.Sections[0].Term, Schedule.Campus);
 
         foreach (var section in Schedule.Sections)
         {
-            var meetings = Meetings.Parse(section.Times);
-            if (meetings.Count == 0) { Unscheduled.Add(section); continue; }
-
-            foreach (var meeting in meetings)
-                foreach (var day in Weekdays.Where(d => DaysOf(meeting.Days).Contains(d)))
+            foreach (var meeting in Meetings.Parse(section.Times))
+                foreach (var day in meeting.DayCodes)
                     Blocks.Add(new Placed(section.Code, $"Section {section.SectionNumber}",
                                           day, meeting.Start, meeting.End, false));
         }
@@ -72,9 +101,16 @@ public class BuilderScheduleModel(ScheduleStore store) : PageModel
         foreach (var window in Schedule.Breaks)
         {
             var meeting = Meetings.Of(window);
-            foreach (var day in Weekdays.Where(d => DaysOf(meeting.Days).Contains(d)))
+            foreach (var day in meeting.DayCodes)
                 Blocks.Add(new Placed(window.Name, "Break", day, meeting.Start, meeting.End, true));
         }
+
+        // The registrar lists the same meeting twice now and then; one block is enough.
+        Blocks = Blocks.Distinct().ToList();
+
+        // A weekend column only when a class meets then - 117 sections do in
+        // Fall 2026, nearly all on Saturday - so the ordinary week stays five wide.
+        Days = Meeting.Week.Where((d, i) => i < 5 || Blocks.Any(b => b.Day == d)).ToList();
 
         if (Blocks.Count > 0)
         {
@@ -84,29 +120,19 @@ public class BuilderScheduleModel(ScheduleStore store) : PageModel
             LastHour = Math.Max(17, (Blocks.Max(b => b.End) + 59) / 60);
         }
 
-        foreach (var a in Blocks)
-            foreach (var b in Blocks)
-                if (!ReferenceEquals(a, b) && a.Day == b.Day
-                    && a.Start < b.End && b.Start < a.End
-                    && string.CompareOrdinal(a.Label, b.Label) < 0)
-                {
-                    Clashes.Add((a, b));
-                    InConflict.Add(a);
-                    InConflict.Add(b);
-                }
-    }
-
-    /// <summary>
-    /// Day codes as the registrar writes them, two letters each. A break with no
-    /// days set applies to the whole week.
-    /// </summary>
-    private static HashSet<string> DaysOf(string days)
-    {
-        if (string.IsNullOrWhiteSpace(days)) return [.. Weekdays];
-        var found = new HashSet<string>();
-        for (var i = 0; i + 1 < days.Length + 1; i++)
-            if (i + 1 < days.Length && Weekdays.Contains(days[i..(i + 2)]))
-            { found.Add(days[i..(i + 2)]); i++; }
-        return found.Count > 0 ? found : [.. Weekdays];
+        // Each pair once. Two sections of the same course clash like any other
+        // pair; a section's own meetings never clash with each other, and two
+        // breaks overlapping is nobody's problem.
+        for (var i = 0; i < Blocks.Count; i++)
+            for (var j = i + 1; j < Blocks.Count; j++)
+            {
+                var (a, b) = (Blocks[i], Blocks[j]);
+                if (a.Day != b.Day || a.Start >= b.End || b.Start >= a.End) continue;
+                if (a.IsBreak && b.IsBreak) continue;
+                if (a.Label == b.Label && a.Detail == b.Detail) continue;
+                Clashes.Add((a, b));
+                InConflict.Add(a);
+                InConflict.Add(b);
+            }
     }
 }

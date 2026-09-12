@@ -2,10 +2,12 @@
 @model IndexModel
 @{
     ViewData["Title"] = "Courses";
+    ViewData["Description"] = "Every University of Utah course with its average GPA and grade distribution, searchable by code or title.";
+    ViewData["Canonical"] = "/courses";
 }
 
 <div class="page-head">
-    <h1>Find a course</h1>
+    <h1>Find a Course</h1>
 </div>
 
 @* One page, not two. The search bar stays put and the results below it are

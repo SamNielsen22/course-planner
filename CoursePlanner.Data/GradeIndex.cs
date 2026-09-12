@@ -2,31 +2,31 @@ namespace CoursePlanner.Data;
 
 /// <summary>
 /// Every published grade row - each section, each term of a course, and the
-/// all-terms row where the scrape has produced it - with its reconstruction,
-/// held in memory. Every grade figure on the site is read or pooled from
-/// here, so a search tile, a builder card and a page can never disagree.
+/// all-terms row where the scrape has produced it - held in memory. Every
+/// grade figure on the site is read from here, so a search tile, a builder
+/// card and a page can never disagree.
 ///
-/// Built once at startup: <see cref="GradeReconstruction"/> runs for each row
-/// then and never again; a request only sums. Pooled averages and deviations
-/// are weighted by the reconstruction's inferred headcounts, which include
-/// the students the registrar blanked - weighting by the visible counts put
-/// the pooled mean off by more than 0.01 a third of the time.
+/// Nothing is inferred. A single row is shown as published. The only figure
+/// ever pooled is the average GPA - a headcount-weighted mean of the rows'
+/// own averages - for the course page's all-terms view until the registrar's
+/// own all-terms row exists, and for the averages on search tiles and builder
+/// cards. Percentiles and deviations are never combined: the section and
+/// term rows are the grains they are published at, and the pages stay there.
 ///
-/// Not watched. After a grade load, restart the site or call <see cref="Rebuild"/>.
+/// Built once at startup. Not watched: after a grade load, restart the site
+/// or call <see cref="Rebuild"/>.
 /// </summary>
 public class GradeIndex(CourseQueries db)
 {
-    /// <summary>
-    /// One published row and its reconstruction. Bucket counts are the visible
-    /// ones (blanked reads as 0, as the chart draws it); List is the rebuilt
-    /// running total at each of the twelve marks; Headcount includes the
-    /// inferred hidden students.
-    /// </summary>
+    /// <summary>One published row. Bucket counts are the visible ones - a blanked group (under five) reads as 0, as the chart draws it.</summary>
     public sealed record Row(
         string Term, string Subject, string CourseNumber, string? SectionNumber,
         double Avg, double? P25, double? P50, double? P75, double? Sd,
-        int A, int B, int C, int D, int E, int Cr, int Nc, int W, int Other,
-        double[] List, int Headcount);
+        int A, int B, int C, int D, int E, int Cr, int Nc, int W, int Other)
+    {
+        /// <summary>Students with a published letter grade - the weight a pooled average uses.</summary>
+        public int Graded => A + B + C + D + E;
+    }
 
     private sealed record Snapshot(
         Dictionary<string, Row> Sections,                  // term|subject|number|section
@@ -44,9 +44,9 @@ public class GradeIndex(CourseQueries db)
 
     private static Snapshot Build(CourseQueries db)
     {
-        var sections = Reconstruct(db.GradeRows("section_grades"));
-        var courseTerms = Reconstruct(db.GradeRows("course_term_grades"));
-        var allTerms = Reconstruct(db.GradeRows("course_grades"));
+        var sections = Rows(db.GradeRows("section_grades"));
+        var courseTerms = Rows(db.GradeRows("course_term_grades"));
+        var allTerms = Rows(db.GradeRows("course_grades"));
 
         var sectionByKey = new Dictionary<string, Row>();
         foreach (var r in sections) sectionByKey[Key(r.Term, r.Subject, r.CourseNumber, r.SectionNumber)] = r;
@@ -66,7 +66,7 @@ public class GradeIndex(CourseQueries db)
             list.Add(row);
         }
 
-        // The three averages the tiles and cards show, pooled once here so they
+        // The averages the tiles and cards show, pooled once here so they
         // match what the pages compute from the same rows.
         var courseAverages = new Dictionary<string, double>();
         foreach (var (course, rows) in termsOfCourse)
@@ -89,26 +89,20 @@ public class GradeIndex(CourseQueries db)
                             courseAverages, instructorAverages, instructorCourseAverages);
     }
 
-    // The reconstruction is the only expensive step; the rows are independent.
-    private static List<Row> Reconstruct(IReadOnlyList<CourseQueries.GradeRow> published) =>
-        published.AsParallel().AsOrdered().Select(p =>
-        {
-            var fit = GradeReconstruction.Rebuild(new GradeReconstruction.Row(
-                p.Avg, p.P25, p.P50, p.P75, p.Sd, p.A, p.B, p.C, p.D, p.E));
-            return new Row(p.Term, p.Subject, p.CourseNumber, p.SectionNumber,
-                           p.Avg, p.P25, p.P50, p.P75, p.Sd,
-                           p.A ?? 0, p.B ?? 0, p.C ?? 0, p.D ?? 0, p.E ?? 0, p.Cr, p.Nc, p.W, p.Other,
-                           fit?.List ?? new double[12], fit?.Headcount ?? 0);
-        }).ToList();
+    private static List<Row> Rows(IReadOnlyList<CourseQueries.GradeRow> published) =>
+        published.Select(p => new Row(
+            p.Term, p.Subject, p.CourseNumber, p.SectionNumber,
+            p.Avg, p.P25, p.P50, p.P75, p.Sd,
+            p.A ?? 0, p.B ?? 0, p.C ?? 0, p.D ?? 0, p.E ?? 0, p.Cr, p.Nc, p.W, p.Other)).ToList();
 
-    /// <summary>Re-reads and re-reconstructs everything. For after a grade load.</summary>
+    /// <summary>Re-reads everything. For after a grade load.</summary>
     public void Rebuild() => _now = Build(db);
 
     /// <summary>
-    /// One course, for a single term or pooled across every term. The pooled
-    /// view prefers the registrar's own all-terms row when the scrape has
-    /// produced it - the only figure that sees through per-term suppression -
-    /// and otherwise pools the term rows.
+    /// One course, for a single term or across every term. The all-terms view
+    /// is the registrar's own pooled row when the scrape has produced it - the
+    /// only figure that sees through per-term suppression; until then it is
+    /// the term rows pooled, which gives an average and nothing more.
     /// </summary>
     public GradeDistribution Course(string subject, string courseNumber, string? term = null)
     {
@@ -125,18 +119,17 @@ public class GradeIndex(CourseQueries db)
         _now.Sections.TryGetValue(Key(term, subject, courseNumber, sectionNumber), out var row) ? Pool([row]) : GradeDistribution.Empty;
 
     /// <summary>
-    /// One instructor's grades, optionally narrowed to a term or a class. The
-    /// class filter matters because a professor who teaches both a large
-    /// first-year class and a graduate seminar has two quite different
-    /// distributions, and pooling them describes neither.
+    /// One instructor's graded sections as published, optionally narrowed to a
+    /// term or a class. The professor page shows one of these at a time - the
+    /// one grain at which every figure is the registrar's own.
     /// </summary>
-    public GradeDistribution Instructor(string unid, string? term = null, string? subject = null, string? courseNumber = null)
+    public IReadOnlyList<Row> InstructorSections(string unid, string? term = null, string? subject = null, string? courseNumber = null)
     {
-        if (!_now.SectionsOfInstructor.TryGetValue(unid, out var rows)) return GradeDistribution.Empty;
-        return Pool(rows.Where(r =>
+        if (!_now.SectionsOfInstructor.TryGetValue(unid, out var rows)) return [];
+        return rows.Where(r =>
             (term is null || r.Term == term) &&
             (subject is null || r.Subject == subject) &&
-            (courseNumber is null || r.CourseNumber == courseNumber)).ToList());
+            (courseNumber is null || r.CourseNumber == courseNumber)).ToList();
     }
 
     /// <summary>Every course's pooled average, keyed "SUBJ|NUMBER" - the builder's GPA sort.</summary>
@@ -148,15 +141,19 @@ public class GradeIndex(CourseQueries db)
     public double? InstructorAverage(string unid) =>
         _now.InstructorAverages.TryGetValue(unid, out var a) ? a : null;
 
+    /// <summary>Every professor-and-course pair with published grades: the class pages the sitemap lists.</summary>
+    public IEnumerable<(string Unid, string Subject, string CourseNumber)> GradedClasses =>
+        _now.SectionsOfInstructor.SelectMany(kv => kv.Value.Select(r => (kv.Key, r.Subject, r.CourseNumber))).Distinct();
+
     /// <summary>THIS professor's average in THIS course - the number the search tiles and builder cards show.</summary>
     public double? InstructorCourseAverage(string unid, string subject, string courseNumber) =>
         _now.InstructorCourseAverages.TryGetValue(Key(unid, subject, courseNumber), out var a) ? a : null;
 
     /// <summary>
-    /// Several rows as one distribution. A single row is read as published.
-    /// Several are pooled: buckets summed; the mean and deviation weighted by
-    /// inferred headcount (the deviation by the pooled-variance identity); the
-    /// percentiles read off the merged rebuilt lists, the dashboard's way.
+    /// Rows as one distribution. A single row is read as published. Several
+    /// give summed buckets and a headcount-weighted average - averaging the
+    /// rows' means would let a 12-student summer outvote a 900-student autumn -
+    /// and nothing else: percentiles and deviations are not combined.
     /// </summary>
     public static GradeDistribution Pool(IReadOnlyList<Row> rows)
     {
@@ -167,32 +164,11 @@ public class GradeIndex(CourseQueries db)
             return new GradeDistribution(r.A, r.B, r.C, r.D, r.E, r.Cr, r.Nc, r.W, r.Other,
                                          r.Avg, r.P25, r.P50, r.P75, r.Sd);
         }
-
-        var weighted = rows.Where(r => r.Headcount > 0).ToList();
-        var n = weighted.Sum(r => (double)r.Headcount);
-        double? avg = n > 0 ? weighted.Sum(r => r.Avg * r.Headcount) / n : null;
-
-        double? sd = null;
-        var withSd = weighted.Where(r => r.Sd is not null).ToList();
-        if (withSd.Count > 0)
-        {
-            var m = withSd.Sum(r => (double)r.Headcount);
-            var mean = withSd.Sum(r => r.Avg * r.Headcount) / m;
-            var second = withSd.Sum(r => r.Headcount * (r.Sd!.Value * r.Sd.Value + r.Avg * r.Avg)) / m;
-            sd = Math.Sqrt(Math.Max(0, second - mean * mean));
-        }
-
-        var list = new double[12]; var total = 0;
-        foreach (var r in weighted)
-        {
-            for (var i = 0; i < 12; i++) list[i] += r.List[i];
-            total += r.Headcount;
-        }
-        double? P(double q) => total > 0 ? GradeReconstruction.Percentile(list, total, q) : null;
-
+        var graded = rows.Sum(r => (double)r.Graded);
+        double? avg = graded > 0 ? rows.Sum(r => r.Avg * r.Graded) / graded : null;
         return new GradeDistribution(
             rows.Sum(r => r.A), rows.Sum(r => r.B), rows.Sum(r => r.C), rows.Sum(r => r.D), rows.Sum(r => r.E),
             rows.Sum(r => r.Cr), rows.Sum(r => r.Nc), rows.Sum(r => r.W), rows.Sum(r => r.Other),
-            avg, P(.25), P(.5), P(.75), sd);
+            avg);
     }
 }

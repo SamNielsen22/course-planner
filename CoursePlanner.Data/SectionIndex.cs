@@ -64,7 +64,8 @@ public class SectionIndex(CourseQueries db)
         string? query = null,
         string? requirement = null,
         bool openOnly = false,
-        bool creditOnly = true)
+        bool creditOnly = true,
+        string? campus = null)
     {
         var entry = Get(term);
         var q = (query ?? "").Trim();
@@ -78,7 +79,8 @@ public class SectionIndex(CourseQueries db)
         const StringComparison Like = StringComparison.OrdinalIgnoreCase;
 
         return entry.Sections.Where(s =>
-            (string.IsNullOrEmpty(subject) || s.Subject == subject)
+            (string.IsNullOrEmpty(campus) || s.Campus == campus)
+            && (string.IsNullOrEmpty(subject) || s.Subject == subject)
             && (string.IsNullOrEmpty(courseNumber) || s.CourseNumber == courseNumber)
             && (q.Length == 0
                 || s.Subject.Contains(q, Like)

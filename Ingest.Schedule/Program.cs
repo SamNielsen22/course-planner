@@ -1,6 +1,12 @@
 class Program
 {
-    const string BaseUrl = "https://class-schedule.app.utah.edu/main/";
+    // The registrar publishes three class schedules on the one site, and a
+    // section is listed in exactly one of them: main (Salt Lake, whose subject
+    // pages also carry the Sandy, St. George and Herriman classes), uac (the
+    // Asia Campus in Incheon, sections 3xx) and online (UOnline Programs,
+    // sections 29x). The professional schools keep calendars of their own but
+    // no schedule of their own, so these three are the whole University.
+    static readonly string[] Campuses = { "main", "uac", "online" };
     const int TermsToScrape = 19;   // back to Fall 2020, matching the grade data
 
     // The digit the registrar gives each term. Listed newest first within a year.
@@ -18,18 +24,16 @@ class Program
             return;
         }
 
-        var termUrls = TermCodesNewestFirst()
-            .Take(TermsToScrape)
-            .Select(termCode => BaseUrl + termCode + "/")
-            .ToList();
+        var termCodes = TermCodesNewestFirst().Take(TermsToScrape).ToList();
 
-        Console.WriteLine($"Crawling {termUrls.Count} terms, newest first");
+        Console.WriteLine($"Crawling {termCodes.Count} terms on {Campuses.Length} schedules, newest first");
 
-        foreach (var termUrl in termUrls)
-        {
-            Console.WriteLine($"Crawling term {termUrl}");
-            new Crawler().Run(termUrl);
-        }
+        foreach (var termCode in termCodes)
+            foreach (var campus in Campuses)
+            {
+                Console.WriteLine($"Crawling {campus} {termCode}");
+                new Crawler().Run(campus, termCode);
+            }
     }
 
     /// <summary>
@@ -42,7 +46,9 @@ class Program
         var termCode = TermCodesNewestFirst().First();
         Console.WriteLine($"Refreshing seats for term {termCode}");
 
-        var updated = new Crawler().RefreshSeats(BaseUrl + termCode + "/");
+        var updated = 0;
+        foreach (var campus in Campuses)
+            updated += new Crawler().RefreshSeats(campus, termCode);
         Console.WriteLine($"Done. Seat counts updated on {updated} sections.");
     }
 

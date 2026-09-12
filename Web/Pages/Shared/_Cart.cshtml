@@ -6,7 +6,7 @@
    which is the whole reason it is worth showing. *@
 <aside class="cart" id="cart">
     <header class="cart-head">
-        <span class="cart-title">Your schedule</span>
+        <span class="cart-title">@(Model.Name ?? "Your schedule")</span>
         <span class="cart-count">@Model.Sections.Count</span>
     </header>
 

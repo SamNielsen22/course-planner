@@ -1,16 +1,22 @@
 @page "/builder"
 @model BuilderAddModel
 @{
-    ViewData["Title"] = "Add a course";
+    ViewData["Title"] = "Schedule Builder";
+    ViewData["NoIndex"] = true;
 }
 
 @* The term field was removed, so nothing on the page said which term these
    sections belong to. Everything here - the results, the schedule, the
    conflicts - is scoped to it. It is stated once, under the heading, rather
    than repeated on the cart beside it. *@
-<div class="page-head">
-    <h1>Schedule builder</h1>
-    <p class="page-sub">Browsing @Terms.Display(Model.Term ?? "") sections</p>
+@* The arrow sits on the heading's own line, back to the schedule home this
+   one was opened from - a control beside the title rather than a line above it. *@
+<div class="page-head page-head-back">
+    <a class="back-arrow" asp-page="/Schedules" aria-label="Your schedules" title="Your schedules">&larr;</a>
+    <div>
+        <h1>Schedule Builder</h1>
+        <p class="page-sub">Browsing @Terms.Display(Model.Term ?? "")@(Campus.Label(Model.Campus) is { } campus ? " · " + campus : "") sections</p>
+    </div>
 </div>
 
 @* One screen rather than four steps: each choice stays visible while the next
@@ -19,6 +25,8 @@
 @Html.AntiForgeryToken()
 
 <form method="get" id="search">
+    @* Carried so the live results ask for the same term the page shows. *@
+    <input type="hidden" name="term" value="@Model.Term"/>
     @* One field rather than a subject dropdown beside a course field. Those two
        did the same job by different means, could contradict each other, and the
        dropdown ran to 200-odd codes. What is typed is inferred: an exact subject
@@ -41,6 +49,21 @@
                 }
             </select>
         </label>
+
+        @* A guest picks the campus here; an account schedule's is fixed when
+           it is created, and is named under the heading instead. *@
+        @if (Model.CanPickCampus)
+        {
+            <label>
+                Campus
+                <select name="campus">
+                    @foreach (var (code, name) in Campus.All)
+                    {
+                        <option value="@code" selected="@(code == Model.Campus)">@name</option>
+                    }
+                </select>
+            </label>
+        }
 
         <label>
             Sort by

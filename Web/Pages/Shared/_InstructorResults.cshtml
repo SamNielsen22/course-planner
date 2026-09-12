@@ -18,7 +18,7 @@ else
         {
             <article class="prof-card">
                 <header class="prof-head">
-                    <a class="prof-name" asp-page="/Instructor" asp-route-unid="@person.Unid">
+                    <a class="prof-name" asp-page="/Instructor" asp-route-unid="@person.Unid" asp-route-slug="@Web.Pages.Names.Slug(person.Name)">
                         @Web.Pages.Names.Natural(person.Name)
                     </a>
                     <span class="prof-gpa">
@@ -46,8 +46,8 @@ else
                                already chosen, which is the question the tile
                                raises - how does THIS professor grade it. *@
                             <a class="class-card" asp-page="/Instructor"
-                               asp-route-unid="@person.Unid"
-                               asp-route-course="@($"{course.Subject} {course.CourseNumber}")">
+                               asp-route-unid="@person.Unid" asp-route-slug="@Web.Pages.Names.Slug(person.Name)"
+                               asp-route-course="@Web.Pages.Names.CourseSlug(course.Subject, course.CourseNumber)">
                                 <span class="class-code">@course.Subject @course.CourseNumber</span>
                                 <span class="class-title">@course.Title</span>
                                 @* Their own average in this class, not the

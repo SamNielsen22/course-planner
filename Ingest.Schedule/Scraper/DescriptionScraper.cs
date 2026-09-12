@@ -1,18 +1,34 @@
+using System.Text.RegularExpressions;
 using HtmlAgilityPack;
-public record DetailsRecord(string Description, string Prerequisites, string RequirementDesignation);
-public static class DescriptionScraper
+
+/// <summary>
+/// What a course's description page says about it. Title is the full name from
+/// the page heading - "Manufacturing for Engineering Systems" - where the
+/// class listing carries only the registrar's 30-character short title
+/// ("Manufact for Eng Sys"); empty when the heading was not where expected.
+/// </summary>
+public record DetailsRecord(string Title, string Description, string Prerequisites, string RequirementDesignation);
+
+public static partial class DescriptionScraper
 {
+    // "ME EN 2650 - Manufacturing for Engineering Systems": code, dash, name.
+    [GeneratedRegex(@"^\s*[A-Z][A-Z ]*\s+\d+[A-Z]?\s*-\s*(?<title>.+?)\s*$")]
+    private static partial Regex Heading();
+
     public static DetailsRecord Scrape(HtmlDocument doc)
     {
         var description = "";
         var prerequisites = "";
         var requirementDesignation = "";
 
+        var heading = HtmlUtils.CleanText(doc.DocumentNode.SelectSingleNode("//h1")?.InnerText) ?? "";
+        var title = Heading().Match(heading) is { Success: true } match ? match.Groups["title"].Value : "";
+
         var cards = doc.DocumentNode.SelectNodes("//div[contains(@class,'card')]");
 
         if (cards == null){
             Console.WriteLine("Could not find card in class description");
-            return new DetailsRecord(description, prerequisites, requirementDesignation);
+            return new DetailsRecord(title, description, prerequisites, requirementDesignation);
         }
 
         foreach (var card in cards)
@@ -46,7 +62,7 @@ public static class DescriptionScraper
             }
         }
 
-        return new DetailsRecord(description, prerequisites, requirementDesignation);
+        return new DetailsRecord(title, description, prerequisites, requirementDesignation);
     }
 
     /// <summary>

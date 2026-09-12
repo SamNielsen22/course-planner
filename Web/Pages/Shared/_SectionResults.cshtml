@@ -54,38 +54,76 @@ else
                     <span class="sc-title">@s.Title</span>
                 </div>
 
-                @* Who teaches it, then how they grade it. The two figures sit
-                   directly under the name because the comparison they invite is
-                   "this professor versus the course", and that only reads if the
-                   name is next to them. *@
+                @* Who teaches it, then how they grade it. The figures sit directly
+                   under the names because the comparison they invite is "this
+                   professor versus the course", and that only reads if the name
+                   is next to them. *@
                 <div class="sc-row">
-                    <p class="sc-prof">
+                    <div class="sc-prof">
                         @if (s.Instructors.Count == 0)
                         {
                             <span class="muted">No professor listed</span>
                         }
                         else
                         {
-                            foreach (var i in s.Instructors)
+                            @* Everyone teaching it, each a link to their page with this
+                               class chosen, punctuated as prose - "A, B and C" - so a
+                               wrapped line ends on a comma rather than starting on a
+                               stray separator. Past three (team-taught clinical courses
+                               run to eighteen) the rest wait behind "and N more". *@
+                            var total = s.Instructors.Count;
+                            var shown = s.Instructors.Take(3).ToList();
+                            var rest = s.Instructors.Skip(3).ToList();
+                            string Before(int i) => total > 1 && i == total - 1 ? "and " : "";
+                            string After(int i) => i < total - 2 ? "," : "";
+                            for (var n = 0; n < shown.Count; n++)
                             {
-                                @* from=builder: the professor page hides its section picker
-                                   for these - that picker belongs to the professor search. *@
-                                <a class="link" asp-page="/Instructor" asp-route-unid="@i.Unid"
-                                   asp-route-course="@($"{s.Subject} {s.CourseNumber}")"
-                                   asp-route-from="builder">@Web.Pages.Names.Natural(i.Name)</a>
+                                // The third name's comma belongs only once the fold is open.
+                                var folded = n == shown.Count - 1 && rest.Count > 0 && After(n) == ",";
+                                <span class="sc-one @(folded ? "sc-comma-open" : "")">@Before(n)<a class="link" asp-page="/Instructor" asp-route-unid="@shown[n].Unid" asp-route-slug="@Web.Pages.Names.Slug(shown[n].Name)"
+                                   asp-route-course="@Web.Pages.Names.CourseSlug(s.Subject, s.CourseNumber)">@Web.Pages.Names.Natural(shown[n].Name)</a>@(folded ? "" : After(n))</span>
+                            }
+                            if (rest.Count > 0)
+                            {
+                                <details class="sc-more">
+                                    <summary>and @rest.Count more</summary>
+                                    @for (var k = 0; k < rest.Count; k++)
+                                    {
+                                        var i = shown.Count + k;
+                                        <span class="sc-one">@Before(i)<a class="link" asp-page="/Instructor" asp-route-unid="@rest[k].Unid" asp-route-slug="@Web.Pages.Names.Slug(rest[k].Name)"
+                                           asp-route-course="@Web.Pages.Names.CourseSlug(s.Subject, s.CourseNumber)">@Web.Pages.Names.Natural(rest[k].Name)</a>@After(i)</span>
+                                    }
+                                </details>
                             }
                         }
-                    </p>
+                    </div>
 
+                    @* The course's average, then how its professors grade it: one
+                       figure for the usual single professor, one per person for a
+                       pair or a trio, and none past that - a team-taught course is
+                       nobody's grading in particular. *@
                     <div class="sc-grades">
                         <div class="sc-fig">
                             <span class="sc-label">Course average</span>
-                            <span class="sc-value">@(s.CourseAvgGpa?.ToString("0.00") ?? "—")</span>
+                            <span class="sc-value">@Figures.Gpa(s.CourseAvgGpa)</span>
                         </div>
-                        <div class="sc-fig">
-                            <span class="sc-label">This professor</span>
-                            <span class="sc-value">@(s.InstructorAvgGpa?.ToString("0.00") ?? "—")</span>
-                        </div>
+                        @if (s.Instructors.Count == 1)
+                        {
+                            <div class="sc-fig">
+                                <span class="sc-label">This professor</span>
+                                <span class="sc-value">@Figures.Gpa(s.InstructorAverages.GetValueOrDefault(s.Instructors[0].Unid))</span>
+                            </div>
+                        }
+                        else if (s.Instructors.Count <= 3)
+                        {
+                            foreach (var i in s.Instructors)
+                            {
+                                <div class="sc-fig">
+                                    <span class="sc-label">@Web.Pages.Names.Family(i.Name)</span>
+                                    <span class="sc-value">@Figures.Gpa(s.InstructorAverages.GetValueOrDefault(i.Unid))</span>
+                                </div>
+                            }
+                        }
                     </div>
                 </div>
 

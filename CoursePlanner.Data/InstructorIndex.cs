@@ -63,6 +63,9 @@ public class InstructorIndex(CourseQueries db, GradeIndex grades)
 
     public int Count => _all.Count;
 
+    /// <summary>Everyone, in the index's order - for the sitemap.</summary>
+    public IReadOnlyList<Entry> All => _all;
+
     /// <summary>Re-reads the whole index. For after a fresh grade load.</summary>
     public void Rebuild() => _all = Shuffled(WithAverages(db.InstructorAverages(), grades));
 

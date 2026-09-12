@@ -16,6 +16,11 @@ CREATE TABLE IF NOT EXISTS sections (
   course_number  TEXT NOT NULL,
   section_number TEXT NOT NULL,
 
+  -- Which of the registrar's three schedules listed it: main (Salt Lake, with
+  -- the Sandy, St. George and Herriman classes), uac (Asia Campus) or online
+  -- (UOnline Programs). A section is listed in exactly one.
+  campus         TEXT NOT NULL DEFAULT 'main',
+
   component      TEXT,
   type           TEXT,
   units          INTEGER,
@@ -190,7 +195,8 @@ CREATE INDEX IF NOT EXISTS idx_course_term_grades_course
 -- else - the schedule site is driven by the code.
 CREATE TABLE IF NOT EXISTS crawl_progress (
   term_code TEXT NOT NULL,
+  campus    TEXT NOT NULL DEFAULT 'main',
   subject   TEXT NOT NULL,
 
-  PRIMARY KEY (term_code, subject)
+  PRIMARY KEY (term_code, campus, subject)
 );

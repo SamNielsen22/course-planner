@@ -12,6 +12,7 @@ public record Section(
     string Subject,
     string CourseNumber,
     string SectionNumber,
+    string Campus,
     string Title,
     string? Component,
     string? Type,
@@ -49,79 +50,6 @@ public class CourseQueries(string connectionString)
         using var database = Open();
         return database.Query<string>(
             "SELECT DISTINCT term FROM sections ORDER BY term").ToList();
-    }
-
-    /// <summary>Courses in a term, optionally filtered by text and by requirement designation.</summary>
-    public IReadOnlyList<Course> SearchCourses(string term, string? query, string? requirement)
-    {
-        const string sql = @"
-            SELECT DISTINCT c.subject AS Subject, c.course_number AS CourseNumber, c.title AS Title,
-                   c.requirement_designation AS RequirementDesignation,
-                   CAST(g.gpa_avg AS REAL) AS GpaAvg
-            FROM sections s
-            JOIN courses c ON c.subject = s.subject AND c.course_number = s.course_number
-            -- Grades cover fewer courses than the schedule does, so this is a
-            -- LEFT JOIN: a course with none still appears, just without a figure.
-            -- Pooled from the per-term grain because course_grades, the all-terms
-            -- grain, is not populated until the scrape's final pass.
-            LEFT JOIN (SELECT subject, course_number,
-                              CAST(SUM(gpa_avg * n) / SUM(n) AS REAL) AS gpa_avg
-                       FROM (SELECT subject, course_number, gpa_avg,
-                                    COALESCE(grade_a,0)+COALESCE(grade_b,0)
-                                    +COALESCE(grade_c,0)+COALESCE(grade_d,0)
-                                    +COALESCE(grade_e,0) AS n
-                             FROM course_term_grades WHERE gpa_avg IS NOT NULL)
-                       WHERE n > 0 GROUP BY subject, course_number) g
-              ON g.subject = c.subject AND g.course_number = c.course_number
-            WHERE s.term = @Term
-              -- A code like CS 2420 matches nothing column by column, because
-              -- no single column holds it. Splitting the query lets a person type
-              -- a course the way they say it, and a bare code or title still hits.
-              AND (@Query = ''
-                   OR c.subject LIKE @Like
-                   OR c.course_number LIKE @Like
-                   OR c.title LIKE @Like
-                   OR (c.subject || ' ' || c.course_number) LIKE @Like
-                   OR (@Head <> '' AND c.subject LIKE @HeadLike
-                       AND c.course_number LIKE @TailLike))
-              AND (@Requirement = '' OR c.requirement_designation LIKE @RequirementLike)
-              -- Same rule as FindSections: non-credit Continuing Education
-              -- courses count toward nothing and are never graded.
-              AND NOT (s.units = 0 AND LENGTH(c.course_number) = 3)
-            ORDER BY c.subject, c.course_number
-            LIMIT 200;";
-
-        query = (query ?? "").Trim();
-        requirement ??= "";
-
-        // A two-part query is read as subject then number: CS 2420, math 1210.
-        var parts = query.Split(' ', 2, StringSplitOptions.RemoveEmptyEntries);
-        var head = parts.Length == 2 ? parts[0] : "";
-        var tail = parts.Length == 2 ? parts[1] : "";
-
-        using var database = Open();
-
-        // Mapped by hand rather than with Query<Course>. When every row's GpaAvg
-        // is null - a search that matches only ungraded courses - SQLite reports
-        // the column as BLOB, Dapper reads that as byte[], and the constructor
-        // no longer matches. A CAST does not fix it; reading the value loosely
-        // does.
-        return database.Query(sql, new
-        {
-            Term = term,
-            Head = head,
-            HeadLike = $"{head}%",
-            TailLike = $"{tail}%",
-            Query = query,
-            Like = $"%{query}%",
-            Requirement = requirement,
-            RequirementLike = $"%{requirement}%"
-        }).Select(row => new Course(
-            (string)row.Subject,
-            (string)row.CourseNumber,
-            (string)row.Title,
-            (string?)row.RequirementDesignation,
-            row.GpaAvg is double gpa ? gpa : null)).ToList();
     }
 
     /// <summary>Every section of one course in one term.</summary>
@@ -184,176 +112,6 @@ public class CourseQueries(string connectionString)
                                     (string?)r.RequirementDesignation,
                                     r.GpaAvg is double gpa ? gpa : null))
             .ToList();
-    }
-
-    public IReadOnlyList<Section> GetSections(string term, string subject, string courseNumber) =>
-        FindSections(term, subject: subject, courseNumber: courseNumber);
-
-    /// <summary>
-    /// Sections in a term narrowed by any combination of text, requirement designation,
-    /// open seats and start time. Time filtering happens in memory because the stored
-    /// times are display strings, sometimes several patterns per section.
-    /// </summary>
-    public IReadOnlyList<Section> FindSections(
-        string term,
-        string? subject = null,
-        string? courseNumber = null,
-        string? query = null,
-        string? requirement = null,
-        bool openOnly = false,
-        bool creditOnly = true,
-        string? startAfter = null,
-        string? startBefore = null)
-    {
-        const string sql = @"
-            SELECT s.term, s.subject, s.course_number, s.section_number, c.title,
-                   s.component, s.type, s.units, s.location, s.times,
-                   s.seats_available, s.seats_updated, CAST(g.gpa_avg AS REAL) AS gpa_avg
-            FROM sections s
-            JOIN courses c ON c.subject = s.subject AND c.course_number = s.course_number
-            -- Grades are a separate source and do not cover every term, so this
-            -- is a LEFT JOIN: a section with no published grades still lists.
-            LEFT JOIN section_grades g ON g.term = s.term AND g.subject = s.subject
-                              AND g.course_number = s.course_number
-                              AND g.section_number = s.section_number
-            WHERE s.term = @Term
-              AND (@Subject = '' OR s.subject = @Subject)
-              AND (@CourseNumber = '' OR s.course_number = @CourseNumber)
-              -- The same split SearchCourses does. A code like CS 2420 matches
-              -- nothing column by column, because no single column holds it.
-              AND (@Query = ''
-                   OR s.subject LIKE @Like
-                   OR s.course_number LIKE @Like
-                   OR c.title LIKE @Like
-                   OR (s.subject || ' ' || s.course_number) LIKE @Like
-                   OR (@Head <> '' AND s.subject LIKE @HeadLike
-                       AND s.course_number LIKE @TailLike))
-              AND (@Requirement = '' OR c.requirement_designation LIKE @RequirementLike)
-              AND (@OpenOnly = 0 OR s.seats_available > 0)
-              -- Continuing Education: zero credit, three-digit course numbers,
-              -- taught at UUCE and the satellite campuses. No 3-digit course has
-              -- ever appeared in the grade data, and they count toward nothing,
-              -- so they are noise for anyone planning a degree. Both halves of
-              -- the test are needed: 3-digit alone would hide real labs like
-              -- MATH 225, and units=0 alone would hide thesis Continuing
-              -- Registration and the zero-credit labs attached to real courses.
-              AND (@CreditOnly = 0
-                   OR NOT (s.units = 0 AND LENGTH(s.course_number) = 3))
-            ORDER BY s.subject, s.course_number, s.section_number;";
-
-        subject ??= ""; courseNumber ??= ""; requirement ??= "";
-        query = (query ?? "").Trim();
-
-        // A two-part query is read as subject then number: "CS 2420", "math 1210".
-        var parts = query.Split(' ', 2, StringSplitOptions.RemoveEmptyEntries);
-        var head = parts.Length == 2 ? parts[0] : "";
-        var tail = parts.Length == 2 ? parts[1] : "";
-
-        using var database = Open();
-
-        var rows = database.Query(sql, new
-        {
-            Term = term,
-            Subject = subject,
-            CourseNumber = courseNumber,
-            Query = query,
-            Like = $"%{query}%",
-            Head = head,
-            HeadLike = $"{head}%",
-            TailLike = $"{tail}%",
-            Requirement = requirement,
-            RequirementLike = $"%{requirement}%",
-            OpenOnly = openOnly ? 1 : 0,
-            CreditOnly = creditOnly ? 1 : 0
-        }).ToList();
-
-        var instructors = InstructorsFor(database, term, subject, courseNumber);
-
-        var sections = rows.Select(row => new Section(
-            (string)row.term,
-            (string)row.subject,
-            (string)row.course_number,
-            (string)row.section_number,
-            (string)row.title,
-            (string?)row.component,
-            (string?)row.type,
-            (int?)(long?)row.units,
-            (string?)row.location,
-            (string?)row.times,
-            (int?)(long?)row.seats_available,
-            (string?)row.seats_updated,
-            (double?)row.gpa_avg,
-            instructors.TryGetValue(SectionKey((string)row.subject, (string)row.course_number, (string)row.section_number), out var names)
-                ? names : Array.Empty<SectionInstructor>()
-        ));
-
-        var after = ToMinutes(startAfter);
-        var before = ToMinutes(startBefore);
-        if (after is not null || before is not null)
-            sections = sections.Where(section =>
-            {
-                var start = EarliestStart(section.Times);
-                if (start is null) return false;   // no meeting time cannot satisfy a time filter
-                if (after is not null && start < after) return false;
-                if (before is not null && start > before) return false;
-                return true;
-            });
-
-        return sections.ToList();
-    }
-
-    /// <summary>Instructors, ranked by how many sections they have.</summary>
-    public IReadOnlyList<Instructor> SearchInstructors(string? query, string? term)
-    {
-        // Grouped by uNID, not by name: two people can share a name - both
-        // "Nguyen, Khoi" teach MATH - and grouping on the name merges them into
-        // one entry carrying the other's sections.
-        const string sql = @"
-            SELECT i.instructor_unid AS Unid, p.display_name AS Name, COUNT(*) AS SectionCount
-            FROM section_instructors i
-            JOIN instructors p ON p.unid = i.instructor_unid
-            WHERE (@Query = '' OR p.display_name LIKE @Like)
-              AND (@Term = '' OR i.term = @Term)
-            GROUP BY i.instructor_unid
-            ORDER BY SectionCount DESC, p.display_name
-            LIMIT 100;";
-
-        query ??= ""; term ??= "";
-        using var database = Open();
-
-        // COUNT(*) comes back as Int64, which will not bind to an int constructor.
-        return database.Query(sql, new { Query = query, Like = $"%{query}%", Term = term })
-            .Select(row => new Instructor((string)row.Unid, (string)row.Name, (int)(long)row.SectionCount))
-            .ToList();
-    }
-
-    /// <summary>Everything one instructor is teaching in a term, by uNID.</summary>
-    public IReadOnlyList<Section> GetInstructorSections(string term, string unid)
-    {
-        const string sql = @"
-            SELECT s.term, s.subject, s.course_number, s.section_number, c.title,
-                   s.component, s.type, s.units, s.location, s.times,
-                   s.seats_available, s.seats_updated, CAST(g.gpa_avg AS REAL) AS gpa_avg
-            FROM section_instructors i
-            JOIN sections s ON s.term = i.term AND s.subject = i.subject
-                           AND s.course_number = i.course_number AND s.section_number = i.section_number
-            JOIN courses c ON c.subject = s.subject AND c.course_number = s.course_number
-            LEFT JOIN section_grades g ON g.term = s.term AND g.subject = s.subject
-                              AND g.course_number = s.course_number
-                              AND g.section_number = s.section_number
-            WHERE i.term = @Term AND i.instructor_unid = @Unid
-            ORDER BY s.subject, s.course_number, s.section_number;";
-
-        using var database = Open();
-        var name = database.QuerySingleOrDefault<string>(
-            "SELECT display_name FROM instructors WHERE unid = @Unid", new { Unid = unid }) ?? unid;
-
-        return database.Query(sql, new { Term = term, Unid = unid }).Select(row => new Section(
-            (string)row.term, (string)row.subject, (string)row.course_number, (string)row.section_number,
-            (string)row.title, (string?)row.component, (string?)row.type, (int?)(long?)row.units,
-            (string?)row.location, (string?)row.times, (int?)(long?)row.seats_available,
-            (string?)row.seats_updated, (double?)row.gpa_avg,
-            new[] { new SectionInstructor(unid, name) })).ToList();
     }
 
     private static string SectionKey(string subject, string courseNumber, string sectionNumber) =>
@@ -426,6 +184,124 @@ public class CourseQueries(string connectionString)
     {
         using var database = Open();
         return database.Query<string>("SELECT DISTINCT term FROM section_grades;").ToList();
+    }
+
+    /// <summary>
+    /// Sections in a term narrowed by any combination of text, requirement designation,
+    /// open seats and start time. Time filtering happens in memory because the stored
+    /// times are display strings, sometimes several patterns per section.
+    /// </summary>
+    public IReadOnlyList<Section> FindSections(
+        string term,
+        string? subject = null,
+        string? courseNumber = null,
+        string? query = null,
+        string? requirement = null,
+        bool openOnly = false,
+        bool creditOnly = true,
+        string? startAfter = null,
+        string? startBefore = null,
+        string? campus = null)
+    {
+        const string sql = @"
+            SELECT s.term, s.subject, s.course_number, s.section_number, s.campus, c.title,
+                   s.component, s.type, s.units, s.location, s.times,
+                   s.seats_available, s.seats_updated, CAST(g.gpa_avg AS REAL) AS gpa_avg
+            FROM sections s
+            JOIN courses c ON c.subject = s.subject AND c.course_number = s.course_number
+            -- Grades are a separate source and do not cover every term, so this
+            -- is a LEFT JOIN: a section with no published grades still lists.
+            LEFT JOIN section_grades g ON g.term = s.term AND g.subject = s.subject
+                              AND g.course_number = s.course_number
+                              AND g.section_number = s.section_number
+            WHERE s.term = @Term
+              -- One of the registrar's three schedules, or all of them.
+              AND (@Campus = '' OR s.campus = @Campus)
+              AND (@Subject = '' OR s.subject = @Subject)
+              AND (@CourseNumber = '' OR s.course_number = @CourseNumber)
+              -- The same split SearchCourses does. A code like CS 2420 matches
+              -- nothing column by column, because no single column holds it.
+              AND (@Query = ''
+                   OR s.subject LIKE @Like
+                   OR s.course_number LIKE @Like
+                   OR c.title LIKE @Like
+                   OR (s.subject || ' ' || s.course_number) LIKE @Like
+                   OR (@Head <> '' AND s.subject LIKE @HeadLike
+                       AND s.course_number LIKE @TailLike))
+              AND (@Requirement = '' OR c.requirement_designation LIKE @RequirementLike)
+              AND (@OpenOnly = 0 OR s.seats_available > 0)
+              -- Continuing Education: zero credit, three-digit course numbers,
+              -- taught at UUCE and the satellite campuses. No 3-digit course has
+              -- ever appeared in the grade data, and they count toward nothing,
+              -- so they are noise for anyone planning a degree. Both halves of
+              -- the test are needed: 3-digit alone would hide real labs like
+              -- MATH 225, and units=0 alone would hide thesis Continuing
+              -- Registration and the zero-credit labs attached to real courses.
+              AND (@CreditOnly = 0
+                   OR NOT (s.units = 0 AND LENGTH(s.course_number) = 3))
+            ORDER BY s.subject, s.course_number, s.section_number;";
+
+        subject ??= ""; courseNumber ??= ""; requirement ??= "";
+        query = (query ?? "").Trim();
+
+        // A two-part query is read as subject then number: "CS 2420", "math 1210".
+        var parts = query.Split(' ', 2, StringSplitOptions.RemoveEmptyEntries);
+        var head = parts.Length == 2 ? parts[0] : "";
+        var tail = parts.Length == 2 ? parts[1] : "";
+
+        using var database = Open();
+
+        var rows = database.Query(sql, new
+        {
+            Term = term,
+            Subject = subject,
+            CourseNumber = courseNumber,
+            Query = query,
+            Like = $"%{query}%",
+            Head = head,
+            HeadLike = $"{head}%",
+            TailLike = $"{tail}%",
+            Requirement = requirement,
+            RequirementLike = $"%{requirement}%",
+            OpenOnly = openOnly ? 1 : 0,
+            CreditOnly = creditOnly ? 1 : 0,
+            Campus = campus ?? ""
+        }).ToList();
+
+        var instructors = InstructorsFor(database, term, subject, courseNumber);
+
+        var sections = rows.Select(row => new Section(
+            (string)row.term,
+            (string)row.subject,
+            (string)row.course_number,
+            (string)row.section_number,
+            (string)row.campus,
+            (string)row.title,
+            (string?)row.component,
+            (string?)row.type,
+            (int?)(long?)row.units,
+            (string?)row.location,
+            (string?)row.times,
+            (int?)(long?)row.seats_available,
+            (string?)row.seats_updated,
+            (double?)row.gpa_avg,
+            instructors.TryGetValue(SectionKey((string)row.subject, (string)row.course_number, (string)row.section_number), out var names)
+                ? names : Array.Empty<SectionInstructor>()
+        ));
+
+        var after = ToMinutes(startAfter);
+        var before = ToMinutes(startBefore);
+        if (after is not null || before is not null)
+            sections = sections.Where(section =>
+            {
+                var start = EarliestStart(section.Times);
+                if (start is null) return false;   // no meeting time cannot satisfy a time filter
+                if (after is not null && start < after) return false;
+                if (before is not null && start > before) return false;
+                return true;
+            });
+
+        return sections.ToList();
     }
 
     /// <summary>One published grade row as stored. Bucket counts are null where the registrar blanked them (under five).</summary>
@@ -522,59 +398,45 @@ public class CourseQueries(string connectionString)
         return sections.Select(s =>
         {
             var code = s.Subject + "|" + s.CourseNumber;
-            double? mine = null;
-            foreach (var teacher in s.Instructors)
-                if (instructorCourseAverage(teacher.Unid, s.Subject, s.CourseNumber) is double g)
-                { mine = g; break; }
-            return new SectionCard(s.Subject, s.CourseNumber, s.SectionNumber, s.Title,
+            // Each professor's own average in this course, by uNID: a co-taught
+            // section shows one figure per person rather than one person's
+            // number under a label that says "this professor".
+            var averages = s.Instructors
+                .GroupBy(t => t.Unid)
+                .ToDictionary(g => g.Key, g => instructorCourseAverage(g.Key, s.Subject, s.CourseNumber));
+            return new SectionCard(s.Subject, s.CourseNumber, s.SectionNumber, s.Campus, s.Title,
                                    s.Times, s.Location, s.SeatsAvailable, s.Units, s.Instructors,
-                                   courseAverage(s.Subject, s.CourseNumber), mine,
+                                   courseAverage(s.Subject, s.CourseNumber), averages,
                                    prereqs.GetValueOrDefault(code));
         }).ToList();
     }
 
-    /// <summary>
-    /// Every course this instructor is listed on, graded ones first, with their
-    /// headcount-weighted average in each. Used to be graded courses only, which
-    /// left the page disagreeing with the search card: the card counted a person
-    /// on 89 classes and the page offered two. A class with no published grades
-    /// is still a class they taught.
-    /// </summary>
-    public IReadOnlyList<InstructorCourse> InstructorCourses(string unid)
+    /// <summary>Someone who has taught a course in a section with published grades: how often, and in which terms.</summary>
+    public sealed record CourseTeacher(string Unid, string Name, int Sections, IReadOnlyList<string> Terms);
+
+    /// <summary>Everyone who has taught the course in a graded section - the course page's "who teaches it".</summary>
+    public IReadOnlyList<CourseTeacher> CourseTeachers(string subject, string courseNumber)
     {
         using var database = Open();
         return database.Query(@"
-            SELECT i.subject AS Subject, i.course_number AS CourseNumber, c.title AS Title,
-                   CAST(SUM(g.gpa_avg * n.c) / SUM(n.c) AS REAL) AS Gpa
-            FROM section_instructors i
-            JOIN courses c ON c.subject = i.subject AND c.course_number = i.course_number
-            LEFT JOIN section_grades g ON g.term = i.term AND g.subject = i.subject
-              AND g.course_number = i.course_number AND g.section_number = i.section_number
-              AND g.gpa_avg IS NOT NULL
-            LEFT JOIN (SELECT term, subject, course_number, section_number,
-                              COALESCE(grade_a,0)+COALESCE(grade_b,0)+COALESCE(grade_c,0)
-                              +COALESCE(grade_d,0)+COALESCE(grade_e,0) AS c
-                       FROM section_grades) n
-              ON n.term = g.term AND n.subject = g.subject
-             AND n.course_number = g.course_number AND n.section_number = g.section_number
-             AND n.c > 0
-            WHERE i.instructor_unid = @Unid
-            GROUP BY i.subject, i.course_number
-            ORDER BY (Gpa IS NULL), i.subject, i.course_number;", new { Unid = unid })
-            .Select(r => new InstructorCourse((string)r.Subject, (string)r.CourseNumber,
-                                              (string)r.Title, r.Gpa is double gpa ? gpa : null))
+            SELECT si.instructor_unid AS Unid, p.display_name AS Name, COUNT(*) AS Sections,
+                   GROUP_CONCAT(DISTINCT sg.term) AS Terms
+            FROM section_grades sg
+            JOIN section_instructors si ON si.term = sg.term AND si.subject = sg.subject
+              AND si.course_number = sg.course_number AND si.section_number = sg.section_number
+            JOIN instructors p ON p.unid = si.instructor_unid
+            WHERE sg.subject = @Subject AND sg.course_number = @Number AND sg.gpa_avg IS NOT NULL
+            GROUP BY si.instructor_unid, p.display_name;", new { Subject = subject, Number = courseNumber })
+            .Select(r => new CourseTeacher((string)r.Unid, (string)r.Name, (int)(long)r.Sections, ((string)r.Terms).Split(',')))
             .ToList();
     }
 
-    /// <summary>Terms this instructor has graded sections in.</summary>
-    public IReadOnlyList<string> InstructorTerms(string unid)
+    /// <summary>Every course in the catalogue, in order - the sitemap's list.</summary>
+    public IReadOnlyList<(string Subject, string Number)> AllCourses()
     {
         using var database = Open();
-        return database.Query<string>(@"
-            SELECT DISTINCT i.term FROM section_instructors i
-            JOIN section_grades g ON g.term = i.term AND g.subject = i.subject
-              AND g.course_number = i.course_number AND g.section_number = i.section_number
-            WHERE i.instructor_unid = @Unid ORDER BY i.term;", new { Unid = unid }).ToList();
+        return database.Query("SELECT subject, course_number FROM courses ORDER BY subject, course_number")
+            .Select(r => ((string)r.subject, (string)r.course_number)).ToList();
     }
 
     /// <summary>Catalogue prose, independent of any term.</summary>
@@ -913,14 +775,14 @@ public record InstructorCourse(
 
 /// <summary>
 /// A section as the schedule builder shows it: the class, who teaches it, how
-/// the course grades on average, and how THIS professor grades it. The last two
-/// are the comparison the card exists to make.
+/// the course grades on average, and how each of its professors grades it,
+/// by uNID. The last two are the comparison the card exists to make.
 /// </summary>
 public record SectionCard(
-    string Subject, string CourseNumber, string SectionNumber, string Title,
+    string Subject, string CourseNumber, string SectionNumber, string Campus, string Title,
     string? Times, string? Location, int? SeatsAvailable, int? Units,
     IReadOnlyList<SectionInstructor> Instructors,
-    double? CourseAvgGpa, double? InstructorAvgGpa,
+    double? CourseAvgGpa, IReadOnlyDictionary<string, double?> InstructorAverages,
     string? Prerequisites);
 
 /// <summary>Catalogue prose for one course.</summary>

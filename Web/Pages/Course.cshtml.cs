@@ -38,6 +38,25 @@ public class CourseModel(CourseQueries db, SectionIndex sections, GradeIndex gra
 
     public string? Title => Info?.Title;
 
+    /// <summary>Everyone who has taught the course in a graded section: their own average in it, and when they last taught it.</summary>
+    public IReadOnlyList<(CourseQueries.CourseTeacher Who, double? Average, string LastTerm)> Teachers { get; private set; } = [];
+
+    /// <summary>The one address for this course, whatever term or section the page is showing.</summary>
+    public string Canonical => $"/course/{Uri.EscapeDataString(Subject)}/{Uri.EscapeDataString(Number)}";
+
+    /// <summary>What a search result says about the page: the course, and its figures across every term.</summary>
+    public string Description
+    {
+        get
+        {
+            var name = Title is null ? $"{Subject} {Number}" : $"{Subject} {Number} ({Title})";
+            var overall = grades.Course(Subject, Number);
+            return overall.AvgGpa is double avg
+                ? $"{name} at the University of Utah: average GPA {avg:0.00} across {overall.Total:N0} students, with grade distributions by term and section."
+                : $"{name} at the University of Utah: description, prerequisites and sections.";
+        }
+    }
+
     public void OnGet()
     {
         Info = db.Course(Subject, Number);
@@ -57,8 +76,15 @@ public class CourseModel(CourseQueries db, SectionIndex sections, GradeIndex gra
         Grades = Picked is null
             ? grades.Course(Subject, Number, Term)
             : grades.Section(Term!, Subject, Number, Picked.SectionNumber);
+
+        // Most recently taught first, then by how often; the average is the
+        // same pooled figure the search tiles and builder cards show.
+        Teachers = db.CourseTeachers(Subject, Number)
+            .Select(t => (t, grades.InstructorCourseAverage(t.Unid, Subject, Number), Pages.Terms.NewestFirst(t.Terms)[0]))
+            .OrderByDescending(x => Pages.Terms.Key(x.Item3)).ThenByDescending(x => x.t.Sections)
+            .ToList();
     }
 
     public static string Professor(Section s) =>
-        s.Instructors.Count > 0 ? Names.Natural(s.Instructors[0].Name) : "Staff";
+        Names.Line(s.Instructors.Select(i => Names.Natural(i.Name)).ToList()) ?? "Staff";
 }

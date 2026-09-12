@@ -2,19 +2,22 @@
 @model CourseModel
 @inject Web.Pages.PrereqMarkup Prereqs
 @{
-    ViewData["Title"] = $"{Model.Subject} {Model.Number}";
+    ViewData["Title"] = Model.Title is null ? $"{Model.Subject} {Model.Number}" : $"{Model.Subject} {Model.Number} {Model.Title}";
+    ViewData["Description"] = Model.Description;
+    ViewData["Canonical"] = Model.Canonical;
 }
 
 @* Back returns you to wherever you came from - a search, a section card, a
    professor page. A fixed link only ever guesses one of them. *@
-<p class="crumb"><button type="button" class="back" onclick="history.back()">&larr; Back</button></p>
-
-<div class="page-head">
-    <h1>@Model.Subject @Model.Number</h1>
-    @if (Model.Title is not null)
-    {
-        <p class="subtitle">@Model.Title</p>
-    }
+<div class="page-head page-head-back">
+    <button type="button" class="back-arrow" onclick="history.back()" aria-label="Back" title="Back">&larr;</button>
+    <div>
+        <h1>@Model.Subject @Model.Number</h1>
+        @if (Model.Title is not null)
+        {
+            <p class="subtitle">@Model.Title</p>
+        }
+    </div>
 </div>
 
 <div class="stack">
@@ -97,9 +100,8 @@
 @if (Model.Grades.Any)
 {
     @* For a term or a section these are the dashboard's own figures. Across
-       terms the deviation pools exactly and the percentiles are reconstructed
-       from the term rows - GradeReconstruction - until the all-terms grain is
-       scraped, when the published figure takes over. *@
+       terms only the average is pooled, until the registrar's all-terms row is
+       scraped, when its published figures take over. *@
     <partial name="_GradeStats" model="Model.Grades"/>
 
     @* The average covers every student; the bars only show groups of five or
@@ -114,4 +116,38 @@
             still counting toward the average.
         </p>
     }
+}
+
+@* The question a student actually has about a course: who has taught it,
+   and how each of them graded it. Every name is the professor's own page
+   for this class. *@
+@if (Model.Teachers.Count > 0)
+{
+    <section class="panel teachers">
+        <h3>Who teaches it</h3>
+        <table>
+            <thead>
+            <tr>
+                <th>Professor</th>
+                <th>Last taught</th>
+                <th class="num">Sections</th>
+                <th class="num">Their average</th>
+            </tr>
+            </thead>
+            <tbody>
+            @foreach (var (who, average, last) in Model.Teachers)
+            {
+                <tr>
+                    <td>
+                        <a asp-page="/Instructor" asp-route-unid="@who.Unid" asp-route-slug="@Names.Slug(who.Name)"
+                           asp-route-course="@Names.CourseSlug(Model.Subject, Model.Number)">@Names.Natural(who.Name)</a>
+                    </td>
+                    <td>@Terms.Display(last)</td>
+                    <td class="num">@who.Sections</td>
+                    <td class="num">@Figures.Gpa(average)</td>
+                </tr>
+            }
+            </tbody>
+        </table>
+    </section>
 }

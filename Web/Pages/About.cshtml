@@ -2,19 +2,13 @@
 @model AboutModel
 @{
     ViewData["Title"] = "About";
+    ViewData["Description"] = "What Utah Course Compass is and where its numbers come from: the University of Utah's public class schedule and grade summary.";
+    ViewData["Canonical"] = "/About";
 }
 
 <div class="page-head">
     <h1>About</h1>
-    <p class="page-sub">What this is, and where the numbers come from.</p>
 </div>
-
-<p class="lede">
-    Utah Course Compass puts the University of Utah&rsquo;s class schedule and its
-    published grade history in one place, so you can see how a course has actually
-    graded &mdash; and how the professor teaching it grades that same course &mdash;
-    before you register.
-</p>
 
 <div class="stat-row four">
     <div class="stat">
@@ -34,43 +28,3 @@
         <span class="stat-label">Graded sections</span>
     </div>
 </div>
-
-<h2>Where the data comes from</h2>
-<p>
-    Schedules come from the registrar&rsquo;s public class schedule, through
-    @(Model.LastScheduleTerm is { } t ? Terms.Display(t) : "the current term").
-    Grades come from the University&rsquo;s public grade summary, covering
-    @(Model.FirstGradeTerm is { } a ? Terms.Display(a) : "") through
-    @(Model.LastGradeTerm is { } b ? Terms.Display(b) : "").
-    Both are published by the University; nothing here is private, and no grade
-    belonging to an individual student appears anywhere in it.
-</p>
-
-<h2>How to read an average</h2>
-<p>
-    A course average is the mean grade point across everyone who took it, so a
-    2.6 means the typical student earned a B&minus;/C+. Two things are worth
-    knowing before you lean on one.
-</p>
-<ul>
-    <li>
-        <strong>Small groups are hidden.</strong> The University withholds any
-        grade group with fewer than five students, but those students still count
-        toward the published average. So a distribution can look better than the
-        average beside it. Where the gap is large, the course page says so.
-    </li>
-    <li>
-        <strong>An average is not a difficulty score.</strong> Who enrolls matters
-        as much as who teaches. A required first-year course and a senior elective
-        are not measured on the same scale.
-    </li>
-</ul>
-
-<h2>Unofficial</h2>
-<p>
-    This is a student project, not a University service. It is not affiliated with,
-    endorsed by, or maintained by the University of Utah. Seat counts and times can
-    lag the registrar, and only the official
-    <a href="https://student.utah.edu/" rel="noopener">student portal</a> can
-    register you for anything. Check there before you rely on what you see here.
-</p>

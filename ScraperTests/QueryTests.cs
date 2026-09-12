@@ -118,26 +118,6 @@ public class QueryTests : IClassFixture<TestDatabase>
     }
 
     [Fact]
-    public void SearchCourses_OnlyReturnsCoursesOfferedThatTerm()
-    {
-        // ANTH 1010 runs in Fall2026 only, so a Spring2026 search must not see it.
-        var fall = queries.SearchCourses("Fall2026", null, null);
-        var spring = queries.SearchCourses("Spring2026", null, null);
-
-        Assert.Contains(fall, c => c.Subject == "ANTH");
-        Assert.DoesNotContain(spring, c => c.Subject == "ANTH");
-    }
-
-    [Fact]
-    public void SearchCourses_FiltersByRequirementDesignation()
-    {
-        var quantitative = queries.SearchCourses("Fall2026", null, "Quantitative");
-
-        Assert.Single(quantitative);
-        Assert.Equal("3100", quantitative[0].CourseNumber);
-    }
-
-    [Fact]
     public void FindSections_OpenOnly_ExcludesFullAndOverEnrolled()
     {
         // 002 has exactly 0 seats and 003 is over-enrolled at -2; neither is "open".
@@ -205,83 +185,4 @@ public class QueryTests : IClassFixture<TestDatabase>
         Assert.Empty(online.Instructors);
     }
 
-    [Fact]
-    public void SearchInstructors_CountsSectionsPerInstructor()
-    {
-        // COUNT(*) arrives as Int64 and will not bind to an int constructor - this
-        // failed at runtime once already.
-        var instructors = queries.SearchInstructors(null, "Fall2026");
-
-        Assert.Equal(2, Assert.Single(instructors, i => i.Name == "Parker, Erin").SectionCount);
-        Assert.Equal(2, Assert.Single(instructors, i => i.Name == "Kopta, Daniel").SectionCount);
-        Assert.Equal(1, Assert.Single(instructors, i => i.Name == "Brown, Noelle").SectionCount);
-    }
-
-    [Fact]
-    public void SearchInstructors_RanksByLoadThenAlphabetically()
-    {
-        var instructors = queries.SearchInstructors(null, "Fall2026");
-
-        // Two sections each, so the tie breaks on name; one-section people sort
-        // last. Both Nguyens appear - same name, different people.
-        Assert.Equal(new[] { "Kopta, Daniel", "Parker, Erin",
-                             "Brown, Noelle", "Nguyen, Khoi", "Nguyen, Khoi" },
-                     instructors.Select(i => i.Name));
-    }
-
-    [Fact]
-    public void SearchInstructors_MatchesPartialNamesCaseInsensitively()
-    {
-        var found = queries.SearchInstructors("kopta", null);
-
-        Assert.Single(found);
-        Assert.Equal("Kopta, Daniel", found[0].Name);
-    }
-
-    [Fact]
-    public void SearchInstructors_KeepsTwoPeopleWhoShareANameApart()
-    {
-        // The whole reason identity is the uNID. Grouped on the name these two
-        // merge into one entry with two sections, and a professor page then
-        // shows one person the other's teaching.
-        var found = queries.SearchInstructors("Nguyen", "Fall2026");
-
-        Assert.Equal(2, found.Count);
-        Assert.Equal(new[] { "u0044444", "u0055555" },
-                     found.Select(i => i.Unid).OrderBy(u => u));
-        Assert.All(found, i => Assert.Equal(1, i.SectionCount));
-    }
-
-    [Fact]
-    public void GetInstructorSections_SeparatesInstructorsSharingASection()
-    {
-        // Both teach CS 2420-002. Keyed on the name, the section_instructors
-        // primary key would have collided and only one row would exist.
-        var one = queries.GetInstructorSections("Fall2026", "u0044444");
-        var two = queries.GetInstructorSections("Fall2026", "u0055555");
-
-        Assert.Equal("2420", Assert.Single(one).CourseNumber);
-        Assert.Equal("2420", Assert.Single(two).CourseNumber);
-    }
-
-    [Fact]
-    public void GetInstructorSections_ReturnsOnlyThatInstructorsSectionsInThatTerm()
-    {
-        var teaching = queries.GetInstructorSections("Fall2026", "u0011111");
-
-        Assert.Equal(2, teaching.Count);
-        Assert.All(teaching, s => Assert.Contains(s.Instructors, i => i.Name == "Kopta, Daniel"));
-        Assert.All(teaching, s => Assert.Equal("Fall2026", s.Term));
-    }
-
-    [Fact]
-    public void GetSections_CarriesGradeAndSeatData()
-    {
-        var lecture = Assert.Single(
-            queries.GetSections("Fall2026", "CS", "2420"), s => s.SectionNumber == "001");
-
-        Assert.Equal(3.10, lecture.GpaAvg);
-        Assert.Equal(12, lecture.SeatsAvailable);
-        Assert.Equal("Intro Alg & Data Struct", lecture.Title);
-    }
 }

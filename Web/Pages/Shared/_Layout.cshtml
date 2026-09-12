@@ -1,9 +1,27 @@
+@inject Web.Accounts.AccountsFeature Accounts
 <!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="utf-8"/>
     <meta name="viewport" content="width=device-width, initial-scale=1"/>
     <title>@ViewData["Title"] - Utah Course Compass</title>
+    @* What a search engine shows and indexes: the page's own line, its one
+       address, and a keep-out on the personal pages. *@
+    @if (ViewData["Description"] is string description)
+    {
+        <meta name="description" content="@description"/>
+        <meta property="og:description" content="@description"/>
+    }
+    <meta property="og:title" content="@ViewData["Title"]"/>
+    <meta property="og:site_name" content="Utah Course Compass"/>
+    @if (ViewData["Canonical"] is string canonical)
+    {
+        <link rel="canonical" href="@($"{Context.Request.Scheme}://{Context.Request.Host}{canonical}")"/>
+    }
+    @if (ViewData["NoIndex"] is true)
+    {
+        <meta name="robots" content="noindex"/>
+    }
     <link rel="icon" href="/favicon.svg"/>
     @* Plus Jakarta Sans for the wordmark and the home page buttons only - the
        rest of the site stays on the system sans. Two weights, so the load is
@@ -23,10 +41,25 @@
             Utah Course Compass
         </a>
         <span class="links">
-            <a asp-page="/BuilderAdd">Schedule Builder</a>
+            <a asp-page="/Schedules">Schedule Builder</a>
             <a asp-page="/Index">Courses</a>
             <a asp-page="/Instructors">Professors</a>
             <a asp-page="/About">About</a>
+            @if (Accounts.Enabled)
+            {
+                @* Signed in: the account page. Otherwise straight to Google -
+                   the cache never serves a signed-in visitor a cached page, so
+                   the two versions cannot get mixed up. *@
+                @if (User.Identity?.IsAuthenticated == true)
+                {
+                    <a asp-page="/Account/Index">Account</a>
+                }
+                else if (Accounts.Google)
+                {
+                    <a asp-page="/Account/External" asp-page-handler="Start" asp-route-provider="Google"
+                       asp-route-returnUrl="@(Context.Request.Path + Context.Request.QueryString)">Sign in</a>
+                }
+            }
         </span>
     </nav>
 </header>

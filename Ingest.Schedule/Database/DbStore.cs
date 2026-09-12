@@ -14,7 +14,7 @@ static class DbStore
     static int skippedWithoutUnid;
     public static int SkippedWithoutUnid => skippedWithoutUnid;
 
-    public static void StoreSection(SectionRecord section, DetailsRecord details)
+    public static void StoreSection(SectionRecord section, DetailsRecord details, string campus)
     {
         using IDbConnection database = new SqliteConnection(ConnectionString);
         database.Open();
@@ -31,9 +31,10 @@ static class DbStore
         """;
 
         const string upsertSectionSql = """
-            INSERT INTO sections (term, subject, course_number, section_number, component, type, units, location, times, seats_available, seats_updated)
-            VALUES (@Term, @Subject, @CourseNumber, @SectionNumber, @Component, @Type, @Units, @Location, @Times, @SeatsAvailable, @SeatsUpdated)
+            INSERT INTO sections (term, subject, course_number, section_number, campus, component, type, units, location, times, seats_available, seats_updated)
+            VALUES (@Term, @Subject, @CourseNumber, @SectionNumber, @Campus, @Component, @Type, @Units, @Location, @Times, @SeatsAvailable, @SeatsUpdated)
             ON CONFLICT(term, subject, course_number, section_number) DO UPDATE SET
+              campus = excluded.campus,
               component = excluded.component,
               type = excluded.type,
               units = excluded.units,
@@ -69,11 +70,13 @@ static class DbStore
         var classKey = $"{section.Subject}:{section.CourseNumber}";
         if (seenCourses.Add(classKey))
         {
+            // The full name from the description page when it was read; the
+            // listing's 30-character short title only until then.
             database.Execute(upsertCourseSql, new
             {
                 section.Subject,
                 section.CourseNumber,
-                section.Title,
+                Title = details.Title.Length > 0 ? details.Title : section.Title,
                 details.Description,
                 details.Prerequisites,
                 details.RequirementDesignation
@@ -86,6 +89,7 @@ static class DbStore
             section.Subject,
             section.CourseNumber,
             section.SectionNumber,
+            Campus = campus,
             section.Component,
             section.Type,
             section.Units,
@@ -143,32 +147,33 @@ static class DbStore
     const string createProgressSql = """
         CREATE TABLE IF NOT EXISTS crawl_progress (
           term_code TEXT NOT NULL,
+          campus    TEXT NOT NULL DEFAULT 'main',
           subject   TEXT NOT NULL,
 
-          PRIMARY KEY (term_code, subject)
+          PRIMARY KEY (term_code, campus, subject)
         );
     """;
 
-    public static HashSet<string> CompletedSubjects(string termCode)
+    public static HashSet<string> CompletedSubjects(string termCode, string campus)
     {
         using IDbConnection database = new SqliteConnection(ConnectionString);
         database.Open();
         database.Execute(createProgressSql);
 
         return database.Query<string>(
-            "SELECT subject FROM crawl_progress WHERE term_code = @TermCode",
-            new { TermCode = termCode }).ToHashSet();
+            "SELECT subject FROM crawl_progress WHERE term_code = @TermCode AND campus = @Campus",
+            new { TermCode = termCode, Campus = campus }).ToHashSet();
     }
 
-    public static void MarkSubjectDone(string termCode, string subject)
+    public static void MarkSubjectDone(string termCode, string campus, string subject)
     {
         using IDbConnection database = new SqliteConnection(ConnectionString);
         database.Open();
         database.Execute(createProgressSql);
 
         database.Execute(
-            "INSERT OR IGNORE INTO crawl_progress (term_code, subject) VALUES (@TermCode, @Subject)",
-            new { TermCode = termCode, Subject = subject });
+            "INSERT OR IGNORE INTO crawl_progress (term_code, campus, subject) VALUES (@TermCode, @Campus, @Subject)",
+            new { TermCode = termCode, Campus = campus, Subject = subject });
     }
 
     // A courses row only exists once its description page has been fetched, so its
@@ -179,11 +184,13 @@ static class DbStore
         database.Open();
 
         var row = database.QueryFirstOrDefault(
-            "SELECT description, prerequisites, requirement_designation FROM courses WHERE subject = @Subject AND course_number = @CourseNumber",
+            "SELECT title, description, prerequisites, requirement_designation FROM courses WHERE subject = @Subject AND course_number = @CourseNumber",
             new { Subject = subject, CourseNumber = courseNumber });
 
         if (row is null) return null;
-        return new DetailsRecord((string?)row.description ?? "", (string?)row.prerequisites ?? "",
+        // The stored title stands whatever it is: the full name once the page
+        // has been read (or backfilled), the short one until then.
+        return new DetailsRecord((string?)row.title ?? "", (string?)row.description ?? "", (string?)row.prerequisites ?? "",
                                  (string?)row.requirement_designation ?? "");
     }
 
@@ -198,6 +205,24 @@ static class DbStore
             database.Execute("ALTER TABLE sections ADD COLUMN seats_available INTEGER");
         if (!sectionColumns.Contains("seats_updated"))
             database.Execute("ALTER TABLE sections ADD COLUMN seats_updated TEXT");
+
+        // Which of the registrar's schedules listed the section: main, uac or
+        // online. Everything crawled before the column existed came from the
+        // main one, which is what the default records.
+        if (!sectionColumns.Contains("campus"))
+            database.Execute("ALTER TABLE sections ADD COLUMN campus TEXT NOT NULL DEFAULT 'main'");
+
+        // Progress is per schedule too - CS finished on main is not CS
+        // finished on the Asia Campus - so the table is rebuilt around the
+        // wider key, every existing row kept as main's.
+        var progressColumns = database.Query<string>("SELECT name FROM pragma_table_info('crawl_progress')").ToHashSet();
+        if (progressColumns.Count > 0 && !progressColumns.Contains("campus"))
+        {
+            database.Execute("ALTER TABLE crawl_progress RENAME TO crawl_progress_old");
+            database.Execute(createProgressSql);
+            database.Execute("INSERT INTO crawl_progress (term_code, campus, subject) SELECT term_code, 'main', subject FROM crawl_progress_old");
+            database.Execute("DROP TABLE crawl_progress_old");
+        }
 
         var courseColumns = database.Query<string>("SELECT name FROM pragma_table_info('courses')").ToHashSet();
         if (!courseColumns.Contains("requirement_designation"))

@@ -17,6 +17,14 @@ public class BuilderAddModel(CourseQueries db, SiteIndex site, SectionIndex sect
     [BindProperty(SupportsGet = true)] public string? Term { get; set; }
 
     /// <summary>
+    /// Which of the registrar's schedules the results come from. An account
+    /// schedule's own, chosen when it was created; a guest picks, and their
+    /// schedule's own campus is the default.
+    /// </summary>
+    [BindProperty(SupportsGet = true)] public string? Campus { get; set; }
+    public bool CanPickCampus { get; private set; }
+
+    /// <summary>
     /// Inferred from the search box, not chosen from a list. A student thinks
     /// "CS 2420" or "calculus", not "select a subject, then enter a number", and
     /// the two fields could contradict each other besides.
@@ -100,7 +108,13 @@ public class BuilderAddModel(CourseQueries db, SiteIndex site, SectionIndex sect
     {
         if (Page < 1) Page = 1;
         Terms = Pages.Terms.NewestFirst(site.Terms);
-        Term = Terms.Contains(Term) ? Term : Terms.FirstOrDefault();
+        // The schedule's own term is the default: one created for Spring
+        // browses Spring. A term in the query still wins, for deep links.
+        var schedule = store.Current;
+        if (!Terms.Contains(Term))
+            Term = schedule.Term is { } own && Terms.Contains(own) ? own : Terms.FirstOrDefault();
+        CanPickCampus = !store.SignedIn;
+        Campus = CanPickCampus ? Pages.Campus.Known(Campus ?? schedule.Campus) : schedule.Campus;
         Departments = site.Departments;
         Designations = site.Designations;
         if (Term is null) return;
@@ -121,9 +135,8 @@ public class BuilderAddModel(CourseQueries db, SiteIndex site, SectionIndex sect
         // From the in-memory term, not the database: the whole term was being
         // read and built on every keystroke to show twenty-four rows.
         var found = sections.Find(Term, subject: Subject, query: text,
-                                  requirement: Req, openOnly: Open);
+                                  requirement: Req, openOnly: Open, campus: Campus);
 
-        var schedule = store.Current;
         Cart = schedule;
         Picked = schedule.Sections.Select(s => s.Key).ToHashSet();
 

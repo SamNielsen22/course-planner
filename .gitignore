@@ -16,3 +16,9 @@ node_modules/
 data/
 __pycache__/
 *.pyc
+.neon
+.env.local
+
+# Claude Code tooling (Neon skills); not part of the project
+.claude/
+skills-lock.json

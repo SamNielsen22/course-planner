@@ -20,7 +20,8 @@ public class SiteIndex(CourseQueries db, GradeIndex grades)
         IReadOnlyList<string> Departments,
         IReadOnlyList<string> Designations,
         CoverageCounts Coverage,
-        IReadOnlyDictionary<string, double> CourseAverages);
+        IReadOnlyDictionary<string, double> CourseAverages,
+        IReadOnlyList<(string Subject, string Number)> Courses);
 
     private volatile Snapshot _now = Build(db, grades);
 
@@ -30,7 +31,8 @@ public class SiteIndex(CourseQueries db, GradeIndex grades)
         db.Departments(),
         db.Designations(),
         db.Coverage(),
-        grades.CourseAverages);
+        grades.CourseAverages,
+        db.AllCourses());
 
     /// <summary>Every term with a section, in storage order. Pages sort as they need.</summary>
     public IReadOnlyList<string> Terms => _now.Terms;
@@ -49,6 +51,9 @@ public class SiteIndex(CourseQueries db, GradeIndex grades)
 
     /// <summary>"SUBJ|NUMBER" to the course's headcount-weighted GPA across every term.</summary>
     public IReadOnlyDictionary<string, double> CourseAverages => _now.CourseAverages;
+
+    /// <summary>Every course, for the sitemap.</summary>
+    public IReadOnlyList<(string Subject, string Number)> Courses => _now.Courses;
 
     /// <summary>Re-reads everything. For after a crawl or a grade load.</summary>
     public void Rebuild() => _now = Build(db, grades);

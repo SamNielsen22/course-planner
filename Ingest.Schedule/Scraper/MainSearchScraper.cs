@@ -218,15 +218,19 @@ class MainSearchScraper{
         if (table == null)
             return null;
 
-        var locations = table.SelectNodes(".//th[@data-building-code]//a");
-        if (locations == null)
+        // Salt Lake rooms are linked to the campus map; the Asia Campus's
+        // are plain text, since map.utah.edu knows nothing of Incheon. The
+        // cell's own text is the room either way.
+        var cells = table.SelectNodes(".//th[@data-building-code]");
+        if (cells == null)
             return null;
 
         var results = new List<string>();
 
-        foreach (var location in locations)
+        foreach (var cell in cells)
         {
-            results.Add(HtmlUtils.CleanText(location.InnerText));
+            var text = HtmlUtils.CleanText(cell.InnerText);
+            if (text.Length > 0) results.Add(text);
         }
 
         return results.Count > 0 ? string.Join(", ", results) : null;

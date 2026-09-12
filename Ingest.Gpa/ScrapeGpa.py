@@ -817,6 +817,14 @@ class DashboardSession:
             self.selected[level] = value
             return self._command(FILTER_LABELS["term"], [], "filter-all")
 
+        # A real term after the all-terms pass: the flag must go with it, or
+        # every rebuilt session keeps replaying a filter-all and this term's
+        # rows carry all-terms totals under the term's own label. That is how
+        # 3,824 sections from other terms landed in gpa3's Spring 2026 on
+        # 2026-09-09..11, from workers that had done an (all) subject first.
+        if level == "term":
+            self.all_terms = False
+
         # Record the pin BEFORE issuing it. A command that fails can still have
         # been applied - the server answered Section=['013'] with HTTP 400 on
         # 2026-09-03 and pinned it anyway - and recording afterwards means a

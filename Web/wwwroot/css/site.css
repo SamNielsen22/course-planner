@@ -1,3 +1,4 @@
+@charset "UTF-8";
 :root {
   --crimson: #a51c30;
   --crimson-d: #861427;
@@ -12,7 +13,6 @@
   --card-soft: #eeeef2;
   --panel: #fff;      /* panels nested inside a card go back to white */
   --border: #d2d2da;
-
 
   --sans: system-ui, "Segoe UI", Roboto, sans-serif;
   --mono: ui-monospace, Consolas, monospace;
@@ -104,7 +104,6 @@ th {
   letter-spacing: .07em; color: var(--label);
 }
 
-.crumb { margin: 0 0 1rem; font-size: .85rem; }
 .subtitle { margin: 0 0 1rem; font-size: 1rem; color: var(--text); }
 .count { font-size: .85rem; margin: 0 0 .75rem; color: var(--label); }
 .empty { padding: 2rem 0; color: var(--label); }
@@ -197,6 +196,7 @@ tbody tr:hover td.empty { background: var(--card); }
   letter-spacing: .06em; color: var(--label);
   border-bottom: 1px solid var(--border);
 }
+.week .day-short { display: none; }
 .week .times { border-right: 1px solid var(--border); }
 .week .col { border-right: 1px solid var(--border); position: relative; }
 .week .col:last-child { border-right: none; }
@@ -208,10 +208,13 @@ tbody tr:hover td.empty { background: var(--card); }
   border-radius: 5px; padding: .3rem .4rem; overflow: hidden; line-height: 1.25;
 }
 
+/* Base rule first: the phone rule below overrides it, and a rule that came
+   later in the file would silently win on the phone too. */
+nav .links { display: flex; gap: 2rem; align-items: center; }
+
 @media (max-width: 720px) {
   table { display: block; overflow-x: auto; }
   .filters input { min-width: 0; width: 100%; }
-  .with-side { grid-template-columns: 1fr; }
 
   /* The wordmark takes its own line and the links share the next one, evenly
      spaced. Left as a single wrapping flex row the links bunched under the
@@ -224,18 +227,18 @@ tbody tr:hover td.empty { background: var(--card); }
   /* The four links wrap rather than forcing the header wider than the screen:
      on a 320px phone "Schedule Builder ... About" overflowed by 18px. */
   nav .links {
-    display: grid; grid-template-columns: repeat(4, 1fr);
+    display: grid; grid-template-columns: repeat(auto-fit, minmax(4.5rem, 1fr));
     gap: .35rem; justify-items: center; width: 100%;
   }
   nav a:not(.brand) { font-size: .72rem; letter-spacing: .04em; }
 }
-@media (max-width: 380px) {
+@media (max-width: 400px) {
   nav .brand { font-size: 1.1rem; }
   .brand-mark { height: 1.2em; }
   nav a:not(.brand) { font-size: .68rem; letter-spacing: .02em; }
-  /* Four across is too tight once "Schedule Builder" wraps; two rows of two
-     keeps every label whole. */
-  nav .links { grid-template-columns: repeat(2, 1fr); gap: .3rem .5rem; }
+  /* Five links no longer fit one row; a centred wrap keeps whatever spills
+     onto the second row in the middle rather than stranded at the left. */
+  nav .links { display: flex; flex-wrap: wrap; justify-content: center; gap: .3rem .9rem; }
 }
 
 /* ============================================================== home */
@@ -425,12 +428,6 @@ tbody tr:hover td.empty { background: var(--card); }
 .class-gpa { margin-top: auto; font-size: .78rem; color: var(--label); }
 .class-gpa strong { color: var(--text-h); }
 
-@media (max-width: 860px) {
-  .with-sidebar { grid-template-columns: 1fr; }
-  .sidebar { position: static; flex-direction: row; flex-wrap: wrap; }
-  .sidebar label { flex: 1 1 10rem; }
-}
-
 /* ==================================================== search bar + refine */
 
 .search-bar select {
@@ -444,16 +441,8 @@ tbody tr:hover td.empty { background: var(--card); }
 
 /* Secondary controls: present, but visibly not the main event. */
 
-.gened {
-  display: inline-block; margin-left: .5rem;
-  font-size: .68rem; font-weight: 700; letter-spacing: .04em;
-  background: var(--crimson-l); color: var(--crimson);
-  border-radius: 4px; padding: .1rem .4rem;
-}
-
 /* ========================================================= builder layout */
 
-.build-head h2 { margin: 0 0 .9rem; }
 .small-btn { font-size: .72rem; padding: .5rem 1.1rem; }
 
 /* Inside a grey panel the tables go white, so the rows stay legible. */
@@ -487,12 +476,6 @@ main:has(> .hero) {
 }
 .home-buttons .btn { padding: .95rem 1rem; font-family: var(--display); }
 
-/* A back button that looks like the link it replaced. */
-.back {
-  font: inherit; font-size: .85rem; color: var(--crimson);
-  background: none; border: none; padding: 0; cursor: pointer;
-}
-.back:hover { text-decoration: underline; }
 
 /* ================================================== one-line filter row */
 
@@ -528,10 +511,13 @@ main:has(> .hero) {
   display: grid; gap: 1rem; margin-bottom: 1.5rem;
   grid-template-columns: 1fr;
 }
+/* overflow stays visible: a tooltip on a course code near the card's edge
+   must be free to hang past it. The rounded corners are kept by rounding the
+   first and last rows themselves instead. */
 .section-card {
   position: relative;
   border: 1px solid var(--border); border-radius: 11px;
-  overflow: hidden; background: var(--panel);
+  background: var(--panel);
   transition: border-color .13s ease, box-shadow .13s ease;
 }
 .section-card:hover { box-shadow: 0 2px 12px rgb(0 0 0 / .07); }
@@ -545,6 +531,7 @@ main:has(> .hero) {
 .sc-head {
   background: var(--card-soft); text-align: center;
   padding-right: 2.6rem; padding-left: 2.6rem;
+  border-radius: 10px 10px 0 0;
 }
 .sc-code {
   display: block; font-family: var(--mono);
@@ -562,7 +549,18 @@ main:has(> .hero) {
 }
 
 /* ---- when and where ---- */
-.sc-prof { margin: 0; text-align: center; font-size: 1rem; font-weight: 600; }
+.sc-prof { margin: 0; text-align: center; font-size: 1rem; font-weight: 600; line-height: 1.7; }
+.sc-one { white-space: nowrap; }
+/* The third name's comma appears only once the fold after it is open. */
+.sc-comma-open:has(+ .sc-more[open])::after { content: ","; }
+/* Team-taught: three names, then a fold. Opened, it stays open - the fold is a
+   way in, not a toggle - and the summary reads as the last item in the row. */
+.sc-more { display: inline; }
+.sc-more summary { display: inline; cursor: pointer; color: var(--label); font-weight: 600; }
+.sc-more summary::-webkit-details-marker { display: none; }
+.sc-more summary::marker { content: ""; }
+.sc-more summary:hover { color: var(--crimson); text-decoration: underline; }
+.sc-more[open] summary { display: none; }
 .sc-when {
   margin: .3rem 0 0; text-align: center;
   font-size: .85rem; color: var(--text); font-variant-numeric: tabular-nums;
@@ -587,10 +585,15 @@ main:has(> .hero) {
 
 /* ---- prerequisites: registrar prose, so it needs room to breathe and a cap
         so one long string cannot dwarf the rest of the card ---- */
-.sc-prereq { background: var(--card-soft); }
+.sc-prereq { background: var(--card-soft); border-radius: 0 0 10px 10px; }
 /* No overflow cap here: it would clip the tooltip a course code raises. Cards
    sit one per row, so a long prerequisite string costs height, not layout. */
 .sc-prereq p { margin: .3rem 0 0; font-size: .84rem; line-height: 1.45; }
+/* The course page's professors table: white rows inside the grey panel. */
+.teachers { margin-top: 1.25rem; }
+.teachers table { margin: .5rem 0 0; background: var(--panel); }
+.teachers .num { text-align: right; }
+
 .sc-label {
   font-size: .66rem; font-weight: 700; text-transform: uppercase;
   letter-spacing: .07em; color: var(--label);
@@ -602,7 +605,7 @@ main:has(> .hero) {
 /* Centred and narrow: the two numbers are read against each other, and a full
    card width between them made that a saccade rather than a glance. */
 .sc-grades {
-  display: grid; grid-template-columns: auto auto; gap: 2.5rem;
+  display: flex; flex-wrap: wrap; gap: .6rem 2.5rem;
   justify-content: center; margin-top: .6rem;
 }
 .sc-head + .sc-row { border-bottom: none; }
@@ -854,7 +857,7 @@ td form { display: inline; }
 
 /* Drawn here rather than by the browser: the native title attribute waits about
    a second, which is long enough that most people never discover it. */
-.course-ref::after {
+.course-ref::after, .building::after {
   content: attr(data-title);
   position: absolute; bottom: calc(100% + .35rem); left: 50%;
   transform: translateX(-50%);
@@ -862,17 +865,31 @@ td form { display: inline; }
   padding: .35rem .6rem; border-radius: 6px;
   background: var(--crimson); color: #fff;
   font-size: .78rem; font-weight: 600; line-height: 1.3;
-  white-space: nowrap; max-width: 20rem; overflow: hidden; text-overflow: ellipsis;
+  white-space: normal; width: max-content; max-width: 22rem; text-align: center;
   box-shadow: 0 2px 10px rgb(0 0 0 / .12);
   pointer-events: none;
 }
-.course-ref:hover::after, .course-ref:focus-visible::after { display: block; }
+.course-ref:hover::after, .course-ref:focus-visible::after,
+.building:hover::after, .building:focus-visible::after { display: block; }
+
+/* A building code in a schedule: an abbreviation, so it reads as one, with the
+   full name drawn the same way. Names run long, so this one is allowed to wrap. */
+.building {
+  position: relative; display: inline-block;
+  text-decoration: underline dotted; text-underline-offset: .15em; cursor: help;
+}
 
 /* The professor cards stack one per row. */
 #results .prof-card + .prof-card { margin-top: 1rem; }
 
 /* The week grid needs room for a block's label and time. */
 .week .hour, .week .cell { height: 3rem; }
+/* Six columns in 390px: three-letter days, and a block's text may not
+   push its column wider. */
+.week .head { padding: .6rem .15rem; letter-spacing: .03em; }
+.week .day-long { display: none; }
+.week .day-short { display: inline; }
+.week .block { overflow: hidden; overflow-wrap: break-word; }
 .week .col { min-height: 0; }
 .block-label { display: block; font-weight: 700; font-size: .72rem; }
 .block-time { display: block; font-size: .66rem; opacity: .85; }
@@ -901,7 +918,6 @@ td form { display: inline; }
 
 /* At full width the links keep their original spacing; the wrapper is only
    there so the narrow layout has something to distribute. */
-nav .links { display: flex; gap: 2rem; align-items: center; }
 
 .prof-dept {
   margin: -.4rem 0 .7rem; font-size: .78rem; color: var(--label);
@@ -916,8 +932,24 @@ nav .links { display: flex; gap: 2rem; align-items: center; }
 
 /* Heading and the one line that qualifies it - which term, how many results. */
 .page-head { margin-bottom: 1.5rem; }
-.page-head h1 { margin: 0; }
+/* Page titles in the display face, like the wordmark: a little larger,
+   tighter, and unmistakably the top of the page. */
+.page-head h1 {
+  margin: 0; font-family: var(--display); font-weight: 800;
+  font-size: 1.8rem; letter-spacing: -.02em; line-height: 1.15;
+}
 .page-sub { margin: .3rem 0 0; font-size: .9rem; color: var(--label); }
+
+/* A back arrow on the heading's line: quiet until hovered. Every page with a
+   way back uses this one, as a link or as a history.back() button. */
+.page-head-back { display: flex; align-items: center; gap: .6rem; }
+.back-arrow {
+  font: inherit; font-size: 1.5rem; line-height: 1; color: var(--label); text-decoration: none;
+  background: none; border: none; cursor: pointer;
+  padding: .25rem .5rem; margin-left: -.5rem;
+  transition: color .13s ease;
+}
+.back-arrow:hover { color: var(--crimson); text-decoration: none; }
 
 /* The opening line of a page of prose - larger than the body, still quiet. */
 .lede { font-size: 1.05rem; line-height: 1.65; max-width: 46rem; }
@@ -946,3 +978,137 @@ nav .links { display: flex; gap: 2rem; align-items: center; }
   .course-code { font-size: .85rem; }
   .course-title { font-size: .92rem; }
 }
+
+/* ====================================================== account pages */
+
+.account { max-width: 24rem; }
+.account label {
+  display: block; font-size: .7rem; font-weight: 700; text-transform: uppercase;
+  letter-spacing: .07em; color: var(--label); margin: .9rem 0 .3rem;
+}
+.account label .muted { text-transform: none; letter-spacing: 0; font-weight: 400; }
+.account input:not([type=checkbox]) {
+  width: 100%; font: inherit; padding: .65rem .85rem; border-radius: 8px;
+  border: 1px solid var(--border); background: var(--card); color: var(--text-h);
+}
+.account input:focus { background: var(--panel); outline: 2px solid var(--crimson); outline-offset: 1px; }
+label.check {
+  display: flex; gap: .5rem; align-items: center; text-transform: none;
+  letter-spacing: 0; font-weight: 400; font-size: .92rem; color: var(--text);
+}
+.account .btn { margin-top: 1rem; }
+.account form + section, .account section + form { margin-top: 1rem; }
+.errors ul { margin: .6rem 0 0; padding-left: 1.1rem; color: var(--crimson); font-size: .9rem; }
+.btn.danger { color: var(--crimson); border-color: var(--crimson); background: transparent; }
+
+/* Sign-in providers above the email form, then "or use email". */
+.providers { margin: .25rem 0 0; }
+.providers form { margin: .5rem 0; }
+.btn.provider { display: block; width: 100%; text-align: center; }
+.small { font-size: .85rem; }
+.providers + .small { text-align: center; margin-top: .75rem; }
+
+/* ====================================================== the account page */
+
+.account-page { max-width: 32rem; }
+.account-page .panel .btn { margin-top: .9rem; }
+.account-figure { margin: 0 0 .35rem; font-size: 1.05rem; color: var(--text); }
+.account-figure strong { font-size: 1.7rem; font-weight: 700; color: var(--text-h); margin-right: .3rem; }
+.account-row { margin: 1.25rem 0 2.25rem; }
+/* Deleting the account is a real action but a rare one: a closed disclosure
+   at the foot of the page, not a red box competing with the schedule. */
+.account-danger { border-top: 1px solid var(--border); padding-top: 1.1rem; }
+.account-danger summary {
+  cursor: pointer; list-style: none; display: inline-flex; gap: .4rem; align-items: center;
+  font-size: .72rem; font-weight: 700; text-transform: uppercase; letter-spacing: .07em; color: var(--label);
+}
+.account-danger summary::-webkit-details-marker { display: none; }
+.account-danger summary::before { content: "▸"; font-size: .8rem; }
+.account-danger[open] summary::before { content: "▾"; }
+.account-danger[open] summary { margin-bottom: .6rem; }
+.account-danger p { margin: .25rem 0 .75rem; }
+.account-danger .btn { margin-top: .9rem; }
+
+/* A phone with six columns: a block is about 40px wide, so the label must be
+   small enough that "CHIN" fits on a line of its own. */
+@media (max-width: 480px) {
+  .week .block { padding: .2rem .2rem; }
+  .block-label { font-size: .58rem; }
+  .block-time { font-size: .52rem; }
+}
+
+/* ---------------------------------------------------- the schedule home */
+.schedules { max-width: 46rem; margin: 0 auto; }
+.sched-empty { text-align: center; color: var(--label); margin: 2rem 0; }
+/* Nothing yet: a dashed placeholder the size of a row or two, holding the
+   one action, so the page never shows a button floating over blank space. */
+.sched-none {
+  text-align: center; padding: 2.4rem 1.5rem;
+  border: 1.5px dashed var(--border); border-radius: 12px;
+}
+.sched-none-title { margin: 0 0 .3rem; font-weight: 700; color: var(--text-h); }
+.sched-none-sub { margin: 0 0 1.1rem; font-size: .9rem; color: var(--label); }
+
+/* The section bar: a small label left, the one action right. */
+/* The action sits on the card's left edge, just above it. */
+.sched-bar { margin: 0 0 .7rem; }
+
+/* Rows: the whole row is the way in, as a course row is on the course
+   search - the same quiet lift under the pointer, no button and no arrow.
+   Only the menu at the right sits outside the press. The rows carry the
+   card's corners so the hover tint does too. */
+.sched-list {
+  list-style: none; margin: 0; padding: 0;
+  background: var(--card); border: 1px solid var(--border); border-radius: 12px;
+}
+.sched-row {
+  display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center;
+  transition: background .12s ease;
+}
+.sched-row:first-child { border-radius: 11px 11px 0 0; }
+.sched-row:last-child { border-radius: 0 0 11px 11px; }
+.sched-row + .sched-row { border-top: 1px solid var(--border); }
+.sched-row:hover { background: #d6d6de; }   /* a shade darker than the card, to compare against white */
+.sched-row form { margin: 0; min-width: 0; }
+.sched-hit {
+  display: grid; grid-template-columns: auto minmax(0, 1fr); gap: .9rem; align-items: center;
+  width: 100%; padding: .95rem 1.1rem; text-align: left;
+  font: inherit; color: inherit; background: none; border: none; cursor: pointer; text-decoration: none;
+}
+.sched-hit:hover, .sched-hit:focus { text-decoration: none; }   /* a link's hover underline would streak the whole row */
+.sched-hit:focus-visible { outline: 2px solid var(--crimson); outline-offset: -2px; border-radius: inherit; }
+.sched-dot {
+  width: .55rem; height: .55rem; border-radius: 50%;
+  border: 1px solid var(--border); background: transparent;
+}
+.sched-open .sched-dot { background: var(--crimson); border-color: var(--crimson); }
+.sched-what { display: flex; align-items: baseline; gap: .9rem; flex-wrap: wrap; min-width: 0; }
+.sched-name { font-weight: 700; color: var(--text-h); }
+.sched-meta { font-size: .85rem; color: var(--label); }
+.sched-warn { color: #9a3412; font-weight: 600; }
+.sched-actions { display: flex; align-items: center; padding-right: .6rem; }
+.sched-actions form { margin: 0; }
+
+/* The row menu: a details element drawn as a small popover, so it needs no script. */
+.row-menu { position: relative; }
+.row-menu summary {
+  list-style: none; cursor: pointer; width: 2rem; height: 2rem; border-radius: 999px;
+  display: inline-flex; align-items: center; justify-content: center;
+  font-size: 1.1rem; color: var(--label);
+}
+.row-menu summary::-webkit-details-marker { display: none; }
+.row-menu summary:hover, .row-menu[open] summary { background: var(--panel); color: var(--text-h); }
+.row-menu-panel {
+  position: absolute; right: 0; top: calc(100% + .35rem); z-index: 25; min-width: 15rem;
+  background: var(--panel); border: 1px solid var(--border); border-radius: 10px;
+  padding: .75rem .8rem; box-shadow: 0 6px 24px rgb(0 0 0 / .1);
+}
+.row-menu-when { margin: 0 0 .6rem; font-size: .78rem; color: var(--label); }
+.row-menu-rename { display: flex; gap: .4rem; margin-bottom: .6rem; }
+.row-menu-rename input { flex: 1; min-width: 0; }
+.link-btn {
+  font: inherit; font-size: .85rem; font-weight: 600; color: var(--label);
+  background: none; border: none; padding: 0; cursor: pointer;
+}
+.link-btn:hover { color: var(--crimson); }
+.link-btn.danger:hover { color: #9a3412; }
