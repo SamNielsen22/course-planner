@@ -12,10 +12,13 @@ namespace Web.Schedule;
 /// <summary>A section the student has put in their schedule.</summary>
 public record PickedSection(
     string Term, string Subject, string CourseNumber, string SectionNumber, string Campus,
-    string Title, string? Times, string? Location, IReadOnlyList<string> Professors, int? Units)
+    string Title, string? Times, string? Location, IReadOnlyList<SectionInstructor> Instructors, int? Units)
 {
     public string Key => $"{Term}|{Subject}|{CourseNumber}|{SectionNumber}";
     public string Code => $"{Subject} {CourseNumber}";
+
+    /// <summary>The professors' names as people write them, in the registrar's order.</summary>
+    public IReadOnlyList<string> Professors => Instructors.Select(i => Names.Natural(i.Name)).ToList();
 
     /// <summary>The professors on one line: one, both, or the first and how many more.</summary>
     public string? Professor => Names.Line(Professors);
@@ -267,6 +270,22 @@ public class ScheduleStore(IHttpContextAccessor accessor, IDataProtectionProvide
         _written = mine;
     }
 
+    /// <summary>
+    /// A guest choosing their term and campus on the way in. Choosing what
+    /// their schedule already is changes nothing; choosing another campus or
+    /// another term starts a new schedule, since one schedule is one of each.
+    /// Breaks are kept: an hour off is an hour off in any term.
+    /// </summary>
+    public void StartGuest(string campus, string? term)
+    {
+        if (SignedIn) return;
+        var stored = ReadCookie();
+        if (CampusOf(stored) != campus) stored.S.Clear();
+        // Another term starts a new schedule too, as adding a class from one does.
+        if (term is not null && stored.S.Any(k => TermOf(k) != term)) stored.S.Clear();
+        Write(stored with { C = campus, T = term ?? stored.T });
+    }
+
     /// <summary>The schedule as the pages show it, filled in from the current data.</summary>
     public BuiltSchedule Current => Hydrate(Read(), _open);
 
@@ -279,7 +298,7 @@ public class ScheduleStore(IHttpContextAccessor accessor, IDataProtectionProvide
             if (sections.Find(key) is not { } s) continue;
             picked.Add(new PickedSection(
                 s.Term, s.Subject, s.CourseNumber, s.SectionNumber, s.Campus, s.Title, s.Times, s.Location,
-                s.Instructors.Select(i => Names.Natural(i.Name)).ToList(), s.Units));
+                s.Instructors, s.Units));
         }
         return new BuiltSchedule
         {
@@ -296,13 +315,11 @@ public class ScheduleStore(IHttpContextAccessor accessor, IDataProtectionProvide
         if (sections.Find(key) is not { } section) return;
         var stored = Read();
         if (stored.S.Contains(key)) return;
-        // One schedule is one campus. An account schedule's was chosen when it
-        // was created, and a key from another campus is simply not for it - the
-        // builder never offers one. A guest's follows what they add: a class
-        // from another campus starts afresh, as one from another term does.
-        if (_open is { } row && row.Campus != section.Campus) return;
-        if (_open is null && CampusOf(stored) != section.Campus)
-            stored.S.RemoveAll(k => sections.Find(k)?.Campus != section.Campus);
+        // One schedule is one campus - a student cannot register across them.
+        // An account schedule's was chosen when it was created and a guest's
+        // is the main campus; a key from another is simply not for it, and
+        // the builder never offers one.
+        if ((_open?.Campus ?? CampusOf(stored)) != section.Campus) return;
         stored = stored with { C = section.Campus };
         stored.S.RemoveAll(k => TermOf(k) != TermOf(key));   // a new term starts a new schedule
         if (stored.S.Count >= MaxSections) return;
@@ -480,6 +497,13 @@ public static partial class Meetings
             if (mine.Any(m => windows.Any(m.Overlaps))) clashing.Add(a.Key);
         }
         return clashing;
+    }
+
+    /// <summary>The ids of the breaks a scheduled class runs into: a break is "wrong" when a class sits in it.</summary>
+    public static HashSet<string> ConflictingBreaks(BuiltSchedule schedule)
+    {
+        var busy = schedule.Sections.SelectMany(s => Parse(s.Times)).ToList();
+        return schedule.Breaks.Where(b => busy.Any(Of(b).Overlaps)).Select(b => b.Id).ToHashSet();
     }
 
     /// <summary>Whether a section clashes with anything already scheduled.</summary>

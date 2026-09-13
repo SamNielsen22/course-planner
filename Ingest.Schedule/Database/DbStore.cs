@@ -31,8 +31,8 @@ static class DbStore
         """;
 
         const string upsertSectionSql = """
-            INSERT INTO sections (term, subject, course_number, section_number, campus, component, type, units, location, times, seats_available, seats_updated)
-            VALUES (@Term, @Subject, @CourseNumber, @SectionNumber, @Campus, @Component, @Type, @Units, @Location, @Times, @SeatsAvailable, @SeatsUpdated)
+            INSERT INTO sections (term, subject, course_number, section_number, campus, component, type, units, location, times, seats_available, seats_updated, has_waitlist)
+            VALUES (@Term, @Subject, @CourseNumber, @SectionNumber, @Campus, @Component, @Type, @Units, @Location, @Times, @SeatsAvailable, @SeatsUpdated, @HasWaitlist)
             ON CONFLICT(term, subject, course_number, section_number) DO UPDATE SET
               campus = excluded.campus,
               component = excluded.component,
@@ -41,7 +41,9 @@ static class DbStore
               location = excluded.location,
               times = excluded.times,
               seats_available = excluded.seats_available,
-              seats_updated = excluded.seats_updated;
+              seats_updated = excluded.seats_updated,
+              -- A list that lost its wait-list line keeps what was known.
+              has_waitlist = COALESCE(excluded.has_waitlist, sections.has_waitlist);
         """;
 
         const string deleteSectionInstructorsSql = """
@@ -96,7 +98,8 @@ static class DbStore
             section.Location,
             section.Times,
             section.SeatsAvailable,
-            SeatsUpdated = section.SeatsAvailable is null ? null : DateTime.UtcNow.ToString("o")
+            SeatsUpdated = section.SeatsAvailable is null ? null : DateTime.UtcNow.ToString("o"),
+            HasWaitlist = section.HasWaitlist is { } waitable ? (waitable ? 1 : 0) : (int?)null
         }, tx);
 
         database.Execute(deleteSectionInstructorsSql, new
@@ -206,6 +209,12 @@ static class DbStore
         if (!sectionColumns.Contains("seats_updated"))
             database.Execute("ALTER TABLE sections ADD COLUMN seats_updated TEXT");
 
+        // The enrollment side, from the registrar's sections table (refreshed
+        // with the seats) and the class list's yes/no on the wait list.
+        foreach (var (column, type) in new[] { ("class_number", "TEXT"), ("enrollment_cap", "INTEGER"), ("enrolled", "INTEGER"), ("waitlist", "INTEGER"), ("has_waitlist", "INTEGER") })
+            if (!sectionColumns.Contains(column))
+                database.Execute($"ALTER TABLE sections ADD COLUMN {column} {type}");
+
         // Which of the registrar's schedules listed the section: main, uac or
         // online. Everything crawled before the column existed came from the
         // main one, which is what the default records.
@@ -308,41 +317,82 @@ static class DbStore
             database.Execute($"ALTER TABLE sections DROP COLUMN {column}");
     }
 
+    /// <summary>What one subject's refresh did: rows updated, rows the registrar lists that the catalogue lacks, rows removed because the registrar no longer lists them.</summary>
+    public sealed record CountsResult(int Updated, int Unknown, int Removed);
+
     /// <summary>
-    /// Refresh seat counts only. Everything else about a section is left alone, so
-    /// this can run often without re-crawling description pages.
+    /// Refresh the enrollment figures of one subject in one term from the
+    /// registrar's sections table: seats, cap, enrolled, waiting, class
+    /// number. Everything else about a section is left alone, so this can run
+    /// often without re-crawling description pages.
+    ///
+    /// A section the catalogue has but the table no longer lists has been
+    /// cancelled - the registrar drops cancelled sections rather than marking
+    /// them - and is removed, instructor rows first. Only when the whole page
+    /// arrived and listed something: a cut-off page or an empty one is not
+    /// evidence that anything is gone.
     /// </summary>
-    public static int UpdateSeats(IEnumerable<SectionRecord> sections)
+    public static CountsResult UpdateCounts(string term, string campus, string subject, IReadOnlyList<SectionCounts> counts, bool complete)
     {
-        const string sql = """
+        const string updateSql = """
             UPDATE sections
-               SET seats_available = @SeatsAvailable,
-                   seats_updated   = @SeatsUpdated
+               SET class_number    = @ClassNumber,
+                   enrollment_cap  = @EnrollmentCap,
+                   enrolled        = @Enrolled,
+                   waitlist        = @Waitlist,
+                   seats_available = @SeatsAvailable,
+                   seats_updated   = @Now
              WHERE term = @Term AND subject = @Subject
                AND course_number = @CourseNumber AND section_number = @SectionNumber;
+        """;
+        const string listedSql = """
+            SELECT course_number || '|' || section_number
+              FROM sections
+             WHERE term = @Term AND campus = @Campus AND subject = @Subject;
+        """;
+        const string deleteInstructorsSql = """
+            DELETE FROM section_instructors
+             WHERE term = @Term AND subject = @Subject AND course_number = @CourseNumber AND section_number = @SectionNumber;
+        """;
+        const string deleteSectionSql = """
+            DELETE FROM sections
+             WHERE term = @Term AND subject = @Subject AND course_number = @CourseNumber AND section_number = @SectionNumber;
         """;
 
         using IDbConnection database = new SqliteConnection(ConnectionString);
         database.Open();
+        database.Execute("PRAGMA foreign_keys = ON;");
         using var tx = database.BeginTransaction();
 
         var now = DateTime.UtcNow.ToString("o");
         var updated = 0;
-        foreach (var section in sections)
+        var unknown = 0;
+        foreach (var row in counts)
         {
-            if (section.SeatsAvailable is null) continue;
-            updated += database.Execute(sql, new
+            var changed = database.Execute(updateSql, new
             {
-                section.SeatsAvailable,
-                SeatsUpdated = now,
-                section.Term,
-                section.Subject,
-                section.CourseNumber,
-                section.SectionNumber
+                row.ClassNumber, row.EnrollmentCap, row.Enrolled, row.Waitlist, row.SeatsAvailable, Now = now,
+                Term = term, row.Subject, row.CourseNumber, row.SectionNumber
             }, tx);
+            if (changed > 0) updated += changed; else unknown++;
+        }
+
+        var removed = 0;
+        if (complete && counts.Count > 0)
+        {
+            var onTable = counts.Select(c => c.CourseNumber + "|" + c.SectionNumber).ToHashSet();
+            var gone = database.Query<string>(listedSql, new { Term = term, Campus = campus, Subject = subject }, tx)
+                               .Where(key => !onTable.Contains(key)).ToList();
+            foreach (var key in gone)
+            {
+                var parts = key.Split('|');
+                var args = new { Term = term, Subject = subject, CourseNumber = parts[0], SectionNumber = parts[1] };
+                database.Execute(deleteInstructorsSql, args, tx);
+                removed += database.Execute(deleteSectionSql, args, tx);
+            }
         }
 
         tx.Commit();
-        return updated;
+        return new CountsResult(updated, unknown, removed);
     }
 }

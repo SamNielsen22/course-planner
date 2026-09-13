@@ -10,19 +10,18 @@ namespace Web.Pages;
 /// refinement was a round trip and the filters you were adjusting scrolled out
 /// of sight on arrival.
 /// </summary>
-public class BuilderAddModel(CourseQueries db, SiteIndex site, SectionIndex sections, GradeIndex grades, ScheduleStore store) : PageModel
+public class BuilderAddModel(CourseQueries db, SiteIndex site, SectionIndex sections, GradeIndex grades, ScheduleStore store, Spotlight spotlight) : PageModel
 {
     private const int PageSize = 24;
 
     [BindProperty(SupportsGet = true)] public string? Term { get; set; }
 
     /// <summary>
-    /// Which of the registrar's schedules the results come from. An account
-    /// schedule's own, chosen when it was created; a guest picks, and their
-    /// schedule's own campus is the default.
+    /// Which of the registrar's schedules the results come from: the
+    /// schedule's own campus, chosen when it was created. A student cannot
+    /// register across campuses, so there is nothing here to pick.
     /// </summary>
-    [BindProperty(SupportsGet = true)] public string? Campus { get; set; }
-    public bool CanPickCampus { get; private set; }
+    public string Campus { get; private set; } = Pages.Campus.Main;
 
     /// <summary>
     /// Inferred from the search box, not chosen from a list. A student thinks
@@ -41,7 +40,7 @@ public class BuilderAddModel(CourseQueries db, SiteIndex site, SectionIndex sect
     /// <summary>Hide sections that clash with what is already in the schedule.</summary>
     [BindProperty(SupportsGet = true)] public bool NoClash { get; set; } = true;
 
-    [BindProperty(SupportsGet = true)] public string Sort { get; set; } = "name";
+    [BindProperty(SupportsGet = true)] public string Sort { get; set; } = "relevance";
     // Bound from "pg", not "page". Razor Pages reserves "page" for its own
     // routing, so a property bound to it silently stays at its default and
     // every request looks like page 1.
@@ -113,8 +112,7 @@ public class BuilderAddModel(CourseQueries db, SiteIndex site, SectionIndex sect
         var schedule = store.Current;
         if (!Terms.Contains(Term))
             Term = schedule.Term is { } own && Terms.Contains(own) ? own : Terms.FirstOrDefault();
-        CanPickCampus = !store.SignedIn;
-        Campus = CanPickCampus ? Pages.Campus.Known(Campus ?? schedule.Campus) : schedule.Campus;
+        Campus = schedule.Campus;
         Departments = site.Departments;
         Designations = site.Designations;
         if (Term is null) return;
@@ -155,8 +153,37 @@ public class BuilderAddModel(CourseQueries db, SiteIndex site, SectionIndex sect
         double? Average(Section s) =>
             averages!.TryGetValue($"{s.Subject}|{s.CourseNumber}", out var g) ? g : null;
 
+        // Relevance: how squarely a section answers what was typed. The exact
+        // class first ("CS 2420"), then classes whose code starts that way,
+        // then titles that start with the words, then titles that merely
+        // contain them; ties in course-number order. With nothing typed the
+        // sections come in the server's weighted shuffle instead (Spotlight).
+        var byName = found.OrderBy(s => s.Subject, StringComparer.OrdinalIgnoreCase)
+                          .ThenBy(s => int.TryParse(new string(s.CourseNumber.TakeWhile(char.IsDigit).ToArray()), out var n) ? n : int.MaxValue)
+                          .ThenBy(s => s.CourseNumber, StringComparer.OrdinalIgnoreCase)
+                          .ThenBy(s => s.SectionNumber, StringComparer.OrdinalIgnoreCase);
+        var roman = CourseQueries.RomanTitle(typed);
+        int Relevance(Section s)
+        {
+            const StringComparison Like = StringComparison.OrdinalIgnoreCase;
+            if (typed.Length == 0) return 0;
+            var code = $"{s.Subject} {s.CourseNumber}";
+            if (code.Equals(typed, Like)) return 0;
+            if (code.StartsWith(typed, Like)) return 1;
+            if (s.Title.StartsWith(typed, Like) || (roman is not null && s.Title.StartsWith(roman, Like))) return 2;
+            if (s.Title.Contains(typed, Like) || (roman is not null && s.Title.Contains(roman, Like))) return 3;
+            return 4;
+        }
+
+        static int Number(Section s) =>
+            int.TryParse(new string(s.CourseNumber.TakeWhile(char.IsDigit).ToArray()), out var n) ? n : int.MaxValue;
+
         var ordered = Sort switch
         {
+            // Nothing typed: the server's own shuffle, weighted toward sections
+            // worth a look, its first card always a fully furnished one.
+            "relevance" when typed.Length == 0 && Subject is null => spotlight.Order(found),
+            "relevance" => byName.OrderBy(Relevance).ToList(),
             // A missing grade is not a good grade, so those sort last either way.
             "gpa" => found.OrderBy(s => Average(s) is null).ThenByDescending(Average).ToList(),
             "time" => found.OrderBy(s => CourseQueries.EarliestStart(s.Times) ?? int.MaxValue).ToList(),
@@ -166,9 +193,7 @@ public class BuilderAddModel(CourseQueries db, SiteIndex site, SectionIndex sect
                                 .ThenByDescending(s => CourseQueries.EarliestStart(s.Times) ?? int.MinValue).ToList(),
             // Numerically. As text "105" falls between "1030" and "1050".
             _ => found.OrderBy(s => s.Subject, StringComparer.OrdinalIgnoreCase)
-                      .ThenBy(s => int.TryParse(
-                          new string(s.CourseNumber.TakeWhile(char.IsDigit).ToArray()),
-                          out var n) ? n : int.MaxValue)
+                      .ThenBy(Number)
                       .ThenBy(s => s.CourseNumber, StringComparer.OrdinalIgnoreCase)
                       .ThenBy(s => s.SectionNumber, StringComparer.OrdinalIgnoreCase).ToList(),
         };

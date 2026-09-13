@@ -19,59 +19,68 @@
     </div>
 </div>
 
-@* The chart is always one section's - the grain where every figure is the
-   registrar's own. A term (their latest by default) and a class are always
-   chosen; the section picker appears only when that pair has more than one. *@
-@* The pickers always browse from the person's own address: a class address
-   names its class in the path, which would otherwise outrank the dropdown. *@
-<form method="get" class="inline-form" action="@Model.Base">
-    <select name="term" onchange="location.replace(this.form.action + '?' + new URLSearchParams(new FormData(this.form)))" aria-label="Term">
-        @foreach (var t in Model.Terms)
-        {
-            <option value="@t" selected="@(t == Model.Term)">@Terms.Display(t)</option>
-        }
-    </select>
-    <select name="course" onchange="location.replace(this.form.action + '?' + new URLSearchParams(new FormData(this.form)))" aria-label="Class">
-        @foreach (var code in Model.Classes)
-        {
-            <option value="@code" selected="@(code == Model.Course)">@code</option>
-        }
-    </select>
-    @if (Model.Sections.Count > 1)
-    {
-        <select name="section" onchange="location.replace(this.form.action + '?' + new URLSearchParams(new FormData(this.form)))" aria-label="Section">
-            @foreach (var s in Model.Sections)
+@* With no grades published for any of their classes there is nothing to
+   pick from and nothing to chart: one line says so, and the pickers stay away. *@
+@if (Model.Terms.Count == 0)
+{
+    <p class="note">No published grades for this professor.</p>
+}
+else
+{
+    @* The chart is always one section's - the grain where every figure is the
+       registrar's own. A term (their latest by default) and a class are always
+       chosen; the section picker appears only when that pair has more than one. *@
+    @* The pickers always browse from the person's own address: a class address
+       names its class in the path, which would otherwise outrank the dropdown. *@
+    <form method="get" class="inline-form" action="@Model.Base">
+        <select name="term" onchange="location.replace(this.form.action + '?' + new URLSearchParams(new FormData(this.form)))" aria-label="Term">
+            @foreach (var t in Model.Terms)
             {
-                <option value="@s.Key" selected="@(s.Key == Model.SectionKey)">@s.Label</option>
+                <option value="@t" selected="@(t == Model.Term)">@Terms.Display(t)</option>
             }
         </select>
-    }
-    <noscript><button type="submit">Go</button></noscript>
-</form>
+        <select name="course" onchange="location.replace(this.form.action + '?' + new URLSearchParams(new FormData(this.form)))" aria-label="Class">
+            @foreach (var code in Model.Classes)
+            {
+                <option value="@code" selected="@(code == Model.Course)">@code</option>
+            }
+        </select>
+        @if (Model.Sections.Count > 1)
+        {
+            <select name="section" onchange="location.replace(this.form.action + '?' + new URLSearchParams(new FormData(this.form)))" aria-label="Section">
+                @foreach (var s in Model.Sections)
+                {
+                    <option value="@s.Key" selected="@(s.Key == Model.SectionKey)">@s.Label</option>
+                }
+            </select>
+        }
+        <noscript><button type="submit">Go</button></noscript>
+    </form>
 
-<partial name="_GradeChart" model="Model.Grades"/>
+    <partial name="_GradeChart" model="Model.Grades"/>
 
-@if (Model.Grades.Any)
-{
-    @* One section, so these are the published figures - all six. *@
-    <partial name="_GradeStats" model="Model.Grades"/>
-
-    @* The average covers every student; the bars only show groups of five or
-       more. When they diverge this far the chart is materially incomplete, and
-       the page should say so rather than leave two numbers arguing. *@
-    @if (Model.Grades.HasHiddenGrades)
+    @if (Model.Grades.Any)
     {
-        <p class="note">
-            The bars total fewer students than the average is computed over. The
-            University withholds any grade group with fewer than five students,
-            so small groups of lower grades are missing from the chart while
-            still counting toward the average.
-        </p>
+        @* One section, so these are the published figures - all six. *@
+        <partial name="_GradeStats" model="Model.Grades"/>
+
+        @* The average covers every student; the bars only show groups of five or
+           more. When they diverge this far the chart is materially incomplete, and
+           the page should say so rather than leave two numbers arguing. *@
+        @if (Model.Grades.HasHiddenGrades)
+        {
+            <p class="note">
+                The bars total fewer students than the average is computed over. The
+                University withholds any grade group with fewer than five students,
+                so small groups of lower grades are missing from the chart while
+                still counting toward the average.
+            </p>
+        }
     }
 }
 
 <div class="center stack-tight">
-    <a class="btn out" href="@Model.RateMyProfessorUrl" target="_blank" rel="noopener noreferrer">
+    <a class="link" href="@Model.RateMyProfessorUrl" target="_blank" rel="noopener noreferrer">
         Search on Rate My Professor
     </a>
     <p class="muted">Professor reviews coming soon!</p>

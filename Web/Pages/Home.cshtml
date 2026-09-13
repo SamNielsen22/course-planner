@@ -1,15 +1,15 @@
 @page "/"
 @model HomeModel
 @{
-    ViewData["Title"] = "Home";
-    ViewData["Description"] = "University of Utah course grades by professor, a schedule builder with conflict checking, and calendar export, from the University's published grade data.";
+    ViewData["Title"] = "Utah Course Compass";
+    ViewData["Description"] = "University of Utah course grades by professor, from the University's published grade summaries.";
     ViewData["Canonical"] = "/";
     Layout = "_LayoutBare";
 }
 
 <div class="hero">
     <h1>
-        <img class="hero-mark" src="/logo.svg" alt="" width="865" height="639"/>
+        <img class="hero-mark" src="/logo.svg" asp-append-version="true" alt="" width="865" height="639"/>
         Utah Course Compass
     </h1>
 </div>

@@ -6,7 +6,7 @@
     var problem = ViewData.ModelState.ErrorCount > 0;
 }
 
-<div class="page-head">
+<div class="page-head center">
     <h1>Your Account</h1>
     <p class="page-sub">
         @Model.Email
@@ -18,23 +18,6 @@
 </div>
 
 <div class="account-page stack">
-    <section class="panel">
-        <h3>Your schedules</h3>
-        @if (Model.Schedules.Count > 0)
-        {
-            <p class="account-figure">
-                <strong>@Model.Schedules.Count</strong>
-                @(Model.Schedules.Count == 1 ? "schedule" : "schedules"), @Model.Schedules.Sum(s => s.Classes) @(Model.Schedules.Sum(s => s.Classes) == 1 ? "class" : "classes") in all
-            </p>
-            <p class="muted">Kept under your account, so they're there on any device you sign in from.</p>
-        }
-        else
-        {
-            <p class="muted">Nothing saved yet. Schedules you build are kept here, on any device you sign in from.</p>
-        }
-        <a class="btn" asp-page="/Schedules">Your schedules</a>
-    </section>
-
     <form method="post" asp-page-handler="Logout" class="account-row">
         <button type="submit" class="btn out">Sign out</button>
     </form>

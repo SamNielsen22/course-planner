@@ -23,6 +23,7 @@
     <Compile Include="..\Ingest.Schedule\Scraper\SubjectScraper.cs" Link="Source\SubjectScraper.cs" />
     <Compile Include="..\Ingest.Schedule\Scraper\DescriptionScraper.cs" Link="Source\DescriptionScraper.cs" />
     <Compile Include="..\Ingest.Schedule\Scraper\CutOffPage.cs" Link="Source\CutOffPage.cs" />
+    <Compile Include="..\Ingest.Schedule\Scraper\SectionsTableScraper.cs" Link="Source\SectionsTableScraper.cs" />
   </ItemGroup>
 
   <ItemGroup>

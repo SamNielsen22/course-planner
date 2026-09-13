@@ -24,6 +24,12 @@ public class InstructorModel(CourseQueries db, GradeIndex grades) : PageModel
     [BindProperty(SupportsGet = true)] public string? Term { get; set; }
 
     /// <summary>
+    /// The term the visitor is planning, when they came from the builder. A
+    /// summer plan wants summer figures; a fall or spring plan, or none, does not.
+    /// </summary>
+    [BindProperty(SupportsGet = true)] public string? Planning { get; set; }
+
+    /// <summary>
     /// "CS 2420" as picked from the class dropdown, or "cs-2420" from the
     /// address; empty means the first class of the term. After OnGet, the
     /// class in force.
@@ -54,9 +60,7 @@ public class InstructorModel(CourseQueries db, GradeIndex grades) : PageModel
     /// <summary>The person's address, or the class's own when one was asked for.</summary>
     public string Canonical => ClassRequested && Course is not null ? $"{Base}/{Names.CourseSlug(Course)}" : Base;
 
-    public string PageTitle => ClassRequested && Course is not null
-        ? $"{Display} – {Course} – University of Utah grades"
-        : $"{Display} – University of Utah grades";
+    public string PageTitle => ClassRequested && Course is not null ? $"{Display} {Course}" : Display;
 
     /// <summary>Their average across every graded section, for the page's description.</summary>
     public double? Average { get; private set; }
@@ -74,12 +78,12 @@ public class InstructorModel(CourseQueries db, GradeIndex grades) : PageModel
                 // A class whose letter counts the University withheld has no
                 // poolable average; the page still shows each section's own.
                 return ClassAverage is double inClass
-                    ? $"How {Display} grades {named} at the University of Utah: average GPA {inClass:0.00} across {sections}, by term and section."
-                    : $"How {Display} grades {named} at the University of Utah: {sections} with published grades, by term and section.";
+                    ? $"{Display}'s grades in {named} at the University of Utah: average GPA {inClass:0.00} across {sections}."
+                    : $"{Display}'s grades in {named} at the University of Utah: {sections} with published grades.";
             }
             return Average is double avg
-                ? $"How {Display} grades at the University of Utah: average GPA {avg:0.00} across {GradedSections:N0} class sections with published grades, by term and section."
-                : $"{Display} at the University of Utah: classes taught, with grade distributions where the University has published them.";
+                ? $"{Display}'s grades at the University of Utah: average GPA {avg:0.00} across {GradedSections:N0} class sections."
+                : $"{Display} at the University of Utah: classes taught, with grades where the University has published them.";
         }
     }
 
@@ -114,11 +118,19 @@ public class InstructorModel(CourseQueries db, GradeIndex grades) : PageModel
 
         // The term: as asked, or the latest one - for the class asked for, if
         // a search tile named one, so the tile lands where that class has grades.
+        // Someone who teaches through the year but taught a summer class most
+        // recently lands on their latest fall or spring instead, unless the
+        // visitor is planning a summer: the summer section is the odd one out,
+        // and not what anyone planning a fall or spring came to see.
         if (Term is null || !Terms.Contains(Term))
         {
             var candidates = Course is null ? all : all.Where(r => Code(r) == Course).ToList();
             if (candidates.Count == 0) candidates = all;
-            Term = Pages.Terms.NewestFirst(candidates.Select(r => r.Term).Distinct()).FirstOrDefault();
+            var newest = Pages.Terms.NewestFirst(candidates.Select(r => r.Term).Distinct());
+            var usuallyNotSummer = all.Count(r => !Pages.Terms.IsSummer(r.Term)) > all.Count(r => Pages.Terms.IsSummer(r.Term));
+            var planningSummer = Planning is not null && Pages.Terms.IsSummer(Planning);
+            Term = (usuallyNotSummer && !planningSummer ? newest.FirstOrDefault(t => !Pages.Terms.IsSummer(t)) : null)
+                   ?? newest.FirstOrDefault();
         }
 
         var inTerm = all.Where(r => r.Term == Term).ToList();

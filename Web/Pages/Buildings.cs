@@ -1,5 +1,4 @@
 using System.Text;
-using Microsoft.AspNetCore.Html;
 
 namespace Web.Pages;
 
@@ -54,32 +53,4 @@ public class Buildings
         return null;
     }
 
-    /// <summary>
-    /// The location with each building code wrapped so the full name shows on
-    /// hover - the treatment prerequisites give course codes. A section with
-    /// several meetings lists a room for each, comma-separated. A room that
-    /// resolves to nothing is HTML-encoded and shown as written.
-    /// </summary>
-    public IHtmlContent Annotate(string? location)
-    {
-        if (string.IsNullOrWhiteSpace(location)) return HtmlString.Empty;
-        return new HtmlString(string.Join(", ", location.Split(',', StringSplitOptions.TrimEntries).Select(Room)));
-    }
-
-    private string Room(string location)
-    {
-        if (Resolve(location) is not { } place) return Encode(location);
-
-        // data-title, not title: the native tooltip waits about a second
-        // before appearing. The stylesheet draws this one, and aria-label
-        // carries the same text for a screen reader.
-        var html = new StringBuilder()
-            .Append("<abbr class=\"building\" data-title=\"").Append(Encode(place.Building.Name))
-            .Append("\" aria-label=\"").Append(Encode($"{place.Code}: {place.Building.Name}"))
-            .Append("\">").Append(Encode(place.Code)).Append("</abbr>");
-        if (place.Room.Length > 0) html.Append(' ').Append(Encode(place.Room));
-        return html.ToString();
-    }
-
-    private static string Encode(string value) => System.Net.WebUtility.HtmlEncode(value);
 }

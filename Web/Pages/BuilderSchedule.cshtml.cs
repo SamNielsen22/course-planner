@@ -21,6 +21,13 @@ public class BuilderScheduleModel(ScheduleStore store, Buildings buildings) : Pa
     /// <summary>The term's class dates, when the academic calendar has them - what the export needs.</summary>
     public AcademicCalendar.TermDates? Calendar { get; private set; }
 
+    /// <summary>
+    /// A UOnline schedule: its sections never meet at an hour or in a room,
+    /// so there is no week to draw, nothing to clash, and nothing to put in
+    /// a calendar. The page is the list of classes and no more.
+    /// </summary>
+    public bool Online => Schedule.Campus == "online";
+
     /// <summary>Pairs that overlap. The schedule is the student's own, so a clash
     /// is reported rather than prevented - they may have added it deliberately.</summary>
     public List<(Placed A, Placed B)> Clashes { get; private set; } = [];

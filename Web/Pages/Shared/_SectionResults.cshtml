@@ -7,13 +7,33 @@
 }
 else
 {
-    <p class="count">
-        @Model.Total.ToString("N0") section@(Model.Total == 1 ? "" : "s")
-        @if (Model.LastPage > 1)
-        {
-            <text>&middot; page @Model.Page of @Model.LastPage</text>
-        }
-    </p>
+    @* Only a list that runs to more than one page has a head: "Page 1 of 311"
+       and two chevrons. A single page needs neither. *@
+    @if (Model.LastPage > 1)
+    {
+    <div class="results-head">
+        @* The line reads naturally, and an unseen copy of its widest form -
+           the last page named twice - holds the width behind it, so the
+           chevrons after it stay put from page 1 to page 311. *@
+        <p class="count">
+            <span>Page @Model.Page of @Model.LastPage</span>
+            <span class="count-widest" aria-hidden="true">Page @Model.LastPage of @Model.LastPage</span>
+        </p>
+        @* The same steps as at the foot of the list, compact: two chevrons beside
+           the page number, so a reader who has seen enough of a page need not
+           scroll past the rest of it, and the row stays one line on a phone. *@
+            <nav class="pager-top" aria-label="Pages">
+                <button type="submit" name="pg" value="@(Model.Page - 1)" class="step"
+                        disabled="@(!Model.HasPrevious)" aria-label="Previous page">
+                    <svg viewBox="0 0 20 20" width="16" height="16" aria-hidden="true" focusable="false"><path d="M12.5 4 6.5 10l6 6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                </button>
+                <button type="submit" name="pg" value="@(Model.Page + 1)" class="step"
+                        disabled="@(!Model.HasNext)" aria-label="Next page">
+                    <svg viewBox="0 0 20 20" width="16" height="16" aria-hidden="true" focusable="false"><path d="m7.5 4 6 6-6 6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                </button>
+            </nav>
+    </div>
+    }
 
     <div class="section-cards">
         @foreach (var s in Model.Results)
@@ -81,7 +101,7 @@ else
                                 // The third name's comma belongs only once the fold is open.
                                 var folded = n == shown.Count - 1 && rest.Count > 0 && After(n) == ",";
                                 <span class="sc-one @(folded ? "sc-comma-open" : "")">@Before(n)<a class="link" asp-page="/Instructor" asp-route-unid="@shown[n].Unid" asp-route-slug="@Web.Pages.Names.Slug(shown[n].Name)"
-                                   asp-route-course="@Web.Pages.Names.CourseSlug(s.Subject, s.CourseNumber)">@Web.Pages.Names.Natural(shown[n].Name)</a>@(folded ? "" : After(n))</span>
+                                   asp-route-course="@Web.Pages.Names.CourseSlug(s.Subject, s.CourseNumber)" asp-route-planning="@Model.Term">@Web.Pages.Names.Natural(shown[n].Name)</a>@(folded ? "" : After(n))</span>
                             }
                             if (rest.Count > 0)
                             {
@@ -91,7 +111,7 @@ else
                                     {
                                         var i = shown.Count + k;
                                         <span class="sc-one">@Before(i)<a class="link" asp-page="/Instructor" asp-route-unid="@rest[k].Unid" asp-route-slug="@Web.Pages.Names.Slug(rest[k].Name)"
-                                           asp-route-course="@Web.Pages.Names.CourseSlug(s.Subject, s.CourseNumber)">@Web.Pages.Names.Natural(rest[k].Name)</a>@After(i)</span>
+                                           asp-route-course="@Web.Pages.Names.CourseSlug(s.Subject, s.CourseNumber)" asp-route-planning="@Model.Term">@Web.Pages.Names.Natural(rest[k].Name)</a>@After(i)</span>
                                     }
                                 </details>
                             }
@@ -128,18 +148,41 @@ else
                 </div>
 
                 <div class="sc-row sc-meet">
-                    <p class="sc-when">
-                        @(string.IsNullOrWhiteSpace(s.Times) ? "No meeting time" : s.Times)
-                        @if (!string.IsNullOrWhiteSpace(s.Location))
-                        {
-                            <text>&middot; @s.Location</text>
-                        }
-                    </p>
+                    @* UOnline sections never meet at an hour or in a room - none of
+                       the five thousand on file does - so the line is left off. *@
+                    @if (s.Campus != "online")
+                    {
+                        <p class="sc-when">
+                            @(string.IsNullOrWhiteSpace(s.Times) ? "No meeting time" : s.Times)
+                            @if (!string.IsNullOrWhiteSpace(s.Location))
+                            {
+                                <text>&middot; @s.Location</text>
+                            }
+                        </p>
+                    }
                     <p class="sc-facts">
                         @if (s.SeatsAvailable is { } seats)
                         {
                             <span class="@(seats > 0 ? "open" : "full")">
-                                @(seats > 0 ? $"{seats} seat{(seats == 1 ? "" : "s")} open" : "Full")
+                                @if (seats > 0)
+                                {
+                                    @($"{seats} seat{(seats == 1 ? "" : "s")} open")
+                                }
+                                else
+                                {
+                                    @* Full: how many are waiting, from the registrar's
+                                       sections table, and whether the section can be
+                                       waited on at all, from the class list. *@
+                                    <text>Full</text>
+                                    @if (s.Waitlist is { } waiting && (waiting > 0 || s.HasWaitlist != false))
+                                    {
+                                        <text> &middot; waitlist @waiting</text>
+                                    }
+                                    else if (s.HasWaitlist == false)
+                                    {
+                                        <text> &middot; no waitlist</text>
+                                    }
+                                }
                             </span>
                         }
                     </p>
@@ -166,12 +209,17 @@ else
 
     @if (Model.LastPage > 1)
     {
-        <nav class="pager">
-            <button type="submit" name="pg" value="@(Model.Page - 1)"
-                    disabled="@(!Model.HasPrevious)">&larr; Previous</button>
+        @* The foot of the list: the same chevrons as the head, either side of the page. *@
+        <nav class="pager" aria-label="Pages">
+            <button type="submit" name="pg" value="@(Model.Page - 1)" class="step"
+                    disabled="@(!Model.HasPrevious)" aria-label="Previous page">
+                <svg viewBox="0 0 20 20" width="16" height="16" aria-hidden="true" focusable="false"><path d="M12.5 4 6.5 10l6 6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            </button>
             <span class="pager-at">@Model.Page / @Model.LastPage</span>
-            <button type="submit" name="pg" value="@(Model.Page + 1)"
-                    disabled="@(!Model.HasNext)">Next &rarr;</button>
+            <button type="submit" name="pg" value="@(Model.Page + 1)" class="step"
+                    disabled="@(!Model.HasNext)" aria-label="Next page">
+                <svg viewBox="0 0 20 20" width="16" height="16" aria-hidden="true" focusable="false"><path d="m7.5 4 6 6-6 6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            </button>
         </nav>
     }
 }

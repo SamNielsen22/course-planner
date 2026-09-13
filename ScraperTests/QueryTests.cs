@@ -42,6 +42,13 @@ public class TestDatabase : IDisposable
               ('Spring2026','CS','2420','001','Lecture','In Person',4,'WEB L103','TuTh/02:00PM-03:20PM', 30);
         """);
 
+        // The enrollment side, as the seats pass writes it: CS 2420-002 is full
+        // with four waiting; the lab has never had its table read.
+        db.Execute("""
+            UPDATE sections SET class_number = '4034', enrollment_cap = 32, enrolled = 32, waitlist = 4, has_waitlist = 1
+             WHERE term = 'Fall2026' AND subject = 'CS' AND course_number = '2420' AND section_number = '002';
+        """);
+
         // One table per grain. CS 2420-003 has no grades at all - a lab
         // publishes none - which is what the LEFT JOIN is for.
         db.Execute("""
@@ -125,6 +132,24 @@ public class QueryTests : IClassFixture<TestDatabase>
 
         Assert.All(open, section => Assert.True(section.SeatsAvailable > 0));
         Assert.DoesNotContain(open, s => s.SectionNumber is "002" or "003");
+    }
+
+    [Fact]
+    public void FindSections_CarriesTheEnrollmentFigures()
+    {
+        var sections = queries.FindSections("Fall2026", subject: "CS", courseNumber: "2420");
+
+        var full = Assert.Single(sections, s => s.SectionNumber == "002");
+        Assert.Equal(4, full.Waitlist);
+        Assert.True(full.HasWaitlist);
+        Assert.Equal(32, full.EnrollmentCap);
+        Assert.Equal(32, full.Enrolled);
+        Assert.Equal("4034", full.ClassNumber);
+
+        var lab = Assert.Single(sections, s => s.SectionNumber == "003");
+        Assert.Null(lab.Waitlist);
+        Assert.Null(lab.HasWaitlist);
+        Assert.Null(lab.ClassNumber);
     }
 
     [Fact]

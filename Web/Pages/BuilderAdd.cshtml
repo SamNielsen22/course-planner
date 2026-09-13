@@ -14,7 +14,7 @@
 <div class="page-head page-head-back">
     <a class="back-arrow" asp-page="/Schedules" aria-label="Your schedules" title="Your schedules">&larr;</a>
     <div>
-        <h1>Schedule Builder</h1>
+        <h1 class="round-start">Schedule Builder</h1>
         <p class="page-sub">Browsing @Terms.Display(Model.Term ?? "")@(Campus.Label(Model.Campus) is { } campus ? " · " + campus : "") sections</p>
     </div>
 </div>
@@ -35,7 +35,7 @@
     <div class="filters one-line">
         <label class="grow">
             Search
-            <input name="q" value="@Model.Q" autocomplete="off" autofocus
+            <input name="q" value="@Model.Q" autocomplete="off" data-autofocus
                    placeholder="Subject, Course Name or Course Code&hellip;"/>
         </label>
 
@@ -50,24 +50,10 @@
             </select>
         </label>
 
-        @* A guest picks the campus here; an account schedule's is fixed when
-           it is created, and is named under the heading instead. *@
-        @if (Model.CanPickCampus)
-        {
-            <label>
-                Campus
-                <select name="campus">
-                    @foreach (var (code, name) in Campus.All)
-                    {
-                        <option value="@code" selected="@(code == Model.Campus)">@name</option>
-                    }
-                </select>
-            </label>
-        }
-
         <label>
             Sort by
             <select name="sort">
+                <option value="relevance" selected="@(Model.Sort == "relevance")">Relevance</option>
                 <option value="name" selected="@(Model.Sort == "name")">Course number</option>
                 <option value="gpa" selected="@(Model.Sort == "gpa")">Highest average grade</option>
                 <option value="time" selected="@(Model.Sort == "time")">Earliest in the day</option>
@@ -108,6 +94,14 @@
     </div>
 </form>
 
+@* Back to the top of a long list. Off screen until the page has been scrolled
+   a way down; bottom-left, where neither the cart nor the phone tab bar sits. *@
+<button type="button" id="to-top" class="to-top" aria-label="Back to top">
+    <svg viewBox="0 0 20 20" width="18" height="18" aria-hidden="true" focusable="false">
+        <path d="M4 12.5 10 6.5l6 6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+    </svg>
+</button>
+
 <dialog id="break-dialog" class="modal">
     <form id="break-form" class="modal-form">
         <h2>Add a break</h2>
@@ -115,19 +109,23 @@
             Name
             <input name="name" placeholder="Lunch, work, practice&hellip;"/>
         </label>
-        <label>
-            Days
-            <select name="days">
-                <option value="">Every weekday</option>
-                <option value="MoWeFr">Mon, Wed, Fri</option>
-                <option value="TuTh">Tue, Thu</option>
-                <option value="Mo">Monday</option>
-                <option value="Tu">Tuesday</option>
-                <option value="We">Wednesday</option>
-                <option value="Th">Thursday</option>
-                <option value="Fr">Friday</option>
-            </select>
-        </label>
+        @* One toggle per day, none on to begin with. The script joins the
+           chosen ones into the "MoWeFr" form the schedule keeps, and asks for
+           at least one rather than letting an empty choice mean every weekday. *@
+        <fieldset class="days" id="break-days">
+            <legend>Days <span class="days-hint">pick at least one</span></legend>
+            @foreach (var (code, letter, name) in new[]
+            {
+                ("Mo", "M", "Monday"), ("Tu", "T", "Tuesday"), ("We", "W", "Wednesday"), ("Th", "Th", "Thursday"),
+                ("Fr", "F", "Friday"), ("Sa", "Sa", "Saturday"), ("Su", "Su", "Sunday"),
+            })
+            {
+                <label class="day-toggle">
+                    <input type="checkbox" name="day" value="@code" aria-label="@name"/>
+                    <span>@letter</span>
+                </label>
+            }
+        </fieldset>
         <div class="modal-times">
             <label>From<input name="from" type="time" value="12:00" required/></label>
             <label>Until<input name="until" type="time" value="13:00" required/></label>
@@ -172,10 +170,10 @@
 
         // The tab badge lives outside the swapped panel, so it has to be told.
         // Without this it kept whatever count the page was first rendered with,
-        // which on a fresh visit is always zero.
-        const fresh = cartSlot.querySelector('.cart-count');
+        // which on a fresh visit is always zero. Counted from the rows, since
+        // the cart itself no longer shows a number.
         const badge = document.querySelector('.tab-count');
-        if (fresh && badge) badge.textContent = fresh.textContent.trim();
+        if (badge) badge.textContent = cartSlot.querySelectorAll('.cart-drop').length;
     }
 
     // Delegated, so these survive the panel being replaced.
@@ -199,9 +197,15 @@
     });
 
     document.getElementById('break-cancel').addEventListener('click', () => dialog.close());
+    document.getElementById('break-days').addEventListener('change', function () { this.classList.remove('days-missing'); });
     breakForm.addEventListener('submit', async function (event) {
         event.preventDefault();
-        const data = Object.fromEntries(new FormData(breakForm));
+        const fields = new FormData(breakForm);
+        const days = document.getElementById('break-days');
+        if (fields.getAll('day').length === 0) { days.classList.add('days-missing'); return; }
+        const data = Object.fromEntries(fields);
+        delete data.day;
+        data.days = fields.getAll('day').join('');   // "MoWeFr", in week order as the boxes are
         const response = await post('AddBreak', data);
         if (response.ok) { dialog.close(); breakForm.reset(); refresh(); refreshCart(); }
     });
@@ -286,6 +290,16 @@
         page = parseInt(button.value, 10);
         refresh();
         window.scrollTo({ top: 0, behavior: 'smooth' });
+    });
+
+    // Back to top: shown once the reader is a screen or so down the list.
+    const toTop = document.getElementById('to-top');
+    const stillness = matchMedia('(prefers-reduced-motion: reduce)');
+    function placeToTop() { toTop.classList.toggle('on', window.scrollY > 600); }
+    addEventListener('scroll', placeToTop, { passive: true });
+    placeToTop();
+    toTop.addEventListener('click', () => {
+        window.scrollTo({ top: 0, behavior: stillness.matches ? 'auto' : 'smooth' });
     });
 })();
 </script>

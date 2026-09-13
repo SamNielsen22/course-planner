@@ -12,7 +12,17 @@ namespace CoursePlanner.Data;
 /// Built at startup and not watched. After a re-crawl or a grade load, restart
 /// the site or call <see cref="Rebuild"/>.
 /// </summary>
-public class SiteIndex(CourseQueries db, GradeIndex grades)
+/// <summary>
+/// Terms the catalogue holds but the site does not offer yet - a schedule
+/// crawled ahead of its registration window, kept stored and out of every
+/// picker until the day it is opened. Named in configuration (Terms:Hidden).
+/// </summary>
+public sealed record HiddenTerms(IReadOnlySet<string> Names)
+{
+    public static readonly HiddenTerms None = new(new HashSet<string>());
+}
+
+public class SiteIndex(CourseQueries db, GradeIndex grades, HiddenTerms hidden)
 {
     private sealed record Snapshot(
         IReadOnlyList<string> Terms,
@@ -23,10 +33,10 @@ public class SiteIndex(CourseQueries db, GradeIndex grades)
         IReadOnlyDictionary<string, double> CourseAverages,
         IReadOnlyList<(string Subject, string Number)> Courses);
 
-    private volatile Snapshot _now = Build(db, grades);
+    private volatile Snapshot _now = Build(db, grades, hidden);
 
-    private static Snapshot Build(CourseQueries db, GradeIndex grades) => new(
-        db.GetTerms(),
+    private static Snapshot Build(CourseQueries db, GradeIndex grades, HiddenTerms hidden) => new(
+        db.GetTerms().Where(t => !hidden.Names.Contains(t)).ToList(),
         db.GradeTerms(),
         db.Departments(),
         db.Designations(),
@@ -34,7 +44,7 @@ public class SiteIndex(CourseQueries db, GradeIndex grades)
         grades.CourseAverages,
         db.AllCourses());
 
-    /// <summary>Every term with a section, in storage order. Pages sort as they need.</summary>
+    /// <summary>Every term with a section that the site offers, in storage order. Pages sort as they need.</summary>
     public IReadOnlyList<string> Terms => _now.Terms;
 
     /// <summary>Every term with published grades - the historical lookup's range.</summary>
@@ -56,5 +66,5 @@ public class SiteIndex(CourseQueries db, GradeIndex grades)
     public IReadOnlyList<(string Subject, string Number)> Courses => _now.Courses;
 
     /// <summary>Re-reads everything. For after a crawl or a grade load.</summary>
-    public void Rebuild() => _now = Build(db, grades);
+    public void Rebuild() => _now = Build(db, grades, hidden);
 }

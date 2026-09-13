@@ -4,7 +4,10 @@
 <head>
     <meta charset="utf-8"/>
     <meta name="viewport" content="width=device-width, initial-scale=1"/>
-    <title>@ViewData["Title"] - Utah Course Compass</title>
+    @* Public pages carry their own plain title, which is also the headline a
+       search result shows; the personal pages, kept out of the index, read the
+       site's name. *@
+    <title>@(ViewData["NoIndex"] is null && ViewData["Title"] is string title ? title : "Utah Course Compass")</title>
     @* What a search engine shows and indexes: the page's own line, its one
        address, and a keep-out on the personal pages. *@
     @if (ViewData["Description"] is string description)
@@ -22,7 +25,7 @@
     {
         <meta name="robots" content="noindex"/>
     }
-    <link rel="icon" href="/favicon.svg"/>
+    <link rel="icon" href="/favicon.svg" asp-append-version="true"/>
     @* Plus Jakarta Sans for the wordmark and the home page buttons only - the
        rest of the site stays on the system sans. Two weights, so the load is
        small. SIL Open Font License. display=swap so the name renders in the
@@ -30,21 +33,20 @@
     <link rel="preconnect" href="https://fonts.googleapis.com"/>
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
     <link rel="stylesheet"
-          href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@@700;800&display=swap"/>
+          href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@@400;500;600;700;800&display=swap"/>
     <link rel="stylesheet" href="~/css/site.css" asp-append-version="true"/>
 </head>
 <body>
 <header>
     <nav>
         <a class="brand" asp-page="/Home">
-            <img class="brand-mark" src="/logo.svg" alt="" width="34" height="25"/>
+            <img class="brand-mark" src="/logo.svg" asp-append-version="true" alt="" width="34" height="25"/>
             Utah Course Compass
         </a>
         <span class="links">
             <a asp-page="/Schedules">Schedule Builder</a>
             <a asp-page="/Index">Courses</a>
             <a asp-page="/Instructors">Professors</a>
-            <a asp-page="/About">About</a>
             @if (Accounts.Enabled)
             {
                 @* Signed in: the account page. Otherwise straight to Google -
@@ -52,11 +54,11 @@
                    the two versions cannot get mixed up. *@
                 @if (User.Identity?.IsAuthenticated == true)
                 {
-                    <a asp-page="/Account/Index">Account</a>
+                    <a class="account-link" asp-page="/Account/Index">Account</a>
                 }
                 else if (Accounts.Google)
                 {
-                    <a asp-page="/Account/External" asp-page-handler="Start" asp-route-provider="Google"
+                    <a class="account-link" asp-page="/Account/External" asp-page-handler="Start" asp-route-provider="Google"
                        asp-route-returnUrl="@(Context.Request.Path + Context.Request.QueryString)">Sign in</a>
                 }
             }
@@ -69,9 +71,59 @@
 </main>
 
 <footer>
-    <p>Utah Course Compass &middot; grade data from the University of Utah&rsquo;s public grade summary. Unofficial, and not affiliated with the University.</p>
+    <p>Utah Course Compass &middot; Not affiliated with the University of Utah.</p>
 </footer>
 
+@* The page's search box takes focus on load - on a desktop. On a phone a
+   focused field raises the keyboard over half the screen before anything
+   has been read, so there it is left alone; the markup carries
+   data-autofocus rather than autofocus so the browser never does it on its
+   own. A box that comes back with its text - the browser's back button
+   restores it - gets the caret after the text, on load and again when the
+   page is restored from the back-forward cache. *@
+<script>
+(function () {
+    const desktop = matchMedia('(hover: hover) and (pointer: fine) and (min-width: 721px)');
+    function focusSearch() {
+        const box = document.querySelector('input[data-autofocus]');
+        if (!box || !desktop.matches) return;
+        box.focus({ preventScroll: true });
+        if (!box.value) return;
+        const end = box.value.length;
+        try { box.setSelectionRange(end, end); } catch (e) { }
+    }
+    focusSearch();
+    window.addEventListener('pageshow', focusSearch);
+})();
+</script>
+@* On a touch screen there is no hover: a course code in the prerequisites
+   shows its title on the first tap and goes to the course on the second.
+   Delegated, so it covers cards the builder swaps in later. *@
+<script>
+(function () {
+    // The bubble is centred on the code; when that would hang off the screen,
+    // it is nudged back in by exactly the overhang.
+    function keepOnScreen(ref) {
+        ref.style.removeProperty('--tip-shift');
+        const width = parseFloat(getComputedStyle(ref, '::after').width) || 0;
+        const at = ref.getBoundingClientRect(), centre = (at.left + at.right) / 2, edge = 8;
+        let shift = 0;
+        if (centre - width / 2 < edge) shift = edge - (centre - width / 2);
+        else if (centre + width / 2 > innerWidth - edge) shift = (innerWidth - edge) - (centre + width / 2);
+        if (shift) ref.style.setProperty('--tip-shift', shift + 'px');
+    }
+    document.addEventListener('mouseover', function (event) {
+        const ref = event.target.closest('a.course-ref');
+        if (ref) keepOnScreen(ref);
+    });
+    if (!matchMedia('(hover: none)').matches) return;
+    document.addEventListener('click', function (event) {
+        const ref = event.target.closest('a.course-ref');
+        document.querySelectorAll('a.course-ref.open').forEach(o => { if (o !== ref) o.classList.remove('open'); });
+        if (ref && !ref.classList.contains('open')) { event.preventDefault(); ref.classList.add('open'); keepOnScreen(ref); }
+    });
+})();
+</script>
 @await RenderSectionAsync("Scripts", required: false)
 </body>
 </html>

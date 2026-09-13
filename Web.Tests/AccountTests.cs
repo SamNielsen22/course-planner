@@ -135,14 +135,15 @@ public class AccountTests : IClassFixture<AccountSite>, IDisposable
         var home = await visitor.Page("/schedules");
         Assert.Equal("main", home.DocumentNode.SelectSingleNode("//dialog//select[@name='campus']/option[1]")?.GetAttributeValue("value", ""));
 
-        await PostAsync(visitor, "New", ("name", "Incheon"), ("campus", "uac"));
+        // The newest term the Asia Campus list is published for; the main list goes up first.
+        var term = _catalogue.NewestTermOn("uac");
+        await PostAsync(visitor, "New", ("name", "Incheon"), ("campus", "uac"), ("term", term));
         var builder = await visitor.Page("/builder");
         Assert.Contains("Asia Campus", builder.DocumentNode.SelectSingleNode("//p[@class='page-sub']")?.InnerText);
         Assert.Null(builder.DocumentNode.SelectSingleNode("//select[@name='campus']"));   // chosen at creation, not per search
         Assert.Contains("Asia Campus", (await visitor.Page("/schedules")).DocumentNode.SelectSingleNode("//span[@class='sched-meta']")?.InnerText);
 
         // A Salt Lake key posted at it is not for it; an Asia Campus one lands.
-        var term = _catalogue.NewestTerm();
         await visitor.Add(_catalogue.Timed(term));
         Assert.Empty(await visitor.Cart());
         var asia = _catalogue.OnAsiaCampus(term);

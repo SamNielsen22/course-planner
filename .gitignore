@@ -13,7 +13,8 @@ node_modules/
 
 # Scraped data. Days of crawling, rebuildable from the ingest projects, and
 # far too big for git - the database alone is ~50MB.
-data/
+# The crawled catalogue and grade files at the root only; Web/data (buildings, the kept order) ships with the site.
+/data/
 __pycache__/
 *.pyc
 .neon

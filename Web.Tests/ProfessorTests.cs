@@ -86,6 +86,33 @@ public class ProfessorTests(Site site) : IClassFixture<Site>
     }
 
     [Fact]
+    public async Task ASummerIsNotTheDefaultForSomeoneWhoUsuallyTeachesFallAndSpring()
+    {
+        var p = site.Catalogue.ProfessorWhoseLatestTermIsSummer();
+        // Planning a fall or spring - or nothing in particular - lands on their latest fall or spring term.
+        Assert.Equal(p.LatestRegularTerm, Chosen(await site.Visitor().Page(Url(p.Unid)), "term"));
+        Assert.Equal(p.LatestRegularTerm, Chosen(await site.Visitor().Page(Url(p.Unid) + "?planning=Fall2026"), "term"));
+        // Planning a summer, their summer is what matters.
+        Assert.Equal(p.SummerTerm, Chosen(await site.Visitor().Page(Url(p.Unid) + "?planning=Summer2026"), "term"));
+        // Asked for outright, the summer term shows like any other.
+        Assert.Equal(p.SummerTerm, Chosen(await site.Visitor().Page(Url(p.Unid, p.SummerTerm)), "term"));
+        // The builder's cards say which term is being planned.
+        var term = site.Catalogue.NewestTerm();
+        var cards = await site.Visitor().Page($"/builder?term={term}&open=false&noClash=false");
+        var link = cards.DocumentNode.SelectSingleNode("//a[contains(@href,'/professor/')]")?.GetAttributeValue("href", "");
+        Assert.Contains("planning=" + term, link);
+    }
+
+    [Fact]
+    public async Task AProfessorWithNoPublishedGradesGetsANoteAndNoPickers()
+    {
+        var doc = await site.Visitor().Page(Url(site.Catalogue.ProfessorWithoutGrades()));
+        Assert.Null(doc.DocumentNode.SelectSingleNode("//select"));
+        Assert.Contains("No published grades for this professor", doc.DocumentNode.SelectSingleNode("//p[@class='note']")?.InnerText);
+        Assert.Null(doc.DocumentNode.SelectSingleNode("//div[@class='stat-strip']"));
+    }
+
+    [Fact]
     public async Task ATileLinkLandsOnTheTermWhereThatClassHasGrades()
     {
         var p = site.Catalogue.ProfessorWithMultiSectionClasses();

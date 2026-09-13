@@ -40,12 +40,17 @@ else
     </ul>
     @if (Model.LastPage > 1)
     {
-        <nav class="pager">
-            <button type="submit" name="pg" value="@(Model.Page - 1)"
-                    disabled="@(!Model.HasPrevious)">&larr; Previous</button>
+        @* The same chevrons as the builder's lists, either side of the page. *@
+        <nav class="pager" aria-label="Pages">
+            <button type="submit" name="pg" value="@(Model.Page - 1)" class="step"
+                    disabled="@(!Model.HasPrevious)" aria-label="Previous page">
+                <svg viewBox="0 0 20 20" width="16" height="16" aria-hidden="true" focusable="false"><path d="M12.5 4 6.5 10l6 6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            </button>
             <span class="pager-at">@Model.Page / @Model.LastPage</span>
-            <button type="submit" name="pg" value="@(Model.Page + 1)"
-                    disabled="@(!Model.HasNext)">Next &rarr;</button>
+            <button type="submit" name="pg" value="@(Model.Page + 1)" class="step"
+                    disabled="@(!Model.HasNext)" aria-label="Next page">
+                <svg viewBox="0 0 20 20" width="16" height="16" aria-hidden="true" focusable="false"><path d="m7.5 4 6 6-6 6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            </button>
         </nav>
     }
 }

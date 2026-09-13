@@ -49,25 +49,18 @@ public class SeoTests(Site site) : IClassFixture<Site>
         var p = site.Catalogue.ProfessorWithMultiSectionClasses();
         var slug = Pages.Names.CourseSlug(p.ClassA);
         var doc = await site.Visitor().Page($"/professor/{p.Unid}/anyone/{slug}");
-        Assert.Contains(p.ClassA, doc.DocumentNode.SelectSingleNode("//title")?.InnerText);
+        Assert.Contains(p.ClassA, doc.DocumentNode.SelectSingleNode("//meta[@property='og:title']")?.GetAttributeValue("content", ""));
         Assert.Contains(p.ClassA, doc.DocumentNode.SelectSingleNode("//p[@class='page-sub']")?.InnerText);
-        Assert.Contains("grades " + p.ClassA, doc.DocumentNode.SelectSingleNode("//meta[@name='description']")?.GetAttributeValue("content", ""));
+        Assert.Contains(p.ClassA, doc.DocumentNode.SelectSingleNode("//meta[@name='description']")?.GetAttributeValue("content", ""));
+        // The tab and the search headline are the plain name and class; a personal page reads the site's name.
+        Assert.Contains(p.ClassA, doc.DocumentNode.SelectSingleNode("//title")?.InnerText);
+        Assert.DoesNotContain("Utah Course Compass", doc.DocumentNode.SelectSingleNode("//title")?.InnerText);
+        Assert.Equal("Utah Course Compass", (await site.Visitor().Page("/builder")).DocumentNode.SelectSingleNode("//title")?.InnerText.Trim());
         Assert.EndsWith("/" + slug, doc.DocumentNode.SelectSingleNode("//link[@rel='canonical']")?.GetAttributeValue("href", ""));
         Assert.Equal(p.ClassA, doc.DocumentNode.SelectSingleNode("//select[@name='course']/option[@selected]")?.GetAttributeValue("value", ""));
         // Picked from the dropdown instead, the same class still claims the same address.
         var viaQuery = await site.Visitor().Page($"/professor/{p.Unid}?course=" + Uri.EscapeDataString(p.ClassA));
         Assert.EndsWith("/" + slug, viaQuery.DocumentNode.SelectSingleNode("//link[@rel='canonical']")?.GetAttributeValue("href", ""));
-    }
-
-    [Fact]
-    public async Task ACoursePageNamesWhoTeachesItAndLinksToTheirClassPages()
-    {
-        var (subject, number, _) = site.Catalogue.GradedCourse();
-        var doc = await site.Visitor().Page($"/course/{Uri.EscapeDataString(subject)}/{number}");
-        var links = doc.DocumentNode.SelectNodes("//section[contains(@class,'teachers')]//tbody//a")?.ToList() ?? [];
-        Assert.NotEmpty(links);
-        var slug = Pages.Names.CourseSlug(subject, number);
-        Assert.All(links, a => Assert.Matches(new Regex(@"^/professor/u\d+/[a-z0-9-]+/" + Regex.Escape(slug) + "$"), a.GetAttributeValue("href", "")));
     }
 
     [Fact]
@@ -98,7 +91,7 @@ public class SeoTests(Site site) : IClassFixture<Site>
         // One address for the course, whatever term the page is showing.
         Assert.Equal($"http://localhost/course/{Uri.EscapeDataString(subject)}/{number}",
             doc.DocumentNode.SelectSingleNode("//link[@rel='canonical']")?.GetAttributeValue("href", ""));
-        Assert.Contains($"{subject} {number}", doc.DocumentNode.SelectSingleNode("//title")?.InnerText);
+        Assert.Contains($"{subject} {number}", doc.DocumentNode.SelectSingleNode("//meta[@property='og:title']")?.GetAttributeValue("content", ""));
         Assert.Null(doc.DocumentNode.SelectSingleNode("//meta[@name='robots']"));
     }
 

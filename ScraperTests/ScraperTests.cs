@@ -54,6 +54,51 @@ public class ScraperTests
     }
 
     [Fact]
+    public void MainSearchScraper_ReadsWhetherASectionHasAWaitList()
+    {
+        var sections = MainSearchScraper.Scrape(LoadSample("cs.html"));
+
+        // The list says yes or no; the count of those waiting lives on the sections table.
+        Assert.Contains(sections, s => s.HasWaitlist == true);
+        Assert.Contains(sections, s => s.HasWaitlist == false);
+        Assert.DoesNotContain(sections, s => s.HasWaitlist is null);
+    }
+
+    [Fact]
+    public void SectionsTableScraper_ReadsEverySectionOfASubject()
+    {
+        // sections.html with the catalogue number left blank: the whole subject, one row each.
+        var doc = LoadSample("sections_games.html");
+
+        Assert.Equal("Fall2026", SectionsTableScraper.Term(doc));
+        var rows = SectionsTableScraper.Scrape(doc);
+        Assert.Equal(87, rows.Count);
+        Assert.All(rows, r => Assert.Equal("GAMES", r.Subject));
+
+        // The lecture students reach through a lab has a class number here, though the list leaves it blank.
+        var lecture = Assert.Single(rows, r => r.CourseNumber == "1010" && r.SectionNumber == "001");
+        Assert.Equal("7519", lecture.ClassNumber);
+        Assert.Equal(140, lecture.EnrollmentCap);
+        Assert.Equal(117, lecture.Enrolled);
+        Assert.Equal(0, lecture.Waitlist);
+        Assert.Equal(23, lecture.SeatsAvailable);
+
+        // A full lab with someone waiting.
+        var lab = Assert.Single(rows, r => r.CourseNumber == "1010" && r.SectionNumber == "006");
+        Assert.Equal(0, lab.SeatsAvailable);
+        Assert.Equal(1, lab.Waitlist);
+    }
+
+    [Fact]
+    public void SectionsTableScraper_IgnoresAPageThatIsNotATable()
+    {
+        var doc = LoadSample("CS2420.html");   // a description page: a heading with no term, no table
+
+        Assert.Null(SectionsTableScraper.Term(doc));
+        Assert.Empty(SectionsTableScraper.Scrape(doc));
+    }
+
+    [Fact]
     public void DescriptionScraper_ParsesRequirementDesignation()
     {
         var doc = new HtmlDocument();

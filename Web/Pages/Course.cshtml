@@ -118,36 +118,3 @@
     }
 }
 
-@* The question a student actually has about a course: who has taught it,
-   and how each of them graded it. Every name is the professor's own page
-   for this class. *@
-@if (Model.Teachers.Count > 0)
-{
-    <section class="panel teachers">
-        <h3>Who teaches it</h3>
-        <table>
-            <thead>
-            <tr>
-                <th>Professor</th>
-                <th>Last taught</th>
-                <th class="num">Sections</th>
-                <th class="num">Their average</th>
-            </tr>
-            </thead>
-            <tbody>
-            @foreach (var (who, average, last) in Model.Teachers)
-            {
-                <tr>
-                    <td>
-                        <a asp-page="/Instructor" asp-route-unid="@who.Unid" asp-route-slug="@Names.Slug(who.Name)"
-                           asp-route-course="@Names.CourseSlug(Model.Subject, Model.Number)">@Names.Natural(who.Name)</a>
-                    </td>
-                    <td>@Terms.Display(last)</td>
-                    <td class="num">@who.Sections</td>
-                    <td class="num">@Figures.Gpa(average)</td>
-                </tr>
-            }
-            </tbody>
-        </table>
-    </section>
-}

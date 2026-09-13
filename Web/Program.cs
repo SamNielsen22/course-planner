@@ -39,6 +39,7 @@ builder.Services.AddSingleton<Web.Pages.PrereqMarkup>();
 // Same again for the University's building list, so a room code can carry
 // its building's name on hover and its street address into a calendar.
 builder.Services.AddSingleton<Web.Pages.Buildings>();
+builder.Services.AddSingleton<Web.Pages.Spotlight>();
 
 // Every published grade row with its reconstruction, held in memory. The
 // reconstruction runs once here, at startup; every grade figure on the site
@@ -52,6 +53,10 @@ builder.Services.AddSingleton<InstructorIndex>();
 // Reference data - terms, subjects, designations, the About figures - read
 // once instead of on every request; and each term's sections held in memory,
 // refreshed every minute because the seat crawl rewrites seat counts.
+// Terms crawled ahead of their registration window stay stored but off every
+// picker until they are taken off this list.
+builder.Services.AddSingleton(new HiddenTerms(
+    (builder.Configuration.GetSection("Terms:Hidden").Get<string[]>() ?? []).ToHashSet()));
 builder.Services.AddSingleton<SiteIndex>();
 builder.Services.AddSingleton<SectionIndex>();
 

@@ -112,9 +112,13 @@ public class Crawler
                               + "left unmarked - rerun to pick them up");
     }
     /// <summary>
-    /// Refresh seat counts for one term and nothing else. Costs one request per
-    /// subject page plus the index - no description pages, since seats are the
-    /// only thing being read. Cheap enough to run several times a day.
+    /// Refresh the enrollment figures for one term and nothing else: seats,
+    /// cap, enrolled, waiting, class number. Costs one request per subject
+    /// plus the index - the registrar's sections table lists a whole subject
+    /// when the catalogue number is left blank, at a tenth the size of the
+    /// class list, and a subject the list splits into credit and noncredit
+    /// menus is one table all the same. No description pages, since counts
+    /// are the only thing being read. Cheap enough to run several times a day.
     /// </summary>
     public int RefreshSeats(string campus, string termCode)
     {
@@ -126,7 +130,7 @@ public class Crawler
         var indexDoc = LoadFromUrl(indexUrl);
         if (indexDoc is null)
         {
-            Console.WriteLine("subject index would not load - no seats refreshed");
+            Console.WriteLine($"{campus} {termCode}: no schedule published, or the index would not load - nothing refreshed");
             return 0;
         }
         var queries = SubjectScraper.Scrape(indexDoc);
@@ -135,34 +139,35 @@ public class Crawler
         var updated = 0;
         foreach (var query in queries)
         {
+            // The label as the index links it, percent-encoded ("CH%20EN"),
+            // which is how the table's address wants it too.
             var subjectLabel = query.Split('&')[0].Split('=')[1];
-            var classListDoc = Load(baseUrl + "class_list.html?" + query)?.Doc;
-            if (classListDoc is null)
+            var page = Load(baseUrl + "sections.html?subj=" + subjectLabel + "&catno=");
+            if (page is null)
             {
-                Console.WriteLine($"  {subjectLabel}: page would not load - skipped");
+                Console.WriteLine($"  {subjectLabel}: table would not load - skipped");
                 continue;
             }
 
-            var alert = classListDoc.DocumentNode.SelectSingleNode(
-                "//div[contains(@class,'alert') and contains(.,'divided by credit and noncredit')]"
-            );
+            var term = SectionsTableScraper.Term(page.Doc);
+            if (term is null)
+            {
+                Console.WriteLine($"  {subjectLabel}: not a sections table (no term in the heading) - skipped");
+                continue;
+            }
 
-            var documents = new List<HtmlDocument>();
-            if (alert != null)   // a credit/noncredit menu, not a class list
-                foreach (var extraQuery in SubjectScraper.Scrape(classListDoc))
-                {
-                    var extraDoc = Load(baseUrl + "class_list.html?" + extraQuery)?.Doc;
-                    if (extraDoc is not null) documents.Add(extraDoc);
-                }
-            else
-                documents.Add(classListDoc);
+            var counts = SectionsTableScraper.Scrape(page.Doc);
+            var result = DbStore.UpdateCounts(term, campus, Uri.UnescapeDataString(subjectLabel), counts, page.Complete);
+            updated += result.Updated;
 
-            var subjectTotal = 0;
-            foreach (var document in documents)
-                subjectTotal += DbStore.UpdateSeats(MainSearchScraper.Scrape(document));
-
-            updated += subjectTotal;
-            Console.WriteLine($"  {subjectLabel}: {subjectTotal} sections updated");
+            var line = $"  {subjectLabel}: {result.Updated} sections updated";
+            // The table is fed from the enrollment system and can run ahead of
+            // the class list: a section entered but not yet published shows here
+            // first. The other cause is a class list page that arrived cut off.
+            if (result.Unknown > 0) line += $", {result.Unknown} on the registrar's table but not on the class list (not yet published, or the list page was cut off)";
+            if (result.Removed > 0) line += $", {result.Removed} no longer listed - removed";
+            if (!page.Complete) line += " (page cut off: what came was kept, nothing removed)";
+            Console.WriteLine(line);
         }
 
         return updated;
@@ -215,6 +220,15 @@ public class Crawler
             }
             catch (AggregateException error)
             {
+                // A page that is not there will not be there in thirty
+                // seconds either: a term whose schedule the registrar has not
+                // published yet answers 404, and retrying it five times would
+                // cost two and a half minutes per campus for nothing.
+                if (error.InnerException is HttpRequestException { StatusCode: System.Net.HttpStatusCode.NotFound })
+                {
+                    Console.WriteLine($"NOT FOUND {url}");
+                    return null;
+                }
                 reason = error.InnerException?.Message ?? error.Message;
             }
 

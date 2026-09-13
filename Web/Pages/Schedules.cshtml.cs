@@ -31,13 +31,20 @@ public class SchedulesModel(ScheduleStore store, AccountsFeature accounts, SiteI
     /// <summary>True when the account database could not be reached.</summary>
     public bool Unavailable { get; private set; }
 
-    /// <summary>A guest: the schedule their browser holds, so the page can say what is in progress.</summary>
-    public BuiltSchedule Guest { get; private set; } = new();
+    /// <summary>A guest: the campus and term their schedule is for, which their way in offers first.</summary>
+    public string GuestCampus { get; private set; } = Campus.Main;
+    public string? GuestTerm { get; private set; }
 
     public void OnGet()
     {
         Terms = Pages.Terms.NewestFirst(site.Terms);
-        if (!SignedIn) { Guest = store.Current; return; }
+        if (!SignedIn)
+        {
+            var guest = store.Current;
+            GuestCampus = guest.Campus;
+            GuestTerm = guest.Term ?? Terms.FirstOrDefault();
+            return;
+        }
         try { Schedules = store.Mine(); }
         catch (NpgsqlException) { Unavailable = true; }
     }
@@ -46,6 +53,13 @@ public class SchedulesModel(ScheduleStore store, AccountsFeature accounts, SiteI
     public IActionResult OnPostNew(string? name, string? term, string? campus)
     {
         store.Create(name, Known(term), Campus.Known(campus));
+        return RedirectToPage("/BuilderAdd");
+    }
+
+    /// <summary>A guest's way in: their one schedule, for the term and campus they choose.</summary>
+    public IActionResult OnPostGuest(string? campus, string? term)
+    {
+        store.StartGuest(Campus.Known(campus), Known(term));
         return RedirectToPage("/BuilderAdd");
     }
 

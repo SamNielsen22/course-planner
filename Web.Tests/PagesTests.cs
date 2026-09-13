@@ -25,6 +25,19 @@ public class PagesTests(Site site) : IClassFixture<Site>
     }
 
     [Fact]
+    public async Task ANumberTypedInArabicFindsATitleNumberedInRoman()
+    {
+        // Course search: "calculus 1" lists Calculus I.
+        var doc = await site.Visitor().Page("/courses?q=" + Uri.EscapeDataString("calculus 1"));
+        var titles = doc.DocumentNode.SelectNodes("//span[@class='course-title']")?.Select(n => n.InnerText.Trim()).ToList() ?? [];
+        Assert.Contains("Calculus I", titles);
+        // And the builder, which searches in memory: the same words offer Calculus I sections.
+        var term = site.Catalogue.NewestTerm();
+        var cards = await site.Visitor().Page($"/builder?term={term}&q=" + Uri.EscapeDataString("calculus 1") + "&open=false&noClash=false");
+        Assert.Contains(cards.DocumentNode.SelectNodes("//span[@class='sc-title']")?.Select(n => n.InnerText.Trim()) ?? [], t => t == "Calculus I");
+    }
+
+    [Fact]
     public async Task CoursePageShowsTheRegistrarsAllTermsFigures()
     {
         var (subject, number, _) = site.Catalogue.GradedCourse();

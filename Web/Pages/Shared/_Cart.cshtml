@@ -1,5 +1,8 @@
 @model Web.Schedule.BuiltSchedule
-@{ var clashing = Web.Schedule.Meetings.Conflicting(Model); }
+@{
+    var clashing = Web.Schedule.Meetings.Conflicting(Model);
+    var brokenBreaks = Web.Schedule.Meetings.ConflictingBreaks(Model);
+}
 
 @* A running view of the schedule, sticky beside the results so it stays in
    sight while they are scrolled. Everything in it can be taken back out here,
@@ -7,12 +10,14 @@
 <aside class="cart" id="cart">
     <header class="cart-head">
         <span class="cart-title">@(Model.Name ?? "Your schedule")</span>
-        <span class="cart-count">@Model.Sections.Count</span>
     </header>
 
     <div class="cart-body">
         @* Breaks constrain the same schedule the sections go into, so they are
-           added from the same panel rather than a page away. *@
+           added from the same panel rather than a page away. Not on a UOnline
+           schedule, whose classes meet at no hour for a break to keep free. *@
+        @if (Model.Campus != "online")
+        {
         <div class="cart-breaks cart-first">
             <div class="cart-breaks-head">
                 <span class="cart-sub">Breaks</span>
@@ -28,7 +33,7 @@
                 <ul class="cart-list">
                     @foreach (var b in Model.Breaks)
                     {
-                        <li>
+                        <li class="@(brokenBreaks.Contains(b.Id) ? "cart-clash" : "")">
                             <div class="cart-what"><span class="cart-code">@b.Name</span></div>
                             <p class="cart-when">@b.Days @b.From&ndash;@b.Until</p>
                             <button class="cart-dropbreak" type="button" data-id="@b.Id"
@@ -39,6 +44,7 @@
                 </ul>
             }
         </div>
+        }
         <div class="cart-courses">
         @if (Model.Sections.Count == 0)
         {
@@ -54,17 +60,14 @@
                 {
                     <li class="@(clashing.Contains(s.Key) ? "cart-clash" : "")">
                         <div class="cart-what">
-                            <span class="cart-code">@s.Code</span>
+                            <a class="cart-code" asp-page="/Course" asp-route-subject="@s.Subject" asp-route-number="@s.CourseNumber">@s.Code</a>
                             <span class="cart-sec">Section @s.SectionNumber</span>
                         </div>
                         <p class="cart-title-line">@s.Title</p>
-                        <p class="cart-when">
-                            @(string.IsNullOrWhiteSpace(s.Times) ? "No meeting time" : s.Times)
-                            @if (!string.IsNullOrWhiteSpace(s.Professor))
-                            {
-                                <text>&middot; @s.Professor</text>
-                            }
-                        </p>
+                        @if (Model.Campus != "online")
+                        {
+                            <p class="cart-when">@(string.IsNullOrWhiteSpace(s.Times) ? "No meeting time" : s.Times)</p>
+                        }
                         <button class="cart-drop" type="button" data-key="@s.Key"
                                 title="Remove from your schedule"
                                 aria-label="Remove @s.Code section @s.SectionNumber">&times;</button>

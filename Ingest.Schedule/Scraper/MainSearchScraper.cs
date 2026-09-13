@@ -23,7 +23,10 @@ record SectionRecord(
     string? Times,
     string? Description, 
     string? Prerequisites,
-    int? SeatsAvailable
+    int? SeatsAvailable,
+    // Whether the section can be waited on at all - the list's "Wait List:
+    // Yes/No". How many are waiting is on the sections table, not here.
+    bool? HasWaitlist = null
 );
 class MainSearchScraper{
     // profiles.faculty.utah.edu/u0171400  and  faculty.utah.edu/u0171400/teaching
@@ -72,14 +75,14 @@ class MainSearchScraper{
                 Console.WriteLine($"WARNING: couldent find li tags in {card.InnerHtml}");
                 continue;
             }
-            ParseSectionInfo(lis, out var instructors, out var component, out var type, out var units, out var seats);
+            ParseSectionInfo(lis, out var instructors, out var component, out var type, out var units, out var seats, out var hasWaitlist);
             var times = ParseDaysTimes(card);
             var location = ParseLocation(card);
             
             sections.Add(new SectionRecord(
                 $"{semester}{year}", subject, courseNumber,
                    section, title, instructors, component,
-                   type, units, location, times, null, null, seats)); // Description and prerequisites are in the details page. Records have to be updated later
+                   type, units, location, times, null, null, seats, hasWaitlist)); // Description and prerequisites are in the details page. Records have to be updated later
         }
 
         return sections;
@@ -130,12 +133,13 @@ class MainSearchScraper{
         title = titleMatch.Groups["title"].Value;
         return true;
     }
-    static void ParseSectionInfo(HtmlNodeCollection lis, out List<InstructorRef> instructors, out string? component, out string? type, out int? units, out int? seatsAvailable)
+    static void ParseSectionInfo(HtmlNodeCollection lis, out List<InstructorRef> instructors, out string? component, out string? type, out int? units, out int? seatsAvailable, out bool? hasWaitlist)
     {
         instructors = new List<InstructorRef>();
         component = type = null;
         units = null;
         seatsAvailable = null;
+        hasWaitlist = null;
 
         foreach (var li in lis)
         {
@@ -185,6 +189,12 @@ class MainSearchScraper{
                 case "Seats Available":
                     if (int.TryParse(GetFirstSpanText(li), out var openSeats))
                         seatsAvailable = openSeats;
+                    break;
+
+                case "Wait List":
+                    var flag = GetFirstSpanText(li);
+                    if (flag.Equals("Yes", StringComparison.OrdinalIgnoreCase)) hasWaitlist = true;
+                    else if (flag.Equals("No", StringComparison.OrdinalIgnoreCase)) hasWaitlist = false;
                     break;
             }
         }

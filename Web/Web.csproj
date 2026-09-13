@@ -16,6 +16,7 @@
 
   <ItemGroup>
     <Content Include="data\buildings.tsv" CopyToOutputDirectory="PreserveNewest" />
+    <Content Include="data\spotlight-order.txt" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 
   <PropertyGroup>

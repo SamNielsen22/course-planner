@@ -51,6 +51,20 @@ public static class AcademicCalendar
             new("fall break", new(2026, 10, 10), new(2026, 10, 18)),
             new("Thanksgiving", new(2026, 11, 26), new(2026, 11, 29)),
         ]),
+        // 2026-2027 main campus and UOnline calendar, registrar's PDF dated 07/20/26.
+        [(Campus.Main, "Spring2027")] = new(new(2027, 1, 11), new(2027, 4, 27),
+        [
+            new("Martin Luther King Jr. Day", new(2027, 1, 18), new(2027, 1, 18)),
+            new("Presidents Day", new(2027, 2, 15), new(2027, 2, 15)),
+            new("spring break", new(2027, 3, 6), new(2027, 3, 14)),
+        ]),
+        [(Campus.Main, "Summer2027")] = new(new(2027, 5, 17), new(2027, 8, 4),
+        [
+            new("Memorial Day", new(2027, 5, 31), new(2027, 5, 31)),
+            new("Juneteenth", new(2027, 6, 21), new(2027, 6, 21)),
+            new("Independence Day", new(2027, 7, 5), new(2027, 7, 5)),
+            new("Pioneer Day", new(2027, 7, 23), new(2027, 7, 23)),
+        ]),
         // Asia Campus, from the registrar's Asia Campus calendars. Independence
         // Movement Day (March 2) falls before its spring classes begin.
         [("uac", "Spring2026")] = new(new(2026, 3, 3), new(2026, 6, 8),

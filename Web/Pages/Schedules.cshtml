@@ -13,37 +13,31 @@
         @if (!Model.SignedIn && Model.CanSignIn)
         {
             <p class="page-sub">
-                Guests keep one schedule, in this browser.
                 <a asp-page="/Account/External" asp-page-handler="Start" asp-route-provider="Google"
-                   asp-route-returnUrl="/schedules">Sign in with Google</a>
-                to keep several and find them on any device.
+                   asp-route-returnUrl="/schedules">Sign in</a>
+                to save your schedule.
             </p>
         }
     </div>
 
 @{
-    // With nothing to list, the empty card below carries the one action itself.
-    var none = Model.SignedIn ? !Model.Unavailable && Model.Schedules.Count == 0 : Model.Guest.Sections.Count == 0;
+    // Signed in with nothing to list, the empty card below carries the one action itself.
+    var none = Model.SignedIn && !Model.Unavailable && Model.Schedules.Count == 0;
 }
-@if (!none)
+@if (Model.SignedIn && !none)
 {
     @* The one action, on the list's own left edge. *@
     <div class="sched-bar">
-        @if (Model.SignedIn)
-        {
-            <button class="btn small-btn" type="button" id="create">New schedule</button>
-        }
-        else
-        {
-            <a class="btn small-btn" asp-page="/BuilderAdd">Continue as guest</a>
-        }
+        <button class="btn small-btn" type="button" id="create">New schedule</button>
     </div>
 }
 
-@if (none && !Model.SignedIn)
+@if (!Model.SignedIn)
 {
-    @* A guest with nothing yet: one button, straight into the builder. *@
-    <div class="center"><a class="btn" asp-page="/BuilderAdd">Continue as guest</a></div>
+    @* A guest keeps one schedule, in their browser, and it is never listed
+       here as something they made: one button, which asks for the campus and
+       goes straight into the builder. *@
+    <div class="center"><button class="btn" type="button" id="guest">Continue as guest</button></div>
 }
 else if (none)
 {
@@ -52,35 +46,6 @@ else if (none)
         <p class="sched-none-sub">Create one and start planning a term.</p>
         <button class="btn" type="button" id="create">New schedule</button>
     </div>
-}
-else if (!Model.SignedIn)
-{
-    @if (Model.Guest.Sections.Count > 0)
-    {
-        <ul class="sched-list">
-            <li class="sched-row sched-open">
-                <a class="sched-hit" asp-page="/BuilderAdd">
-                    <span class="sched-dot" aria-hidden="true"></span>
-                    <span class="sched-what">
-                        <span class="sched-name">Your schedule</span>
-                        <span class="sched-meta">
-                            @if (Campus.Label(Model.Guest.Campus) is { } guestCampus)
-                            {
-                                <text>@guestCampus &middot; </text>
-                            }
-                            @Terms.Display(Model.Guest.Term!) &middot;
-                            @Model.Guest.Sections.Count @(Model.Guest.Sections.Count == 1 ? "class" : "classes") &middot;
-                            @Model.Guest.Units units
-                            @if (Model.Guest.Conflicts > 0)
-                            {
-                                <text>&middot; </text><span class="sched-warn">@Model.Guest.Conflicts in conflict</span>
-                            }
-                        </span>
-                    </span>
-                </a>
-            </li>
-        </ul>
-    }
 }
 else if (Model.Unavailable)
 {
@@ -146,7 +111,7 @@ else
 {
     <dialog id="create-dialog" class="modal">
         <form method="post" asp-page-handler="New" class="modal-form">
-            <h2>New schedule</h2>
+            <h2 tabindex="-1" autofocus>New schedule</h2>
             <p class="muted">Pick the term and the campus. A name is optional, and can change later.</p>
             <label>
                 Name
@@ -180,14 +145,49 @@ else
     <noscript><style>#create-dialog { display: block; position: static; }</style></noscript>
 }
 
+@* A guest's way in: the campus, then the builder. The same dialog the
+   account version uses, with nothing to name. *@
+@if (!Model.SignedIn)
+{
+    <dialog id="guest-dialog" class="modal">
+        <form method="post" asp-page-handler="Guest" class="modal-form">
+            <h2 tabindex="-1" autofocus>Continue as guest</h2>
+            <label>
+                Term
+                <select name="term">
+                    @foreach (var t in Model.Terms)
+                    {
+                        <option value="@t" selected="@(t == Model.GuestTerm)">@Terms.Display(t)</option>
+                    }
+                </select>
+            </label>
+            <label>
+                Campus
+                <select name="campus">
+                    @foreach (var (code, name) in Campus.All)
+                    {
+                        <option value="@code" selected="@(code == Model.GuestCampus)">@name</option>
+                    }
+                </select>
+            </label>
+            <div class="modal-actions">
+                <button class="btn out" type="button" id="guest-cancel">Cancel</button>
+                <button class="btn" type="submit">Continue</button>
+            </div>
+        </form>
+    </dialog>
+    <noscript><style>#guest-dialog { display: block; position: static; }</style></noscript>
+}
+
 @section Scripts {
 <script>
 (function () {
-    const dialog = document.getElementById('create-dialog');
-    const open = document.getElementById('create');
-    if (!dialog || !open) return;
-    open.addEventListener('click', () => dialog.showModal());
-    document.getElementById('create-cancel').addEventListener('click', () => dialog.close());
+    for (const [button, dialog, cancel] of [['create', 'create-dialog', 'create-cancel'], ['guest', 'guest-dialog', 'guest-cancel']]) {
+        const open = document.getElementById(button), modal = document.getElementById(dialog);
+        if (!open || !modal) continue;
+        open.addEventListener('click', () => modal.showModal());
+        document.getElementById(cancel).addEventListener('click', () => modal.close());
+    }
 })();
 </script>
 }

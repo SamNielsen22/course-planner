@@ -7,7 +7,7 @@ class Program
     // sections 29x). The professional schools keep calendars of their own but
     // no schedule of their own, so these three are the whole University.
     static readonly string[] Campuses = { "main", "uac", "online" };
-    const int TermsToScrape = 19;   // back to Fall 2020, matching the grade data
+    const int TermsToScrape = 20;   // the term ahead, then back to Fall 2020, matching the grade data
 
     // The digit the registrar gives each term. Listed newest first within a year.
     const int Fall = 8;
@@ -37,42 +37,56 @@ class Program
     }
 
     /// <summary>
-    /// Seat counts go stale within hours during registration, so they get their own
-    /// pass over the term now under way - one request per subject, no description
-    /// pages - rather than waiting for a full crawl.
+    /// Seat and wait-list counts go stale within hours during registration, so
+    /// they get their own pass - one request per subject, no description pages
+    /// - rather than waiting for a full crawl. Over two terms: the one under
+    /// way, and the one ahead, which is the one being registered for once the
+    /// registrar publishes it (until then its pages answer 404 and it costs one
+    /// request per campus).
     /// </summary>
     static void RefreshSeats()
     {
-        var termCode = TermCodesNewestFirst().First();
-        Console.WriteLine($"Refreshing seats for term {termCode}");
-
         var updated = 0;
-        foreach (var campus in Campuses)
-            updated += new Crawler().RefreshSeats(campus, termCode);
-        Console.WriteLine($"Done. Seat counts updated on {updated} sections.");
+        foreach (var termCode in TermCodesNewestFirst().Take(2))
+        {
+            Console.WriteLine($"Refreshing counts for term {termCode}");
+            foreach (var campus in Campuses)
+                updated += new Crawler().RefreshSeats(campus, termCode);
+        }
+        Console.WriteLine($"Done. Counts updated on {updated} sections.");
     }
 
     /// <summary>
     /// Term codes are generated rather than scraped: the archive page lists only terms
     /// that have already finished, so it misses the upcoming ones a planner cares about.
-    /// Starts at the term currently under way and walks backwards forever - the caller
-    /// decides how many to take.
+    /// Starts one term ahead of the one under way - the registrar publishes the next
+    /// schedule a couple of months before registration opens, and that is the term
+    /// a planner is planning; until it is published its index answers 404 and the
+    /// crawl skips it - and walks backwards forever. The caller decides how many to take.
     /// </summary>
     static IEnumerable<string> TermCodesNewestFirst()
     {
         var today = DateTime.Now;
-        var currentTerm = TermOfMonth(today.Month);
+        var (year, term) = NextTerm(today.Year, TermOfMonth(today.Month));
 
-        for (var year = today.Year; ; year--)
+        while (true)
         {
-            foreach (var term in new[] { Fall, Summer, Spring })
+            yield return TermCode(year, term);
+            (year, term) = term switch
             {
-                var isFutureTerm = year == today.Year && term > currentTerm;
-                if (!isFutureTerm)
-                    yield return TermCode(year, term);
-            }
+                Fall => (year, Summer),
+                Summer => (year, Spring),
+                _ => (year - 1, Fall)
+            };
         }
     }
+
+    static (int Year, int Term) NextTerm(int year, int term) => term switch
+    {
+        Spring => (year, Summer),
+        Summer => (year, Fall),
+        _ => (year + 1, Spring)
+    };
 
     /// <summary>Which term a date falls in, by the month the semester starts.</summary>
     static int TermOfMonth(int month) =>

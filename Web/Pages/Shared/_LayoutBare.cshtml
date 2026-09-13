@@ -5,7 +5,10 @@
 <head>
     <meta charset="utf-8"/>
     <meta name="viewport" content="width=device-width, initial-scale=1"/>
-    <title>@ViewData["Title"] - Utah Course Compass</title>
+    @* Public pages carry their own plain title, which is also the headline a
+       search result shows; the personal pages, kept out of the index, read the
+       site's name. *@
+    <title>@(ViewData["NoIndex"] is null && ViewData["Title"] is string title ? title : "Utah Course Compass")</title>
     @* What a search engine shows and indexes: the page's own line, its one
        address, and a keep-out on the personal pages. *@
     @if (ViewData["Description"] is string description)
@@ -23,7 +26,7 @@
     {
         <meta name="robots" content="noindex"/>
     }
-    <link rel="icon" href="/favicon.svg"/>
+    <link rel="icon" href="/favicon.svg" asp-append-version="true"/>
     @* Plus Jakarta Sans for the wordmark and the home page buttons only - the
        rest of the site stays on the system sans. Two weights, so the load is
        small. SIL Open Font License. display=swap so the name renders in the
@@ -31,7 +34,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com"/>
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
     <link rel="stylesheet"
-          href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@@700;800&display=swap"/>
+          href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@@400;500;600;700;800&display=swap"/>
     <link rel="stylesheet" href="~/css/site.css" asp-append-version="true"/>
 </head>
 <body>
@@ -40,9 +43,31 @@
 </main>
 
 <footer>
-    <p>Utah Course Compass &middot; grade data from the University of Utah&rsquo;s public grade summary. Unofficial, and not affiliated with the University.</p>
+    <p>Utah Course Compass &middot; Not affiliated with the University of Utah.</p>
 </footer>
 
+@* The page's search box takes focus on load - on a desktop. On a phone a
+   focused field raises the keyboard over half the screen before anything
+   has been read, so there it is left alone; the markup carries
+   data-autofocus rather than autofocus so the browser never does it on its
+   own. A box that comes back with its text - the browser's back button
+   restores it - gets the caret after the text, on load and again when the
+   page is restored from the back-forward cache. *@
+<script>
+(function () {
+    const desktop = matchMedia('(hover: hover) and (pointer: fine) and (min-width: 721px)');
+    function focusSearch() {
+        const box = document.querySelector('input[data-autofocus]');
+        if (!box || !desktop.matches) return;
+        box.focus({ preventScroll: true });
+        if (!box.value) return;
+        const end = box.value.length;
+        try { box.setSelectionRange(end, end); } catch (e) { }
+    }
+    focusSearch();
+    window.addEventListener('pageshow', focusSearch);
+})();
+</script>
 @await RenderSectionAsync("Scripts", required: false)
 </body>
 </html>

@@ -1,24 +1,25 @@
 @charset "UTF-8";
 :root {
-  --crimson: #a51c30;
-  --crimson-d: #861427;
-  --crimson-l: #f9ecef;
+  --crimson: #be0000;    /* Utah Red, the University's brand red */
+  --crimson-d: #8f0000;
+  --crimson-l: #fbe6e6;
 
   --text: #55555e;
   --text-h: #1c1b20;
   --label: #8a8a95;
 
   --bg: #fff;         /* the page itself is white */
-  --card: #e4e4ea;    /* content sits on it in grey cards */
-  --card-soft: #eeeef2;
+  --card: #f6f6f8;    /* content sits on it in grey cards - chosen by eye 2026-09-12 */
+  --card-soft: #f8f8f9;
   --panel: #fff;      /* panels nested inside a card go back to white */
-  --border: #d2d2da;
+  --border: #ebebef;
 
-  --sans: system-ui, "Segoe UI", Roboto, sans-serif;
-  --mono: ui-monospace, Consolas, monospace;
-  /* The wordmark and the home page doors only; the rest of the site stays on
-     the system sans. Falls back to it if the font never loads. */
-  --display: "Plus Jakarta Sans", system-ui, "Segoe UI", Roboto, sans-serif;
+  /* One face for everything - body, headings, wordmark, course codes - so
+     the three names below are the same stack. Falls back to the system
+     sans if the font never loads. */
+  --sans: "Plus Jakarta Sans", system-ui, "Segoe UI", Roboto, sans-serif;
+  --mono: var(--sans);
+  --display: var(--sans);
 
   color-scheme: light;
   font: 16px/1.55 var(--sans);
@@ -166,10 +167,8 @@ th, td {
 }
 thead th { background: var(--card); }
 tbody tr:last-child td { border-bottom: none; }
-tbody tr:hover { background: var(--panel); }
 td a + a::before { content: ", "; color: var(--text); }
 td.empty { padding: 2.5rem 1rem; text-align: center; }
-tbody tr:hover td.empty { background: var(--card); }
 
 /* ------------------------------------------------------------ notices */
 
@@ -213,32 +212,25 @@ tbody tr:hover td.empty { background: var(--card); }
 nav .links { display: flex; gap: 2rem; align-items: center; }
 
 @media (max-width: 720px) {
+  /* The page line and its chevrons, read at arm's length. */
+  .results-head .count { font-size: .92rem; }
+  .pager-top .step, .pager .step { width: 1.75rem; height: 2.4rem; }
+  .pager-top .step + .step { margin-left: .6rem; }   /* thumbs need more room between the two than a mouse does */
+  .pager-top .step svg, .pager .step svg { width: 19px; height: 19px; }
+  .pager { gap: 1rem; }
+  .pager-top { margin: -.5rem 0 -.5rem .5rem; }   /* a clear space between the number and the first chevron */
   table { display: block; overflow-x: auto; }
   .filters input { min-width: 0; width: 100%; }
 
-  /* The wordmark takes its own line and the links share the next one, evenly
-     spaced. Left as a single wrapping flex row the links bunched under the
-     brand at odd intervals. */
-  nav {
-    padding: 1rem 1rem .75rem; gap: .5rem;
-    flex-direction: column; align-items: stretch; text-align: center;
-  }
-  nav .brand { margin-right: 0; font-size: 1.25rem; }
-  /* The four links wrap rather than forcing the header wider than the screen:
-     on a 320px phone "Schedule Builder ... About" overflowed by 18px. */
-  nav .links {
-    display: grid; grid-template-columns: repeat(auto-fit, minmax(4.5rem, 1fr));
-    gap: .35rem; justify-items: center; width: 100%;
-  }
-  nav a:not(.brand) { font-size: .72rem; letter-spacing: .04em; }
-}
-@media (max-width: 400px) {
-  nav .brand { font-size: 1.1rem; }
-  .brand-mark { height: 1.2em; }
-  nav a:not(.brand) { font-size: .68rem; letter-spacing: .02em; }
-  /* Five links no longer fit one row; a centred wrap keeps whatever spills
-     onto the second row in the middle rather than stranded at the left. */
-  nav .links { display: flex; flex-wrap: wrap; justify-content: center; gap: .3rem .9rem; }
+  /* On a phone the banner is a slim strip: the wordmark at the left, which
+     is the way home, and Sign in / Account at the right. The page links go;
+     the home page's doors and the back arrows cover them. */
+  nav { padding: 1rem 1rem .6rem; gap: .5rem; justify-content: space-between; }
+  nav .brand { font-size: 1.3rem; margin-right: auto; }
+  .brand-mark { height: 1.35em; }
+  nav .links a:not(.account-link) { display: none; }
+  nav .links { gap: 0; }
+  nav a.account-link { font-size: .8rem; letter-spacing: .05em; }
 }
 
 /* ============================================================== home */
@@ -518,9 +510,8 @@ main:has(> .hero) {
   position: relative;
   border: 1px solid var(--border); border-radius: 11px;
   background: var(--panel);
-  transition: border-color .13s ease, box-shadow .13s ease;
+  transition: border-color .13s ease;
 }
-.section-card:hover { box-shadow: 0 2px 12px rgb(0 0 0 / .07); }
 .sc-row {
   display: block; padding: .85rem 1.1rem;
   border-bottom: 1px solid var(--border); color: var(--text);
@@ -533,8 +524,10 @@ main:has(> .hero) {
   padding-right: 2.6rem; padding-left: 2.6rem;
   border-radius: 10px 10px 0 0;
 }
+/* Inline, so the link is the code itself and not the whole width of the
+   card's top row: hovering beside it should not offer the course. */
 .sc-code {
-  display: block; font-family: var(--mono);
+  display: inline-block; font-family: var(--mono);
   font-size: 1.25rem; font-weight: 700; color: var(--crimson);
   letter-spacing: -.01em;
 }
@@ -589,10 +582,6 @@ main:has(> .hero) {
 /* No overflow cap here: it would clip the tooltip a course code raises. Cards
    sit one per row, so a long prerequisite string costs height, not layout. */
 .sc-prereq p { margin: .3rem 0 0; font-size: .84rem; line-height: 1.45; }
-/* The course page's professors table: white rows inside the grey panel. */
-.teachers { margin-top: 1.25rem; }
-.teachers table { margin: .5rem 0 0; background: var(--panel); }
-.teachers .num { text-align: right; }
 
 .sc-label {
   font-size: .66rem; font-weight: 700; text-transform: uppercase;
@@ -623,16 +612,35 @@ main:has(> .hero) {
 
 /* ============================================================== paging */
 
-.pager { display: flex; justify-content: center; align-items: center; gap: 1rem; margin: 1.5rem 0 2rem; }
-.pager button {
-  font: inherit; font-size: .78rem; font-weight: 700;
-  text-transform: uppercase; letter-spacing: .05em;
-  padding: .6rem 1.4rem; border-radius: 999px; cursor: pointer;
-  background: var(--panel); border: 1px solid var(--crimson); color: var(--crimson);
+/* The foot of the list: a chevron either side of "12 / 311", the same
+   bare chevrons as at the head, so the two ends read as one control. */
+.pager { display: flex; justify-content: center; align-items: center; gap: .5rem; margin: 1.5rem 0 2rem; }
+.pager-at { font-size: .85rem; color: var(--label); font-variant-numeric: tabular-nums; }
+/* The head of the list: the count on the left, two chevron steps on the
+   right - the compact form of the pager at the foot, quiet enough to sit
+   beside a line of grey text and narrow enough to share a phone's width. */
+.results-head { display: flex; align-items: center; justify-content: flex-start; gap: 0; margin: 0 0 .75rem; }
+.results-head .count { margin: 0; font-variant-numeric: tabular-nums; display: inline-grid; white-space: nowrap; }
+.results-head .count > span { grid-area: 1 / 1; }
+.count-widest { visibility: hidden; }
+/* The site-wide nav rule caps a nav's width and centres it; this one is a pair of buttons at the row's end. */
+.pager-top { display: flex; gap: 0; flex-shrink: 0; max-width: none; padding: 0; }
+/* The row is as wide as the cards, and the chevrons sit in the column the
+   cards' own corner buttons (+) occupy, the same distance in from the edge. */
+.with-cart .results-head { max-width: 98%; }
+
+/* Bare chevrons. The buttons keep a 2rem tap target, but the negative
+   margin stops that height from opening the row: the cards start exactly
+   where they did when the row held only the count. */
+.pager-top { margin: -.5rem 0 -.5rem -.25rem; }   /* vertical: keeps the 2rem buttons from opening the row; left: eats most of the first button's inner inset so the chevron sits a word-space from the number */
+.pager-top .step, .pager .step {
+  width: 1.5rem; height: 2rem; padding: 0; display: grid; place-items: center;   /* narrow, so the pair reads as one control */
+  background: none; border: 0; border-radius: 7px; color: var(--crimson); cursor: pointer;
+  transition: opacity .13s ease;
 }
-.pager button:hover:not(:disabled) { background: var(--crimson-l); }
-.pager button:disabled { opacity: .35; cursor: default; border-color: var(--border); color: var(--label); }
-.pager-at { font-size: .82rem; color: var(--label); font-variant-numeric: tabular-nums; }
+.pager-top .step:hover:not(:disabled), .pager .step:hover:not(:disabled) { opacity: .7; }
+.pager-top .step:focus-visible, .pager .step:focus-visible { outline: 2px solid var(--crimson); outline-offset: 0; }
+.pager-top .step:disabled, .pager .step:disabled { opacity: .3; color: var(--label); cursor: default; }
 
 /* A full section is a different answer from a nearly empty one, so it does not
    share the neutral grey used for merely quiet fields. */
@@ -648,6 +656,7 @@ main:has(> .hero) {
 .modal::backdrop { background: rgb(0 0 0 / .35); }
 .modal-form { display: flex; flex-direction: column; gap: .9rem; padding: 1.5rem 1.6rem; }
 .modal-form h2 { margin: 0; font-size: 1.15rem; }
+.modal-form h2:focus { outline: none; }   /* it takes the focus when the dialog opens, so no field springs a keyboard or a picker */
 .modal-form label {
   display: flex; flex-direction: column; gap: .35rem;
   font-size: .7rem; font-weight: 700; text-transform: uppercase;
@@ -656,10 +665,33 @@ main:has(> .hero) {
 .modal-form input, .modal-form select {
   font: inherit; font-size: .92rem; padding: .6rem .8rem;
   border: 1px solid var(--border); border-radius: 7px;
-  background: var(--panel); color: var(--text-h);
+  background: var(--card); color: var(--text-h);
   text-transform: none; letter-spacing: normal;
 }
 .modal-times { display: grid; grid-template-columns: 1fr 1fr; gap: .8rem; }
+
+/* The days a break applies to: a row of toggles, one per day, the box itself
+   kept for the keyboard and screen readers and the letter drawn as the switch. */
+.days { border: none; margin: 0; padding: 0; min-width: 0; }
+.days legend {
+  padding: 0; margin-bottom: .35rem;
+  font-size: .7rem; font-weight: 700; text-transform: uppercase; letter-spacing: .07em; color: var(--label);
+}
+.days { display: flex; flex-wrap: wrap; gap: .35rem; }
+.days legend { flex-basis: 100%; }
+.day-toggle { position: relative; margin: 0; }
+.day-toggle input { position: absolute; opacity: 0; width: 1px; height: 1px; margin: 0; }
+.day-toggle span {
+  display: inline-flex; align-items: center; justify-content: center;
+  min-width: 2.3rem; height: 2.3rem; padding: 0 .5rem; border-radius: 999px;
+  border: 1px solid var(--border); background: var(--panel); color: var(--text);
+  font-size: .85rem; font-weight: 700; cursor: pointer; user-select: none;
+  transition: background .12s ease, color .12s ease, border-color .12s ease;
+}
+.day-toggle input:checked + span { background: var(--crimson); border-color: var(--crimson); color: #fff; }
+.day-toggle input:focus-visible + span { outline: 2px solid var(--crimson); outline-offset: 2px; }
+.days-hint { display: none; margin-left: .4rem; text-transform: none; letter-spacing: 0; font-weight: 600; color: var(--crimson); }
+.days-missing .days-hint { display: inline; }
 .modal-actions { display: flex; justify-content: flex-end; gap: .6rem; margin-top: .3rem; }
 .modal-actions .btn { font-size: .75rem; padding: .6rem 1.3rem; }
 
@@ -698,7 +730,9 @@ td form { display: inline; }
 /* No align-items: start here. The cart column must STRETCH to the height of the
    results beside it, because a sticky box can only travel inside its parent -
    a content-height column gives it nowhere to go. */
-.with-cart { display: grid; grid-template-columns: 1fr 21rem; gap: 1.5rem; }
+/* Chosen by eye (2026-09-12): the cards a touch short of their column. */
+.with-cart { display: grid; grid-template-columns: minmax(0, 1fr) 21rem; gap: 1.5rem; }
+.with-cart .section-cards { max-width: 98%; }
 
 .cart {
   position: sticky; top: 1rem;
@@ -723,11 +757,6 @@ td form { display: inline; }
 .cart-title {
   font-size: .72rem; font-weight: 700; text-transform: uppercase;
   letter-spacing: .07em; color: var(--label);
-}
-.cart-count {
-  min-width: 1.6rem; padding: .12rem .5rem; border-radius: 999px;
-  background: var(--crimson); color: #fff;
-  font-size: .82rem; font-weight: 700; text-align: center;
 }
 
 /* The list is the only part that scrolls, so the heading and the button stay
@@ -755,6 +784,8 @@ td form { display: inline; }
 .cart-list li:last-child { border-bottom: none; }
 .cart-what { display: flex; align-items: baseline; gap: .5rem; }
 .cart-code { font-family: var(--mono); font-weight: 700; font-size: .92rem; color: var(--crimson); }
+/* A class's code is its course page; it looks the same until the mouse is on it. */
+
 .cart-sec { font-size: .68rem; font-weight: 700; text-transform: uppercase;
             letter-spacing: .05em; color: var(--label); }
 .cart-title-line { margin: .1rem 0 0; font-size: .82rem; color: var(--text-h); }
@@ -779,6 +810,8 @@ td form { display: inline; }
    between the two lists, not at the top of the box. */
 .cart-first { margin-top: 0; padding-top: 0; border-top: none; }
 .cart-courses { margin-top: .9rem; padding-top: .8rem; border-top: 1px solid var(--border); }
+/* With no breaks panel above it (a UOnline schedule), the list starts at the top. */
+.cart-body > .cart-courses:first-child { margin-top: 0; padding-top: 0; border-top: none; }
 .cart-breaks-head {
   display: flex; align-items: center; justify-content: space-between;
   gap: .5rem; margin-bottom: .4rem;
@@ -817,6 +850,30 @@ td form { display: inline; }
   border-radius: 999px; background: var(--crimson); color: #fff; font-size: .72rem;
 }
 
+/* Back to top: a small white disc with a red chevron, bottom-left so the
+   sticky cart on the right never covers it. Faded and inert until the page
+   has been scrolled a way down, then it rises in. */
+.to-top {
+  /* Just outside the cards' left edge on a wide screen - the content column
+     is 72rem centred with 1.5rem padding, so the cards start at
+     50% - 34.5rem; the disc's right edge sits 4.75rem before that - and at
+     the viewport's edge when there is no room outside the column. */
+  position: fixed; left: max(1.25rem, calc(50% - 42rem)); bottom: 1.25rem; z-index: 40;
+  width: 2.75rem; height: 2.75rem; padding: 0; border-radius: 50%;
+  display: grid; place-items: center;
+  background: var(--panel); color: var(--crimson);
+  border: 1px solid var(--border); box-shadow: 0 1px 2px rgb(0 0 0 / .03);
+  cursor: pointer;
+  opacity: 0; transform: translateY(.5rem); pointer-events: none;
+  transition: opacity .2s ease, transform .2s ease, border-color .13s ease, box-shadow .13s ease;
+}
+.to-top.on { opacity: 1; transform: none; pointer-events: auto; }
+.to-top:hover { border-color: var(--crimson); box-shadow: 0 1px 3px rgb(0 0 0 / .05); }
+.to-top:focus-visible { outline: 2px solid var(--crimson); outline-offset: 2px; }
+@media (prefers-reduced-motion: reduce) {
+  .to-top { transition: none; transform: none; }
+}
+
 @media (max-width: 900px) {
   .tabs {
     display: flex; position: fixed; left: 0; right: 0; bottom: 0; z-index: 50;
@@ -825,6 +882,9 @@ td form { display: inline; }
   }
   /* Room for the bar, so the last card is not sitting underneath it. */
   main { padding-bottom: 5rem; }
+  /* No back-to-top disc on a phone: the tab bar already owns the bottom
+     edge, and a flick of the thumb gets to the top. */
+  .to-top { display: none; }
   .with-cart { grid-template-columns: 1fr; }
   /* The filters drive the results, so they belong to that tab alone. */
   form.on-cart .filters { display: none; }
@@ -853,31 +913,26 @@ td form { display: inline; }
   font-weight: 600;
   cursor: pointer;
 }
+
 .course-ref:hover, .course-ref:focus-visible { text-decoration: underline; }
 
 /* Drawn here rather than by the browser: the native title attribute waits about
    a second, which is long enough that most people never discover it. */
-.course-ref::after, .building::after {
+.course-ref::after {
   content: attr(data-title);
   position: absolute; bottom: calc(100% + .35rem); left: 50%;
-  transform: translateX(-50%);
+  /* Centred on the code, then nudged by however much the script finds it
+     hanging off the screen - a bubble on a code near the edge would be cut. */
+  transform: translateX(calc(-50% + var(--tip-shift, 0px)));
   display: none; z-index: 30;
   padding: .35rem .6rem; border-radius: 6px;
   background: var(--crimson); color: #fff;
   font-size: .78rem; font-weight: 600; line-height: 1.3;
-  white-space: normal; width: max-content; max-width: 22rem; text-align: center;
+  white-space: normal; width: max-content; max-width: min(22rem, calc(100vw - 1.5rem)); text-align: center;
   box-shadow: 0 2px 10px rgb(0 0 0 / .12);
   pointer-events: none;
 }
-.course-ref:hover::after, .course-ref:focus-visible::after,
-.building:hover::after, .building:focus-visible::after { display: block; }
-
-/* A building code in a schedule: an abbreviation, so it reads as one, with the
-   full name drawn the same way. Names run long, so this one is allowed to wrap. */
-.building {
-  position: relative; display: inline-block;
-  text-decoration: underline dotted; text-underline-offset: .15em; cursor: help;
-}
+.course-ref:hover::after, .course-ref:focus-visible::after, .course-ref.open::after { display: block; }
 
 /* The professor cards stack one per row. */
 #results .prof-card + .prof-card { margin-top: 1rem; }
@@ -904,12 +959,12 @@ td form { display: inline; }
    block is already crimson - so conflicts get a brighter red plus an outline,
    which reads as wrong rather than merely as another class. */
 .block-clash {
-  background: #d92038;
-  outline: 2px solid #7c0d1c;
+  background: #ef3b2f;
+  outline: 2px solid #7a0000;
   outline-offset: -2px;
   z-index: 2;
 }
-.cart-clash { background: var(--crimson-l); box-shadow: inset 3px 0 0 var(--crimson); padding-left: .5rem; }
+.cart-clash { background: var(--crimson-l); }
 .cart-clash .cart-code { color: var(--crimson-d); }
 
 /* The panel on a course page is prose, so its codes need a little more air
@@ -939,6 +994,9 @@ td form { display: inline; }
   font-size: 1.8rem; letter-spacing: -.02em; line-height: 1.15;
 }
 .page-sub { margin: .3rem 0 0; font-size: .9rem; color: var(--label); }
+/* A heading that opens with a round letter looks indented beside a straight
+   one below it, though the ink lines up; a pixel to the left settles the eye. */
+.page-head h1.round-start { margin-left: -1px; }
 
 /* A back arrow on the heading's line: quiet until hovered. Every page with a
    way back uses this one, as a link or as a history.back() button. */
@@ -976,7 +1034,8 @@ td form { display: inline; }
 @media (max-width: 640px) {
   .course-row { gap: .6rem; padding: .7rem .15rem; }
   .course-code { font-size: .85rem; }
-  .course-title { font-size: .92rem; }
+  /* Wrapped rather than cut off with an ellipsis: on a phone most titles do not fit one line. */
+  .course-title { font-size: .92rem; white-space: normal; overflow: visible; text-overflow: clip; line-height: 1.3; }
 }
 
 /* ====================================================== account pages */
@@ -1010,10 +1069,7 @@ label.check {
 
 /* ====================================================== the account page */
 
-.account-page { max-width: 32rem; }
-.account-page .panel .btn { margin-top: .9rem; }
-.account-figure { margin: 0 0 .35rem; font-size: 1.05rem; color: var(--text); }
-.account-figure strong { font-size: 1.7rem; font-weight: 700; color: var(--text-h); margin-right: .3rem; }
+.account-page { max-width: 32rem; margin: 0 auto; text-align: center; }
 .account-row { margin: 1.25rem 0 2.25rem; }
 /* Deleting the account is a real action but a rare one: a closed disclosure
    at the foot of the page, not a red box competing with the schedule. */
@@ -1033,8 +1089,8 @@ label.check {
    small enough that "CHIN" fits on a line of its own. */
 @media (max-width: 480px) {
   .week .block { padding: .2rem .2rem; }
-  .block-label { font-size: .58rem; }
-  .block-time { font-size: .52rem; }
+  .block-label { font-size: .64rem; }
+  .block-time { font-size: .56rem; }
 }
 
 /* ---------------------------------------------------- the schedule home */
@@ -1068,7 +1124,7 @@ label.check {
 .sched-row:first-child { border-radius: 11px 11px 0 0; }
 .sched-row:last-child { border-radius: 0 0 11px 11px; }
 .sched-row + .sched-row { border-top: 1px solid var(--border); }
-.sched-row:hover { background: #d6d6de; }   /* a shade darker than the card, to compare against white */
+.sched-row:hover { background: #d6d6de; }
 .sched-row form { margin: 0; min-width: 0; }
 .sched-hit {
   display: grid; grid-template-columns: auto minmax(0, 1fr); gap: .9rem; align-items: center;
@@ -1112,3 +1168,25 @@ label.check {
 }
 .link-btn:hover { color: var(--crimson); }
 .link-btn.danger:hover { color: #9a3412; }
+
+/* The line under Export to calendar: quiet, and no wider than a sentence. */
+.ics-note { max-width: 26rem; margin-left: auto; margin-right: auto; font-size: .85rem; line-height: 1.45; }
+
+/* =================================================== phones: readability */
+@media (max-width: 720px) {
+  /* The smallest labels come up to a readable size. */
+  .sc-label, .sc-section, .sc-units, .unit, .class-code { font-size: .72rem; }
+  .week .hour { font-size: .72rem; }
+
+  /* The built schedule's table reads as stacked rows instead of scrolling
+     sideways: no header row, and each class as one wrapping line -
+     "CS 2420 · 001 · Daniel Kopta · TuTh/02:00PM-03:20PM · WEB L103". */
+  table { display: block; overflow: visible; }
+  thead { display: none; }
+  tbody { display: block; }
+  tbody tr { display: flex; flex-wrap: wrap; align-items: baseline; gap: .15rem .5rem; padding: .7rem .6rem; border-bottom: 1px solid var(--border); }
+  tbody tr:last-child { border-bottom: none; }
+  td { display: inline; padding: 0; border: none; }
+  td:not(:first-child)::before { content: "·"; margin-right: .5rem; color: var(--label); }
+
+}

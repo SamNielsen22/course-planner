@@ -117,7 +117,7 @@ public sealed class Browser(HttpClient client)
     public async Task<List<string>> Cart()
     {
         var doc = await Page("/builder?handler=Cart");
-        return doc.DocumentNode.SelectNodes("//span[@class='cart-code']")?.Select(n => n.InnerText.Trim()).ToList() ?? [];
+        return doc.DocumentNode.SelectNodes("//a[@class='cart-code']")?.Select(n => n.InnerText.Trim()).ToList() ?? [];
     }
 }
 
@@ -149,20 +149,54 @@ public sealed class Catalogue(string path)
     }
 
     /// <summary>The term the builder browses: the newest one with sections.</summary>
+    /// <summary>Terms the site keeps off its pickers (Terms:Hidden in the site's appsettings.json) - a schedule crawled ahead of registration.</summary>
+    private static readonly HashSet<string> Hidden =
+        System.Text.Json.JsonDocument.Parse(File.ReadAllText(Path.Combine(Site.RepoRoot, "Web", "appsettings.json"))).RootElement
+            .TryGetProperty("Terms", out var terms) && terms.TryGetProperty("Hidden", out var hidden)
+            ? hidden.EnumerateArray().Select(e => e.GetString()!).ToHashSet()
+            : [];
+
+    /// <summary>The newest term the site offers: the newest with sections, hidden ones aside.</summary>
     public string NewestTerm()
     {
         using var db = Open();
-        return Pages.Terms.NewestFirst(db.Query<string>("SELECT DISTINCT term FROM sections")).First();
+        return Pages.Terms.NewestFirst(db.Query<string>("SELECT DISTINCT term FROM sections").Where(t => !Hidden.Contains(t))).First();
+    }
+
+    /// <summary>The newest offered term with sections on a campus: the registrar publishes the Asia Campus list for a new term later than the main one.</summary>
+    public string NewestTermOn(string campus)
+    {
+        using var db = Open();
+        return Pages.Terms.NewestFirst(db.Query<string>("SELECT DISTINCT term FROM sections WHERE campus = @campus", new { campus }).Where(t => !Hidden.Contains(t))).First();
     }
 
     public Section Timed(string term) => One("term = @term AND times LIKE '%/%'", new { term });
     public Section OnAsiaCampus(string term) => One("term = @term AND campus = 'uac' AND times LIKE '%/%'", new { term });
+    public Section OnUOnline(string term) => One("term = @term AND campus = 'online'", new { term });
     public Section OnSaturday(string term) => One("term = @term AND times LIKE 'Sa/%'", new { term });
     public Section OnWeekdaysOnly(string term) => One("term = @term AND times LIKE 'TuTh/%'", new { term });
     public Section WithDayRange(string term) => One("term = @term AND times LIKE 'Mo-Th/%'", new { term });
     public Section WithTwoRooms(string term) => One("term = @term AND times LIKE '%; %' AND location LIKE '%, %' AND location NOT LIKE 'CANVAS%'", new { term });
     public Section Online(string term) => One("term = @term AND location = 'CANVAS .' AND times LIKE '%/%'", new { term });
     public Section InBuilding(string term, string code) => One("term = @term AND location LIKE @like AND times LIKE '%/%'", new { term, like = code + " %" });
+
+    /// <summary>
+    /// A full section that can be waited on and has people waiting, and how
+    /// many - from the newest term that has one, since a term just published
+    /// has nobody enrolled yet.
+    /// </summary>
+    public (Section Section, int Waiting) FullWithWaitlist()
+    {
+        using var db = Open();
+        var rows = db.Query($"SELECT {Columns}, waitlist AS Waiting FROM sections WHERE campus = 'main' AND seats_available <= 0 AND has_waitlist = 1 AND waitlist > 0 ORDER BY subject, course_number, section_number").ToList();
+        var term = Pages.Terms.NewestFirst(rows.Select(r => (string)r.Term).Distinct()).FirstOrDefault()
+            ?? throw new InvalidOperationException("no full section has anyone waiting");
+        var row = rows.First(r => (string)r.Term == term);
+        return (new Section((string)row.Term, (string)row.Subject, (string)row.Number, (string)row.Number2, (string?)row.Times, (string?)row.Location), (int)(long)row.Waiting);
+    }
+
+    /// <summary>A full section the class list says cannot be waited on.</summary>
+    public Section FullWithoutWaitlist(string term) => One("term = @term AND seats_available <= 0 AND has_waitlist = 0", new { term });
 
     /// <summary>Two sections of one course that meet at exactly the same time.</summary>
     public (Section A, Section B) SameTimePair(string term)
@@ -189,6 +223,30 @@ public sealed class Catalogue(string path)
             GROUP BY 1, 2, 3 HAVING N >= 2").ToList();
         var pair = rows.GroupBy(r => (string)r.Unid + "|" + (string)r.Term).First(g => g.Count() >= 2).Take(2).ToList();
         return ((string)pair[0].Unid, (string)pair[0].Term, (string)pair[0].Class, (int)(long)pair[0].N, (string)pair[1].Class, (int)(long)pair[1].N);
+    }
+
+    /// <summary>
+    /// A professor whose latest graded term is a summer though most of their
+    /// graded sections are in fall or spring, with that summer term and their
+    /// latest fall-or-spring term.
+    /// </summary>
+    public (string Unid, string SummerTerm, string LatestRegularTerm) ProfessorWhoseLatestTermIsSummer()
+    {
+        using var db = Open();
+        var rows = db.Query(@"
+            SELECT si.instructor_unid AS Unid, sg.term AS Term, COUNT(*) AS N
+            FROM section_grades sg JOIN section_instructors si
+              ON si.term = sg.term AND si.subject = sg.subject AND si.course_number = sg.course_number AND si.section_number = sg.section_number
+            WHERE sg.gpa_avg IS NOT NULL GROUP BY 1, 2").ToList();
+        foreach (var person in rows.GroupBy(r => (string)r.Unid))
+        {
+            var terms = Pages.Terms.NewestFirst(person.Select(r => (string)r.Term));
+            var summer = person.Where(r => Pages.Terms.IsSummer((string)r.Term)).Sum(r => (int)(long)r.N);
+            var regular = person.Where(r => !Pages.Terms.IsSummer((string)r.Term)).Sum(r => (int)(long)r.N);
+            if (Pages.Terms.IsSummer(terms[0]) && regular > summer)
+                return (person.Key, terms[0], terms.First(t => !Pages.Terms.IsSummer(t)));
+        }
+        throw new InvalidOperationException("no professor whose latest graded term is a summer");
     }
 
     /// <summary>A term, class and professor where that class has exactly one graded section.</summary>
@@ -233,6 +291,16 @@ public sealed class Catalogue(string path)
     {
         using var db = Open();
         return db.ExecuteScalar<int>("SELECT COUNT(*) FROM instructors");
+    }
+
+    /// <summary>Someone who teaches but has no published grades on any section.</summary>
+    public string ProfessorWithoutGrades()
+    {
+        using var db = Open();
+        return db.QueryFirst<string>(@"SELECT i.unid FROM instructors i
+            WHERE NOT EXISTS (SELECT 1 FROM section_instructors si JOIN section_grades g
+                              ON g.term = si.term AND g.subject = si.subject AND g.course_number = si.course_number AND g.section_number = si.section_number
+                              WHERE si.instructor_unid = i.unid AND g.gpa_avg IS NOT NULL) LIMIT 1");
     }
 
     public (string Unid, string Name) AnInstructor()

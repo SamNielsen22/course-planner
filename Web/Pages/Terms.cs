@@ -20,6 +20,9 @@ public static class Terms
     public static IReadOnlyList<string> NewestFirst(IEnumerable<string> terms) =>
         terms.OrderByDescending(Key).ToList();
 
+    /// <summary>Summer: shorter, smaller, and not the term most students plan around.</summary>
+    public static bool IsSummer(string term) => term.StartsWith("Summer", StringComparison.Ordinal);
+
     /// <summary>"Fall2026" -> "Fall 2026".</summary>
     public static string Display(string term) =>
         term.Length > 4 ? $"{term[..^4]} {term[^4..]}" : term;
@@ -97,14 +100,22 @@ public static class Campus
 {
     public const string Main = "main";
 
-    /// <summary>Code and name, in the order a chooser lists them.</summary>
-    public static readonly IReadOnlyList<(string Code, string Name)> All =
+    /// <summary>Code and name of every campus the catalogue holds.</summary>
+    private static readonly IReadOnlyList<(string Code, string Name)> Every =
         [(Main, "Main Campus"), ("uac", "Asia Campus"), ("online", "UOnline")];
 
-    /// <summary>A code the site knows, or main - never a typed-in string.</summary>
-    public static string Known(string? code) => All.Any(c => c.Code == code) ? code! : Main;
+    /// <summary>
+    /// The campuses a chooser offers, in order. UOnline is held back for now:
+    /// its sections stay stored and a schedule already on it keeps working,
+    /// but no new one can be started there.
+    /// </summary>
+    public static readonly IReadOnlyList<(string Code, string Name)> All =
+        Every.Where(c => c.Code != "online").ToList();
 
-    public static string Name(string? code) => All.First(c => c.Code == Known(code)).Name;
+    /// <summary>A code the site knows, or main - never a typed-in string.</summary>
+    public static string Known(string? code) => Every.Any(c => c.Code == code) ? code! : Main;
+
+    public static string Name(string? code) => Every.First(c => c.Code == Known(code)).Name;
 
     /// <summary>The campus's name when it is not the main one, which goes unsaid.</summary>
     public static string? Label(string? code) => Known(code) == Main ? null : Name(code);

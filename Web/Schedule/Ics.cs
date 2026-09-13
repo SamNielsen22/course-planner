@@ -95,31 +95,44 @@ public static class Ics
     {
         // A meeting that ends before it starts is a registrar typo (fourteen
         // sections, all "…AM-01:00AM"); a calendar would refuse it.
-        var days = Days.Where(d => meeting.DayCodes.Contains(d.Code)).ToList();
-        if (days.Count == 0 || meeting.End <= meeting.Start) return;
+        if (meeting.End <= meeting.Start) return;
 
-        // The first class is the first day of term that falls on a meeting day.
-        var first = dates.FirstDay;
-        while (days.All(d => d.Day != first.DayOfWeek)) first = first.AddDays(1);
-        if (first > dates.LastDay) return;
+        // One event per weekday, each repeating on that day alone, rather than
+        // one event with BYDAY=TU,TH: the iPhone's Calendar took the combined
+        // rule as its first day only, and a Tuesday-Thursday class landed on
+        // Tuesdays. Separate events say the same thing in a form every
+        // calendar reads alike.
+        foreach (var day in Days.Where(d => meeting.DayCodes.Contains(d.Code)))
+        {
+            // The first class is the first day of term that falls on this day.
+            var first = dates.FirstDay;
+            while (first.DayOfWeek != day.Day) first = first.AddDays(1);
+            if (first > dates.LastDay) continue;
 
-        Line(text, "BEGIN:VEVENT");
-        Line(text, $"UID:{section.Key.Replace('|', '-').Replace(" ", "")}-{index + 1}@utahcoursecompass.com");
-        Line(text, "DTSTAMP:" + stamp);
-        Line(text, $"DTSTART;TZID={zone.Id}:{Local(first, meeting.Start)}");
-        Line(text, $"DTEND;TZID={zone.Id}:{Local(first, meeting.End)}");
-        Line(text, $"RRULE:FREQ=WEEKLY;BYDAY={string.Join(',', days.Select(d => d.ByDay))};UNTIL={Until(dates.LastDay, zone)}");
-        foreach (var off in dates.DaysOff)
-            if (off >= first && off <= dates.LastDay && days.Any(d => d.Day == off.DayOfWeek))
-                Line(text, $"EXDATE;TZID={zone.Id}:{Local(off, meeting.Start)}");
+            Line(text, "BEGIN:VEVENT");
+            Line(text, $"UID:{section.Key.Replace('|', '-').Replace(" ", "")}-{index + 1}-{day.ByDay}@utahcoursecompass.com");
+            Line(text, "DTSTAMP:" + stamp);
+            Line(text, $"DTSTART;TZID={zone.Id}:{Local(first, meeting.Start)}");
+            Line(text, $"DTEND;TZID={zone.Id}:{Local(first, meeting.End)}");
+            Line(text, $"RRULE:FREQ=WEEKLY;BYDAY={day.ByDay};UNTIL={Until(dates.LastDay, zone)}");
+            foreach (var off in dates.DaysOff)
+                if (off >= first && off <= dates.LastDay && off.DayOfWeek == day.Day)
+                    Line(text, $"EXDATE;TZID={zone.Id}:{Local(off, meeting.Start)}");
 
-        Line(text, "SUMMARY:" + Escape($"{section.Code}: {section.Title}"));
+            Line(text, "SUMMARY:" + Escape($"{section.Code}: {section.Title}"));
 
-        var place = buildings.Resolve(room);
-        if (Where(room, place) is { } where) Line(text, "LOCATION:" + Escape(where));
+            var place = buildings.Resolve(room);
+            if (Where(room, place) is { } where) Line(text, "LOCATION:" + Escape(where));
 
-        Line(text, $"URL:{siteUrl}/course/{Uri.EscapeDataString(section.Subject)}/{Uri.EscapeDataString(section.CourseNumber)}");
-        Line(text, "END:VEVENT");
+            Line(text, $"URL:{siteUrl}/course/{Uri.EscapeDataString(section.Subject)}/{Uri.EscapeDataString(section.CourseNumber)}");
+            // A reminder half an hour before each class, as the calendar apps show it.
+            Line(text, "BEGIN:VALARM");
+            Line(text, "ACTION:DISPLAY");
+            Line(text, "DESCRIPTION:" + Escape($"{section.Code} in 30 minutes"));
+            Line(text, "TRIGGER:-PT30M");
+            Line(text, "END:VALARM");
+            Line(text, "END:VEVENT");
+        }
     }
 
     /// <summary>

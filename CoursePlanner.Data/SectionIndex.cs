@@ -75,6 +75,7 @@ public class SectionIndex(CourseQueries db)
         var parts = q.Split(' ', 2, StringSplitOptions.RemoveEmptyEntries);
         var head = parts.Length == 2 ? parts[0] : "";
         var tail = parts.Length == 2 ? parts[1] : "";
+        var roman = CourseQueries.RomanTitle(q);   // "calculus 1" also as "calculus I"
 
         const StringComparison Like = StringComparison.OrdinalIgnoreCase;
 
@@ -86,6 +87,7 @@ public class SectionIndex(CourseQueries db)
                 || s.Subject.Contains(q, Like)
                 || s.CourseNumber.Contains(q, Like)
                 || (s.Title?.Contains(q, Like) ?? false)
+                || (roman is not null && (s.Title?.Contains(roman, Like) ?? false))
                 || (s.Subject + " " + s.CourseNumber).Contains(q, Like)
                 || (head.Length > 0 && s.Subject.StartsWith(head, Like)
                     && s.CourseNumber.StartsWith(tail, Like)))

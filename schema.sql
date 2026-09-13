@@ -31,6 +31,16 @@ CREATE TABLE IF NOT EXISTS sections (
   seats_available INTEGER,
   seats_updated   TEXT,
 
+  -- The enrollment side, from the registrar's sections table on the same
+  -- pass: the class number a student registers with, how many may enrol,
+  -- how many have, how many are waiting. has_waitlist is the class list's
+  -- yes/no - a full section with no wait list cannot be waited on.
+  class_number    TEXT,
+  enrollment_cap  INTEGER,
+  enrolled        INTEGER,
+  waitlist        INTEGER,
+  has_waitlist    INTEGER,
+
   PRIMARY KEY (term, subject, course_number, section_number),
   FOREIGN KEY (subject, course_number)
     REFERENCES courses(subject, course_number)

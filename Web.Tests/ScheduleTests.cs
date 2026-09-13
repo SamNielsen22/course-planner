@@ -52,32 +52,133 @@ public class ScheduleTests(Site site) : IClassFixture<Site>
             ?.Select(b => b.GetAttributeValue("data-section", "")).ToList() ?? [];
 
     [Fact]
-    public async Task AGuestBrowsesTheMainCampusUnlessTheyPickAnother()
+    public async Task ResultsComeInOrderOfRelevanceByDefault()
     {
-        var asia = site.Catalogue.OnAsiaCampus(Term);
+        // "CS 2420" typed: that class first, then CS 2420-something, then anything else that matched.
+        var doc = await site.Visitor().Page($"/builder?term={Term}&q=CS%202420&open=false&noClash=false");
+        Assert.Equal("relevance", doc.DocumentNode.SelectSingleNode("//select[@name='sort']/option[@selected]")?.GetAttributeValue("value", ""));
+        var codes = doc.DocumentNode.SelectNodes("//a[contains(@class,'sc-code')]")?.Select(n => System.Text.RegularExpressions.Regex.Replace(n.InnerText, @"\s+", " ").Trim()).ToList() ?? [];
+        Assert.NotEmpty(codes);
+        Assert.Equal("CS 2420", codes[0]);
+        var firstOther = codes.FindIndex(c => c != "CS 2420");
+        if (firstOther >= 0) Assert.DoesNotContain("CS 2420", codes.Skip(firstOther));
+        // A title search puts a title that starts with the words before one that merely contains them.
+        var calc = await site.Visitor().Page($"/builder?term={Term}&q=calculus%201&open=false&noClash=false");
+        var titles = calc.DocumentNode.SelectNodes("//span[@class='sc-title']")?.Select(n => n.InnerText.Trim()).ToList() ?? [];
+        Assert.StartsWith("Calculus I", titles[0]);
+    }
+
+    [Fact]
+    public async Task AFullSectionSaysHowManyAreWaiting()
+    {
+        static List<string> Facts(HtmlDocument doc, string subject, string number, string section) =>
+            doc.DocumentNode.SelectNodes($"//article[.//a[contains(@class,'sc-code')][contains(normalize-space(.), '{subject} {number}')]][.//*[contains(@class,'sc-section')][contains(normalize-space(.), '{section}')]]//span[@class='full']")
+               ?.Select(n => System.Text.RegularExpressions.Regex.Replace(HtmlEntity.DeEntitize(n.InnerText), @"\s+", " ").Trim()).ToList() ?? [];
+
+        // Full, with the registrar's count of those waiting - in the newest term anyone is enrolled in.
+        var (waited, waiting) = site.Catalogue.FullWithWaitlist();
+        var term = waited.Term;
+        var doc = await site.Visitor().Page($"/builder?term={term}&q={Uri.EscapeDataString(waited.Code)}&open=false&noClash=false");
+        Assert.Contains($"Full · waitlist {waiting}", Facts(doc, waited.Subject, waited.Number, waited.Number2));
+
+        // Full, and the class list says it cannot be waited on.
+        var closed = site.Catalogue.FullWithoutWaitlist(term);
+        doc = await site.Visitor().Page($"/builder?term={term}&q={Uri.EscapeDataString(closed.Code)}&open=false&noClash=false");
+        Assert.Contains("Full · no waitlist", Facts(doc, closed.Subject, closed.Number, closed.Number2));
+    }
+
+    [Fact]
+    public async Task TheBuilderOffersABackToTopButtonAndOtherPagesDoNot()
+    {
+        var builder = await site.Visitor().Page($"/builder?term={Term}&open=false&noClash=false");
+        var button = builder.DocumentNode.SelectSingleNode("//button[@id='to-top']");
+        Assert.NotNull(button);
+        Assert.Equal("Back to top", button.GetAttributeValue("aria-label", ""));
+        Assert.Null((await site.Visitor().Page("/courses")).DocumentNode.SelectSingleNode("//button[@id='to-top']"));
+    }
+
+    [Fact]
+    public async Task ALongListHasTheStepsAtBothEnds()
+    {
+        var doc = await site.Visitor().Page($"/builder?term={Term}&open=false&noClash=false");
+        var pagers = doc.DocumentNode.SelectNodes("//nav[contains(@class,'pager')]") ?? new HtmlNodeCollection(null);
+        Assert.Equal(2, pagers.Count);
+        Assert.Contains("pager-top", pagers[0].GetAttributeValue("class", ""));   // the compact one, above the cards
+        Assert.All(pagers, p => Assert.Equal(2, p.SelectNodes(".//button[@name='pg']")?.Count));
+        // On the first page both "previous" steps are disabled and both "next" steps live.
+        Assert.All(pagers, p => Assert.NotNull(p.SelectNodes(".//button[@name='pg']")![0].Attributes["disabled"]));
+        Assert.All(pagers, p => Assert.Null(p.SelectNodes(".//button[@name='pg']")![1].Attributes["disabled"]));
+        // The chevrons carry their meaning for a screen reader.
+        Assert.Equal("Previous page", pagers[0].SelectNodes(".//button")![0].GetAttributeValue("aria-label", ""));
+    }
+
+    [Fact]
+    public async Task ABlankSearchLeadsWithAFullyFurnishedCard()
+    {
+        var doc = await site.Visitor().Page($"/builder?term={Term}&open=false&noClash=false");
+        var first = doc.DocumentNode.SelectSingleNode("//article[contains(@class,'section-card')]");
+        Assert.NotNull(first);
+        // A meeting time, prerequisites that name courses, and both grade figures.
+        Assert.Matches(@"\d:\d\d", first.SelectSingleNode(".//p[@class='sc-when']")?.InnerText ?? "");
+        Assert.NotEmpty(first.SelectNodes(".//a[contains(@class,'course-ref')]") ?? new HtmlNodeCollection(null));
+        var figures = first.SelectNodes(".//span[@class='sc-value']")?.Select(n => n.InnerText.Trim()).ToList() ?? [];
+        Assert.Equal(2, figures.Count);
+        Assert.All(figures, f => Assert.Matches(@"^\d\.\d\d$", f));
+    }
+
+    [Fact]
+    public async Task ABlankSearchFollowsTheKeptOrder()
+    {
+        // The order the user chose to keep, one key per line, is the order served - on every start.
+        var kept = File.ReadLines(Path.Combine(Site.RepoRoot, "Web", "data", "spotlight-order.txt")).Where(l => l.Length > 0).ToList();
+        Assert.NotEmpty(kept);
+        var term = kept[0].Split('|')[0];
+        var doc = await site.Visitor().Page($"/builder?term={term}&open=false&noClash=false");
+        var served = doc.DocumentNode.SelectNodes("//article[contains(@class,'section-card')]")!
+            .Select(a => (Code: System.Text.RegularExpressions.Regex.Replace(a.SelectSingleNode(".//a[contains(@class,'sc-code')]")!.InnerText, @"\s+", " ").Trim(),
+                          Section: a.SelectSingleNode(".//span[@class='sc-section']")!.InnerText.Trim().Replace("Section ", "")))
+            .Select(x => $"{term}|{x.Code.Substring(0, x.Code.LastIndexOf(' '))}|{x.Code.Substring(x.Code.LastIndexOf(' ') + 1)}|{x.Section}")
+            .ToList();
+        // Every served card is on the list in list order, allowing for a kept section that has since been cancelled.
+        var expected = kept.Where(k => served.Contains(k)).Take(served.Count).ToList();
+        Assert.Equal(expected, served);
+    }
+
+    [Fact]
+    public async Task ABlankSearchIsShuffledOnceForTheServersLifetime()
+    {
+        static List<string> Codes(HtmlDocument doc) =>
+            doc.DocumentNode.SelectNodes("//a[contains(@class,'sc-code')]")?.Select(n => System.Text.RegularExpressions.Regex.Replace(n.InnerText, @"\s+", " ").Trim()).ToList() ?? [];
+        var once = Codes(await site.Visitor().Page($"/builder?term={Term}&open=false&noClash=false"));
+        var again = Codes(await site.Visitor().Page($"/builder?term={Term}&open=false&noClash=false"));
+        var byNumber = Codes(await site.Visitor().Page($"/builder?term={Term}&open=false&noClash=false&sort=name"));
+        Assert.NotEmpty(once);
+        Assert.Equal(once, again);               // the same order on every visit while the server is up
+        Assert.NotEqual(byNumber, once);         // and not course-number order
+    }
+
+    [Fact]
+    public async Task AGuestIsOnTheMainCampusAndCannotAddAClassFromAnother()
+    {
+        // The newest term the Asia Campus list is published for; the main list goes up first.
+        var term = site.Catalogue.NewestTermOn("uac");
+        var asia = site.Catalogue.OnAsiaCampus(term);
         var visitor = site.Visitor();
-        var search = $"/builder?term={Term}&q={Uri.EscapeDataString(asia.Code)}&open=false&noClash=false";
+        var search = $"/builder?term={term}&q={Uri.EscapeDataString(asia.Code)}&open=false&noClash=false";
 
-        // Its course, searched as a guest arrives: main campus, so the Incheon section is not offered.
-        var main = await visitor.Page(search);
-        Assert.Equal("main", main.DocumentNode.SelectSingleNode("//select[@name='campus']/option[@selected]")?.GetAttributeValue("value", ""));
-        Assert.DoesNotContain(asia.Number2, Offered(main, asia));
-        Assert.DoesNotContain("Asia Campus", main.DocumentNode.SelectSingleNode("//p[@class='page-sub']")?.InnerText);
+        // A guest's schedule is a main-campus one: no campus to pick, and the Incheon section is not offered.
+        var page = await visitor.Page(search);
+        Assert.Null(page.DocumentNode.SelectSingleNode("//select[@name='campus']"));
+        Assert.DoesNotContain(asia.Number2, Offered(page, asia));
+        Assert.DoesNotContain("Asia Campus", page.DocumentNode.SelectSingleNode("//p[@class='page-sub']")?.InnerText);
+        // Asking for it in the address changes nothing.
+        Assert.DoesNotContain(asia.Number2, Offered(await visitor.Page(search + "&campus=uac"), asia));
 
-        // Picked, the Asia Campus offers its own sections and none of Salt Lake's.
-        var uac = await visitor.Page(search + "&campus=uac");
-        Assert.Contains(asia.Number2, Offered(uac, asia));
-        Assert.All(Offered(uac, asia), n => Assert.StartsWith("3", n));
-        Assert.Contains("Asia Campus", uac.DocumentNode.SelectSingleNode("//p[@class='page-sub']")?.InnerText);
-
-        // One schedule is one campus: a Salt Lake class already in it gives way.
-        await visitor.Add(site.Catalogue.Timed(Term));
+        // A key from another campus, posted straight at the handler, is not for this schedule.
+        var slc = site.Catalogue.Timed(term);
+        await visitor.Add(slc);
         await visitor.Add(asia);
-        Assert.Equal([asia.Code], await visitor.Cart());
-        // And the builder now browses the Asia Campus on its own.
-        var again = await visitor.Page("/builder");
-        Assert.Contains("Asia Campus", again.DocumentNode.SelectSingleNode("//p[@class='page-sub']")?.InnerText);
-        Assert.Contains("Asia Campus", (await visitor.Page("/BuilderSchedule")).DocumentNode.SelectSingleNode("//p[@class='page-sub']")?.InnerText);
+        Assert.Equal([slc.Code], await visitor.Cart());
     }
 
     [Fact]
@@ -120,16 +221,30 @@ public class ScheduleTests(Site site) : IClassFixture<Site>
     }
 
     [Fact]
-    public async Task BuildingCodesCarryTheirFullNames()
+    public async Task RoomsAreShownAsWrittenAndTheCalendarButtonExplainsItselfOnAsk()
     {
         var s = site.Catalogue.InBuilding(Term, "WEB");
         var visitor = site.Visitor();
         await visitor.Add(s);
         var doc = await visitor.Page("/BuilderSchedule");
-        var abbr = doc.DocumentNode.SelectSingleNode("//abbr[@class='building']");
-        Assert.NotNull(abbr);
-        Assert.Equal("WEB", abbr.InnerText.Trim());
-        Assert.Contains("Warnock Engineering", abbr.GetAttributeValue("data-title", ""));
+        // The room as the registrar writes it, with no tooltip on the building code.
+        Assert.Null(doc.DocumentNode.SelectSingleNode("//abbr"));
+        Assert.Contains(s.Location!.Trim(), doc.DocumentNode.SelectNodes("//td")!.Select(td => HtmlEntity.DeEntitize(td.InnerText).Trim()));
+        // The export button, with its one line always under it; the dates paragraph that used to sit there is gone.
+        Assert.Equal("Export to calendar", doc.DocumentNode.SelectSingleNode("//a[@id='ics-button']")?.InnerText.Trim());
+        Assert.Contains("Google Calendar", doc.DocumentNode.SelectSingleNode("//p[@id='ics-note']")?.InnerText);
+        Assert.DoesNotContain("Classes repeat weekly", doc.DocumentNode.InnerText);
+    }
+
+    [Fact]
+    public async Task AnOffCampusPlaceGetsItsAddressInTheCalendar()
+    {
+        // The registrar's code names no University building; the site keeps the address itself.
+        var golf = site.Catalogue.One("term = @term AND location = 'GLENDALE GOLF CRS' AND times LIKE '%/%'", new { term = Term });
+        var visitor = site.Visitor();
+        await visitor.Add(golf);
+        var ics = await (await visitor.Send("/BuilderSchedule?handler=Ics")).Content.ReadAsStringAsync();
+        Assert.Contains(@"LOCATION:Glendale Golf Course\, 1630 W 2100 S\, Salt Lake City\, UT 84119", ics.Replace("\r\n ", ""));
     }
 
     [Fact]
@@ -179,30 +294,38 @@ public class ScheduleTests(Site site) : IClassFixture<Site>
         Assert.DoesNotContain("\n", ics.Replace("\r\n", ""));                       // CRLF only
         Assert.All(ics.Split("\r\n"), line => Assert.True(Encoding.UTF8.GetByteCount(line) <= 75, line));
         Assert.Contains("BEGIN:VTIMEZONE\r\nTZID:America/Denver", ics);
-        Assert.DoesNotContain("DESCRIPTION:", ics);
+        // No description on the events themselves; the only ones belong to the reminders, which every class carries, half an hour before it starts.
+        Assert.Equal(ics.Split("BEGIN:VALARM").Length - 1, ics.Split("DESCRIPTION:").Length - 1);
+        Assert.Equal(ics.Split("BEGIN:VEVENT").Length - 1, ics.Split("TRIGGER:-PT30M").Length - 1);
 
+        // One event per meeting DAY - the iPhone's Calendar takes a multi-day BYDAY as its first day only.
         var events = ics.Split("BEGIN:VEVENT").Skip(1).ToList();
-        var meetings = new[] { range, rooms, online }.Sum(s => Meetings.Parse(s.Times).Count);
-        Assert.Equal(meetings, events.Count);
+        var meetingDays = new[] { range, rooms, online }.Sum(s => Meetings.Parse(s.Times).Sum(m => m.DayCodes.Count));
+        Assert.Equal(meetingDays, events.Count);
 
-        // The day range recurs on every day in it, and skips the term's days off on those days.
+        // The day range gets an event for every day in it, each repeating on that
+        // day alone and skipping the term's days off that fall on it.
         var dates = AcademicCalendar.For(Term)!;
-        var rangeEvent = events.First(e => e.Contains($"SUMMARY:{range.Code}:"));
         var meeting = Meetings.Parse(range.Times)[0];
-        var byDay = string.Join(",", meeting.DayCodes.Select(d => d.ToUpperInvariant()));
-        Assert.Contains($"RRULE:FREQ=WEEKLY;BYDAY={byDay};UNTIL=", rangeEvent);
-        var weekdays = meeting.DayCodes.Select(d => Array.IndexOf(Meeting.Week, d)).Select(i => (DayOfWeek)((i + 1) % 7)).ToHashSet();
-        var first = dates.FirstDay;
-        while (!weekdays.Contains(first.DayOfWeek)) first = first.AddDays(1);
-        var expectedSkips = dates.DaysOff.Count(d => d >= first && d <= dates.LastDay && weekdays.Contains(d.DayOfWeek));
-        Assert.Equal(expectedSkips, rangeEvent.Split("EXDATE;").Length - 1);
+        var rangeEvents = events.Where(e => e.Contains($"SUMMARY:{range.Code}:")).ToList();
+        Assert.Equal(meeting.DayCodes.Count, rangeEvents.Count);
+        foreach (var (code, e) in meeting.DayCodes.Zip(rangeEvents))
+        {
+            Assert.Contains($"RRULE:FREQ=WEEKLY;BYDAY={code.ToUpperInvariant()};UNTIL=", e);
+            var weekday = (DayOfWeek)((Array.IndexOf(Meeting.Week, code) + 1) % 7);
+            var first = dates.FirstDay;
+            while (first.DayOfWeek != weekday) first = first.AddDays(1);
+            var expectedSkips = dates.DaysOff.Count(d => d >= first && d <= dates.LastDay && d.DayOfWeek == weekday);
+            Assert.Equal(expectedSkips, e.Split("EXDATE;").Length - 1);
+        }
 
-        // A two-room section: one event per meeting, each in its own room.
+        // A two-room section: the first meeting's days in the first room, the second's in the second.
         var roomEvents = events.Where(e => e.Contains($"SUMMARY:{rooms.Code}:")).ToList();
-        Assert.Equal(2, roomEvents.Count);
+        var roomMeetings = Meetings.Parse(rooms.Times);
+        Assert.Equal(roomMeetings.Sum(m => m.DayCodes.Count), roomEvents.Count);
         var roomNumbers = rooms.Location!.Split(',').Select(r => r.Trim().Split(' ').Last()).ToList();
-        Assert.Contains($"Room {roomNumbers[0]}", roomEvents[0].Replace("\r\n ", ""));
-        Assert.Contains($"Room {roomNumbers[1]}", roomEvents[1].Replace("\r\n ", ""));
+        Assert.All(roomEvents.Take(roomMeetings[0].DayCodes.Count), e => Assert.Contains($"Room {roomNumbers[0]}", e.Replace("\r\n ", "")));
+        Assert.All(roomEvents.Skip(roomMeetings[0].DayCodes.Count), e => Assert.Contains($"Room {roomNumbers[1]}", e.Replace("\r\n ", "")));
 
         // Online sections say so rather than printing CANVAS.
         Assert.Contains("LOCATION:Online", events.First(e => e.Contains($"SUMMARY:{online.Code}:")));

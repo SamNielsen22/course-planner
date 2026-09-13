@@ -22,7 +22,15 @@ public record Section(
     int? SeatsAvailable,
     string? SeatsUpdated,
     double? GpaAvg,
-    IReadOnlyList<SectionInstructor> Instructors);
+    IReadOnlyList<SectionInstructor> Instructors,
+    // The enrollment side, where the registrar's sections table has been read:
+    // how many are waiting, whether the section can be waited on at all, the
+    // cap, the enrolled, and the class number a student registers with.
+    int? Waitlist = null,
+    bool? HasWaitlist = null,
+    int? EnrollmentCap = null,
+    int? Enrolled = null,
+    string? ClassNumber = null);
 
 // Unid is the identity; Name is only for display. Two people can share a
 // name, so anything that looks an instructor up must use the Unid.
@@ -53,6 +61,20 @@ public class CourseQueries(string connectionString)
     }
 
     /// <summary>Every section of one course in one term.</summary>
+    /// <summary>
+    /// The registrar numbers a sequence in Roman - "Calculus I", "Physics
+    /// for Scientists and Engineers II" - and nobody types that. A query whose
+    /// last word is a small number gets a second form with it in Roman, so
+    /// "calculus 1" finds Calculus I. Null when the query ends in no such number.
+    /// </summary>
+    public static string? RomanTitle(string query)
+    {
+        var at = query.LastIndexOf(' ');
+        if (at < 0 || !int.TryParse(query[(at + 1)..], out var n) || n is < 1 or > 10) return null;
+        string[] roman = ["I", "II", "III", "IV", "V", "VI", "VII", "VIII", "IX", "X"];
+        return query[..at] + " " + roman[n - 1];
+    }
+
     /// <summary>
     /// Courses matching text, from the whole catalogue rather than one term.
     /// The lookup page: you find the class first, then choose the term and
@@ -90,6 +112,7 @@ public class CourseQueries(string connectionString)
                        ELSE c.subject LIKE @Like
                          OR c.course_number LIKE @Like
                          OR c.title LIKE @Like
+                         OR c.title LIKE @RomanLike
                          OR (c.subject || ' ' || c.course_number) LIKE @Like
                          OR (@Head <> '' AND c.subject LIKE @HeadLike AND c.course_number LIKE @TailLike)
                   END
@@ -106,8 +129,8 @@ public class CourseQueries(string connectionString)
                           WHEN c.course_number LIKE @StartsLike THEN 2
                           ELSE 3 END,
                      c.subject, c.course_number;",
-            new { Upper = query.ToUpperInvariant(), Like = $"%{query}%", StartsLike = $"{query}%",
-                  Head = head, HeadLike = $"{head}%", TailLike = $"{tail}%" })
+            new { Upper = query.ToUpperInvariant(), Like = $"%{query}%", RomanLike = $"%{RomanTitle(query) ?? query}%",
+                  StartsLike = $"{query}%", Head = head, HeadLike = $"{head}%", TailLike = $"{tail}%" })
             .Select(r => new Course((string)r.Subject, (string)r.CourseNumber, (string)r.Title,
                                     (string?)r.RequirementDesignation,
                                     r.GpaAvg is double gpa ? gpa : null))
@@ -206,7 +229,8 @@ public class CourseQueries(string connectionString)
         const string sql = @"
             SELECT s.term, s.subject, s.course_number, s.section_number, s.campus, c.title,
                    s.component, s.type, s.units, s.location, s.times,
-                   s.seats_available, s.seats_updated, CAST(g.gpa_avg AS REAL) AS gpa_avg
+                   s.seats_available, s.seats_updated, CAST(g.gpa_avg AS REAL) AS gpa_avg,
+                   s.waitlist, s.has_waitlist, s.enrollment_cap, s.enrolled, s.class_number
             FROM sections s
             JOIN courses c ON c.subject = s.subject AND c.course_number = s.course_number
             -- Grades are a separate source and do not cover every term, so this
@@ -225,6 +249,7 @@ public class CourseQueries(string connectionString)
                    OR s.subject LIKE @Like
                    OR s.course_number LIKE @Like
                    OR c.title LIKE @Like
+                   OR c.title LIKE @RomanLike
                    OR (s.subject || ' ' || s.course_number) LIKE @Like
                    OR (@Head <> '' AND s.subject LIKE @HeadLike
                        AND s.course_number LIKE @TailLike))
@@ -258,6 +283,7 @@ public class CourseQueries(string connectionString)
             CourseNumber = courseNumber,
             Query = query,
             Like = $"%{query}%",
+            RomanLike = $"%{RomanTitle(query) ?? query}%",
             Head = head,
             HeadLike = $"{head}%",
             TailLike = $"{tail}%",
@@ -286,7 +312,12 @@ public class CourseQueries(string connectionString)
             (string?)row.seats_updated,
             (double?)row.gpa_avg,
             instructors.TryGetValue(SectionKey((string)row.subject, (string)row.course_number, (string)row.section_number), out var names)
-                ? names : Array.Empty<SectionInstructor>()
+                ? names : Array.Empty<SectionInstructor>(),
+            (int?)(long?)row.waitlist,
+            (long?)row.has_waitlist is { } waitable ? waitable != 0 : null,
+            (int?)(long?)row.enrollment_cap,
+            (int?)(long?)row.enrolled,
+            (string?)row.class_number
         ));
 
         var after = ToMinutes(startAfter);
@@ -407,28 +438,8 @@ public class CourseQueries(string connectionString)
             return new SectionCard(s.Subject, s.CourseNumber, s.SectionNumber, s.Campus, s.Title,
                                    s.Times, s.Location, s.SeatsAvailable, s.Units, s.Instructors,
                                    courseAverage(s.Subject, s.CourseNumber), averages,
-                                   prereqs.GetValueOrDefault(code));
+                                   prereqs.GetValueOrDefault(code), s.Waitlist, s.HasWaitlist);
         }).ToList();
-    }
-
-    /// <summary>Someone who has taught a course in a section with published grades: how often, and in which terms.</summary>
-    public sealed record CourseTeacher(string Unid, string Name, int Sections, IReadOnlyList<string> Terms);
-
-    /// <summary>Everyone who has taught the course in a graded section - the course page's "who teaches it".</summary>
-    public IReadOnlyList<CourseTeacher> CourseTeachers(string subject, string courseNumber)
-    {
-        using var database = Open();
-        return database.Query(@"
-            SELECT si.instructor_unid AS Unid, p.display_name AS Name, COUNT(*) AS Sections,
-                   GROUP_CONCAT(DISTINCT sg.term) AS Terms
-            FROM section_grades sg
-            JOIN section_instructors si ON si.term = sg.term AND si.subject = sg.subject
-              AND si.course_number = sg.course_number AND si.section_number = sg.section_number
-            JOIN instructors p ON p.unid = si.instructor_unid
-            WHERE sg.subject = @Subject AND sg.course_number = @Number AND sg.gpa_avg IS NOT NULL
-            GROUP BY si.instructor_unid, p.display_name;", new { Subject = subject, Number = courseNumber })
-            .Select(r => new CourseTeacher((string)r.Unid, (string)r.Name, (int)(long)r.Sections, ((string)r.Terms).Split(',')))
-            .ToList();
     }
 
     /// <summary>Every course in the catalogue, in order - the sitemap's list.</summary>
@@ -497,7 +508,6 @@ public class CourseQueries(string connectionString)
                      .OrderBy(p => p.Key, StringComparer.OrdinalIgnoreCase)
                      .Select(p => p.Key).ToList();
     }
-
 
     /// <summary>
     /// How much data the site is standing on, counted rather than written down.
@@ -783,7 +793,8 @@ public record SectionCard(
     string? Times, string? Location, int? SeatsAvailable, int? Units,
     IReadOnlyList<SectionInstructor> Instructors,
     double? CourseAvgGpa, IReadOnlyDictionary<string, double?> InstructorAverages,
-    string? Prerequisites);
+    string? Prerequisites,
+    int? Waitlist = null, bool? HasWaitlist = null);
 
 /// <summary>Catalogue prose for one course.</summary>
 public record CourseInfo(
