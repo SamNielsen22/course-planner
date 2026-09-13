@@ -24,6 +24,10 @@
     <Compile Include="..\Ingest.Schedule\Scraper\DescriptionScraper.cs" Link="Source\DescriptionScraper.cs" />
     <Compile Include="..\Ingest.Schedule\Scraper\CutOffPage.cs" Link="Source\CutOffPage.cs" />
     <Compile Include="..\Ingest.Schedule\Scraper\SectionsTableScraper.cs" Link="Source\SectionsTableScraper.cs" />
+    <Compile Include="..\Ingest.Schedule\Database\GradeLoader.cs" Link="Source\GradeLoader.cs" />
+    <Compile Include="..\Ingest.Schedule\Database\Departments.cs" Link="Source\Departments.cs" />
+    <Compile Include="..\Ingest.Schedule\Database\Titles.cs" Link="Source\Titles.cs" />
+    <None Include="..\Ingest.Schedule\Database\departments.csv" Link="Database\departments.csv" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 
   <ItemGroup>

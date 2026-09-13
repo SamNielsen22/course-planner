@@ -14,14 +14,39 @@ class Program
     const int Summer = 6;
     const int Spring = 4;
 
-    static void Main(string[] args)
+    static int Main(string[] args)
     {
         DbStore.EnsureColumns();
 
-        if (args.Length > 0 && args[0].Equals("seats", StringComparison.OrdinalIgnoreCase))
+        // Besides the crawl, the database chores that used to be Python scripts:
+        //   seats                       refresh enrollment figures for the terms under way
+        //   grades [--db p] csv...      load the GPA csv into the grade tables
+        //   departments [--db p]        give each instructor a department from what they teach
+        //   titles [--db p] [--limit n] fill in full course titles from the description pages
+        var command = args.Length > 0 ? args[0].ToLowerInvariant() : "";
+        var rest = args.Skip(1).ToList();
+        var databasePath = "data/courseplanner.db";
+        var at = rest.IndexOf("--db");
+        if (at >= 0 && at + 1 < rest.Count) { databasePath = rest[at + 1]; rest.RemoveRange(at, 2); }
+
+        switch (command)
         {
-            RefreshSeats();
-            return;
+            case "seats":
+                RefreshSeats();
+                return 0;
+            case "grades":
+                return Ingest.Schedule.Database.GradeLoader.Run(databasePath, rest);
+            case "departments":
+                return Ingest.Schedule.Database.Departments.Run(databasePath);
+            case "titles":
+                var limitAt = rest.IndexOf("--limit");
+                int? limit = limitAt >= 0 && limitAt + 1 < rest.Count && int.TryParse(rest[limitAt + 1], out var n) ? n : null;
+                return Ingest.Schedule.Database.Titles.Run(databasePath, limit);
+            case "":
+                break;
+            default:
+                Console.Error.WriteLine($"unknown command '{args[0]}': expected seats, grades, departments or titles, or nothing for the crawl");
+                return 1;
         }
 
         var termCodes = TermCodesNewestFirst().Take(TermsToScrape).ToList();
@@ -34,6 +59,7 @@ class Program
                 Console.WriteLine($"Crawling {campus} {termCode}");
                 new Crawler().Run(campus, termCode);
             }
+        return 0;
     }
 
     /// <summary>

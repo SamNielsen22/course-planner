@@ -301,7 +301,7 @@ static class DbStore
         //                           in place would answer the wrong question.
         //
         // Nothing is migrated across: every row is reloaded from the csv by
-        // Ingest.Gpa/LoadGpa.py, which is the source of truth.
+        // the `grades` command (GradeLoader), which is the source of truth.
         database.Execute("DROP TABLE IF EXISTS grades");
 
         var oldCourseGrades = database.Query<string>(
