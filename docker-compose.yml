@@ -1,0 +1,38 @@
+# What runs on each web server. Pull a new image and restart with:
+#   docker compose pull && docker compose up -d
+# Roll back by pinning a previous tag in IMAGE_TAG and doing the same.
+#
+# Secrets and paths come from a .env file beside this one, which is NOT
+# committed. Copy .env.example and fill it in on each machine.
+
+services:
+  web:
+    image: ghcr.io/${GITHUB_OWNER}/coursecompass:${IMAGE_TAG:-latest}
+    restart: unless-stopped
+
+    # Bound to localhost: the Cloudflare tunnel is the only route in from
+    # outside, so nothing on the local network can reach the app directly.
+    ports:
+      - "127.0.0.1:5215:8080"
+
+    # The catalogue the collector publishes. Read-only, because only the
+    # collector ever writes it; this machine's rclone pull replaces the file.
+    volumes:
+      - ${CATALOGUE_DIR}:/data:ro
+
+    environment:
+      ASPNETCORE_ENVIRONMENT: Production
+      # Mode=ReadOnly matches the mount and stops SQLite creating sidecar files.
+      ConnectionStrings__CoursePlanner: "Data Source=/data/courseplanner.db;Mode=ReadOnly"
+      # Accounts. Without these the site still serves, with sign-in switched off.
+      ConnectionStrings__UserData: ${ConnectionStrings__UserData}
+      Authentication__Google__ClientId: ${Authentication__Google__ClientId}
+      Authentication__Google__ClientSecret: ${Authentication__Google__ClientSecret}
+
+    # Docker restarts the container if the app stops answering.
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:8080/", "||", "exit", "1"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 30s

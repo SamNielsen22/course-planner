@@ -1,0 +1,407 @@
+{
+ "refreshed": [
+  "Avg GPA",
+  "Grade Dist",
+  "Grade Tabs",
+  "Total Avg GPA"
+ ],
+ "tiled": [],
+ "absorbed": {
+  "1": 20
+ },
+ "dictionary": {
+  "integer": 13,
+  "real": 25,
+  "cstring": 32
+ },
+ "segments_held": [
+  "0",
+  "1"
+ ],
+ "options": {
+  "term": [
+   "Fall 2020 End of Term",
+   "Fall 2021 End of Term",
+   "Fall 2022 End of Term",
+   "Fall 2023 End of Term",
+   "Fall 2024 End of Term",
+   "Fall 2025 End of Term",
+   "Spring 2021 End of Term",
+   "Spring 2022 End of Term",
+   "Spring 2023 End of Term",
+   "Spring 2024 End of Term",
+   "Spring 2025 End of Term",
+   "Spring 2026 End of Term",
+   "Summer 2020 End of Term",
+   "Summer 2021 End of Term",
+   "Summer 2022 End of Term",
+   "Summer 2023 End of Term",
+   "Summer 2024 End of Term",
+   "Summer 2025 End of Term"
+  ],
+  "subject": [
+   "BIOL - Biology",
+   "CS - Computer Science"
+  ],
+  "course": [
+   "1400",
+   "1410",
+   "1420",
+   "2100",
+   "2420",
+   "3020",
+   "3090",
+   "3100",
+   "3130",
+   "3190",
+   "3200",
+   "3390",
+   "3500",
+   "3505",
+   "3520",
+   "3540",
+   "3550",
+   "3700",
+   "3710",
+   "3810",
+   "3960",
+   "3991",
+   "4000",
+   "4150",
+   "4230",
+   "4300",
+   "4400",
+   "4440",
+   "4500",
+   "4530",
+   "4600",
+   "4962",
+   "5150",
+   "5310",
+   "5320",
+   "5340",
+   "5353",
+   "5620",
+   "5630"
+  ],
+  "section": [
+   "001",
+   "003",
+   "004",
+   "005",
+   "006",
+   "007",
+   "020",
+   "022",
+   "023",
+   "024",
+   "025",
+   "026",
+   "301",
+   "302"
+  ]
+ },
+ "filters": {
+  "Grade Dist": [],
+  "Grade Tabs": [
+   {
+    "column": "Course Level",
+    "values": [
+     "2000-2999"
+    ],
+    "selection": [
+     "2000-2999",
+     "all"
+    ]
+   },
+   {
+    "column": "Catnbr",
+    "values": [
+     "1400",
+     "1410",
+     "1420",
+     "2100",
+     "2420",
+     "3020",
+     "3090",
+     "3100",
+     "3130",
+     "3190",
+     "3200",
+     "3390",
+     "3500",
+     "3505",
+     "3520",
+     "3540",
+     "3550",
+     "3700",
+     "3710",
+     "3810",
+     "3960",
+     "3991",
+     "4000",
+     "4150",
+     "4230",
+     "4300",
+     "4400",
+     "4440",
+     "4500",
+     "4530",
+     "4600",
+     "4962",
+     "5150",
+     "5310",
+     "5320",
+     "5340",
+     "5353",
+     "5620",
+     "5630"
+    ],
+    "selection": [
+     "2420"
+    ]
+   },
+   {
+    "column": "College",
+    "values": [
+     "College of Engineering"
+    ],
+    "selection": [
+     "College of Engineering",
+     "all"
+    ]
+   },
+   {
+    "column": "Term/Snap",
+    "values": [
+     "Fall 2020 End of Term",
+     "Fall 2021 End of Term",
+     "Fall 2022 End of Term",
+     "Fall 2023 End of Term",
+     "Fall 2024 End of Term",
+     "Fall 2025 End of Term",
+     "Spring 2021 End of Term",
+     "Spring 2022 End of Term",
+     "Spring 2023 End of Term",
+     "Spring 2024 End of Term",
+     "Spring 2025 End of Term",
+     "Spring 2026 End of Term",
+     "Summer 2020 End of Term",
+     "Summer 2021 End of Term",
+     "Summer 2022 End of Term",
+     "Summer 2023 End of Term",
+     "Summer 2024 End of Term",
+     "Summer 2025 End of Term"
+    ],
+    "selection": [
+     "Fall 2025 End of Term"
+    ]
+   },
+   {
+    "column": "Subject",
+    "values": [
+     "BIOL - Biology",
+     "CS - Computer Science"
+    ],
+    "selection": [
+     "CS - Computer Science"
+    ]
+   },
+   {
+    "column": "Section",
+    "values": [
+     "001",
+     "003",
+     "004",
+     "005",
+     "006",
+     "007",
+     "020",
+     "022",
+     "023",
+     "024",
+     "025",
+     "026",
+     "301",
+     "302"
+    ],
+    "selection": [
+     "001"
+    ]
+   }
+  ],
+  "Total Avg GPA": [],
+  "Avg GPA": []
+ },
+ "tables": {
+  "Avg GPA": [
+   {
+    "Catnbr-value": "2420",
+    "Catnbr-alias": "2420",
+    "Course Level-value": "2000-2999",
+    "Course Level-alias": "2000-2999",
+    "Subject-value": "CS - Computer Science",
+    "Subject-alias": "CS - Computer Science",
+    "Measure Names-value": "[federated.1qxv1x700ozc8c18bnd710l9pcfb].[std:GRADEGPA:qk]",
+    "Measure Names-alias": "Standard Deviation",
+    "Measure Values-alias": "1.13"
+   },
+   {
+    "Catnbr-value": "2420",
+    "Catnbr-alias": "2420",
+    "Course Level-value": "2000-2999",
+    "Course Level-alias": "2000-2999",
+    "Subject-value": "CS - Computer Science",
+    "Subject-alias": "CS - Computer Science",
+    "Measure Names-value": "[federated.1qxv1x700ozc8c18bnd710l9pcfb].[prc75:GRADEGPA:qk]",
+    "Measure Names-alias": "75th Percentile",
+    "Measure Values-alias": "3.30"
+   },
+   {
+    "Catnbr-value": "2420",
+    "Catnbr-alias": "2420",
+    "Course Level-value": "2000-2999",
+    "Course Level-alias": "2000-2999",
+    "Subject-value": "CS - Computer Science",
+    "Subject-alias": "CS - Computer Science",
+    "Measure Names-value": "[federated.1qxv1x700ozc8c18bnd710l9pcfb].[prc50:GRADEGPA:qk]",
+    "Measure Names-alias": "50th Percentile",
+    "Measure Values-alias": "3.00"
+   },
+   {
+    "Catnbr-value": "2420",
+    "Catnbr-alias": "2420",
+    "Course Level-value": "2000-2999",
+    "Course Level-alias": "2000-2999",
+    "Subject-value": "CS - Computer Science",
+    "Subject-alias": "CS - Computer Science",
+    "Measure Names-value": "[federated.1qxv1x700ozc8c18bnd710l9pcfb].[prc25:GRADEGPA:qk]",
+    "Measure Names-alias": "25th Percentile",
+    "Measure Values-alias": "2.15"
+   },
+   {
+    "Catnbr-value": "2420",
+    "Catnbr-alias": "2420",
+    "Course Level-value": "2000-2999",
+    "Course Level-alias": "2000-2999",
+    "Subject-value": "CS - Computer Science",
+    "Subject-alias": "CS - Computer Science",
+    "Measure Names-value": "[federated.1qxv1x700ozc8c18bnd710l9pcfb].[avg:GRADEGPA:qk]",
+    "Measure Names-alias": "Average GPA",
+    "Measure Values-alias": "2.63"
+   }
+  ],
+  "Grade Tabs": [
+   {
+    "CNT(Emplid Proxy)-alias": 8,
+    "Catnbr-value": "2420",
+    "Catnbr-alias": "2420",
+    "Course Level-value": "2000-2999",
+    "Course Level-alias": "2000-2999",
+    "Grade Group-value": "E",
+    "Grade Group-alias": "E",
+    "Subject-value": "CS - Computer Science",
+    "Subject-alias": "CS - Computer Science"
+   },
+   {
+    "CNT(Emplid Proxy)-alias": 12,
+    "Catnbr-value": "2420",
+    "Catnbr-alias": "2420",
+    "Course Level-value": "2000-2999",
+    "Course Level-alias": "2000-2999",
+    "Grade Group-value": "D",
+    "Grade Group-alias": "D",
+    "Subject-value": "CS - Computer Science",
+    "Subject-alias": "CS - Computer Science"
+   },
+   {
+    "CNT(Emplid Proxy)-alias": 18,
+    "Catnbr-value": "2420",
+    "Catnbr-alias": "2420",
+    "Course Level-value": "2000-2999",
+    "Course Level-alias": "2000-2999",
+    "Grade Group-value": "C",
+    "Grade Group-alias": "C",
+    "Subject-value": "CS - Computer Science",
+    "Subject-alias": "CS - Computer Science"
+   },
+   {
+    "CNT(Emplid Proxy)-alias": 49,
+    "Catnbr-value": "2420",
+    "Catnbr-alias": "2420",
+    "Course Level-value": "2000-2999",
+    "Course Level-alias": "2000-2999",
+    "Grade Group-value": "B",
+    "Grade Group-alias": "B",
+    "Subject-value": "CS - Computer Science",
+    "Subject-alias": "CS - Computer Science"
+   },
+   {
+    "CNT(Emplid Proxy)-alias": 24,
+    "Catnbr-value": "2420",
+    "Catnbr-alias": "2420",
+    "Course Level-value": "2000-2999",
+    "Course Level-alias": "2000-2999",
+    "Grade Group-value": "A",
+    "Grade Group-alias": "A",
+    "Subject-value": "CS - Computer Science",
+    "Subject-alias": "CS - Computer Science"
+   },
+   {
+    "CNT(Emplid Proxy)-alias": 8,
+    "Catnbr-value": "%all%",
+    "Catnbr-alias": "%all%",
+    "Course Level-value": "%all%",
+    "Course Level-alias": "%all%",
+    "Grade Group-value": "E",
+    "Grade Group-alias": "E",
+    "Subject-value": "%all%",
+    "Subject-alias": "%all%"
+   },
+   {
+    "CNT(Emplid Proxy)-alias": 12,
+    "Catnbr-value": "%all%",
+    "Catnbr-alias": "%all%",
+    "Course Level-value": "%all%",
+    "Course Level-alias": "%all%",
+    "Grade Group-value": "D",
+    "Grade Group-alias": "D",
+    "Subject-value": "%all%",
+    "Subject-alias": "%all%"
+   },
+   {
+    "CNT(Emplid Proxy)-alias": 18,
+    "Catnbr-value": "%all%",
+    "Catnbr-alias": "%all%",
+    "Course Level-value": "%all%",
+    "Course Level-alias": "%all%",
+    "Grade Group-value": "C",
+    "Grade Group-alias": "C",
+    "Subject-value": "%all%",
+    "Subject-alias": "%all%"
+   },
+   {
+    "CNT(Emplid Proxy)-alias": 49,
+    "Catnbr-value": "%all%",
+    "Catnbr-alias": "%all%",
+    "Course Level-value": "%all%",
+    "Course Level-alias": "%all%",
+    "Grade Group-value": "B",
+    "Grade Group-alias": "B",
+    "Subject-value": "%all%",
+    "Subject-alias": "%all%"
+   },
+   {
+    "CNT(Emplid Proxy)-alias": 24,
+    "Catnbr-value": "%all%",
+    "Catnbr-alias": "%all%",
+    "Course Level-value": "%all%",
+    "Course Level-alias": "%all%",
+    "Grade Group-value": "A",
+    "Grade Group-alias": "A",
+    "Subject-value": "%all%",
+    "Subject-alias": "%all%"
+   }
+  ]
+ }
+}

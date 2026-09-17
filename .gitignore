@@ -23,3 +23,9 @@ __pycache__/
 # Claude Code tooling (Neon skills); not part of the project
 .claude/
 skills-lock.json
+
+# Per-machine secrets for docker compose.
+.env
+
+# Build output, produced by dotnet publish.
+publish/

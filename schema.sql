@@ -41,16 +41,18 @@ CREATE TABLE IF NOT EXISTS sections (
   waitlist        INTEGER,
   has_waitlist    INTEGER,
 
+  -- On a lab, discussion or field-work section, the lecture it registers you
+  -- into: from the note on the lecture's class-list card, or data/companion-pairs.tsv.
+  -- '*' means any lecture.
+  pairs_with      TEXT,
+
   PRIMARY KEY (term, subject, course_number, section_number),
   FOREIGN KEY (subject, course_number)
     REFERENCES courses(subject, course_number)
 );
 
--- The registrar's own person id, lifted from the instructor link on the class
--- schedule (profiles.faculty.utah.edu/u0171400). It is the only reliable way to
--- tell people apart: names collide - two different "Nguyen, Khoi" both teach
--- MATH - and the same person's name is spelled differently across terms. Never
--- infer identity from the name.
+-- The registrar's person id, from the instructor link on the class schedule.
+-- The only reliable identity: names collide, and spellings vary by term.
 CREATE TABLE IF NOT EXISTS instructors (
   unid          TEXT PRIMARY KEY,
   display_name  TEXT NOT NULL,
@@ -65,15 +67,8 @@ CREATE TABLE IF NOT EXISTS instructors (
 CREATE INDEX IF NOT EXISTS idx_instructors_department
   ON instructors(department);
 
--- A pure relationship: which people taught which section. The name is NOT here.
--- It is a function of the uNID, so keeping it per-row stored the same 7,908
--- names 143,026 times, and let the registrar's spelling of one person vary
--- between their own sections.
---
--- The key is the uNID, not the name. Keyed on the name, two different people
--- who happen to share one silently collide and the second is dropped - and
--- these sections run large enough for that to be reachable: NURS 7701-001 has
--- thirty instructors.
+-- Which people taught which section. Keyed on the uNID, never the name: two
+-- people sharing a name would collide, and a name is a function of the id anyway.
 CREATE TABLE IF NOT EXISTS section_instructors (
   term            TEXT NOT NULL,
   subject         TEXT NOT NULL,
@@ -97,30 +92,16 @@ CREATE INDEX IF NOT EXISTS idx_sections_course
 
 -- ---------------------------------------------------------------- grades
 --
--- The dashboard publishes the same fourteen measures at three grains, and none
--- of them can be derived from another. Any grade group under five students is
--- suppressed, and the rule is applied to whatever is on screen - so summing a
--- finer grain always undercounts, and always in the same direction.
+-- The same measures at three grains, none derivable from another, because
+-- groups under five students are suppressed at whatever grain is on screen:
 --
 --   section_grades      one section, one term
---   course_term_grades  one course, one term    (sum of its sections + what
---                                                suppression hid from them:
---                                                MATH 1220 Fall 2020 loses
---                                                ~10% of students that way)
---   course_grades       one course, all terms   (sum of its terms + what
---                                                suppression hid from those:
---                                                CS 2420 gains 17 students,
---                                                every one a D, E or W)
+--   course_term_grades  one course, one term
+--   course_grades       one course, all terms
 --
--- Three tables rather than one with a grain column, because the three have
--- three different natural keys and mixing them makes the obvious aggregate
--- silently wrong - SUM over a mixed-grain table counts every student three
--- times. The repeated measure columns are the ordinary cost of a base fact
--- plus its rollups.
---
--- None is foreign-keyed to sections. Grades come from the Tableau dashboard and
--- sections from the class schedule; the dashboard covers terms the schedule
--- crawl does not, and keying to sections meant those rows had nowhere to land.
+-- Three tables rather than one, since they have three different keys and a SUM
+-- over a mixed-grain table would count every student three times. None is
+-- foreign-keyed to sections: the dashboard covers terms the crawl does not.
 
 CREATE TABLE IF NOT EXISTS section_grades (
   term           TEXT NOT NULL,
@@ -201,8 +182,7 @@ CREATE INDEX IF NOT EXISTS idx_course_term_grades_course
   ON course_term_grades(subject, course_number);
 
 -- Which subjects have been crawled, per term. term_code is the registrar's
--- numeric code ('1268'), not the display term ('Fall2026') used everywhere
--- else - the schedule site is driven by the code.
+-- numeric code ('1268'), not the display term used elsewhere.
 CREATE TABLE IF NOT EXISTS crawl_progress (
   term_code TEXT NOT NULL,
   campus    TEXT NOT NULL DEFAULT 'main',

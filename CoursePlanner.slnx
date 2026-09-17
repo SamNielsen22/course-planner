@@ -2,5 +2,6 @@
   <Project Path="Web/Web.csproj" />
   <Project Path="CoursePlanner.Data/CoursePlanner.Data.csproj" />
   <Project Path="ScraperTests/ScraperTests.csproj" />
+  <Project Path="Ingest.Gpa/Ingest.Gpa.csproj" />
   <Project Path="Ingest.Schedule/Ingest.Schedule.csproj" />
 </Solution>

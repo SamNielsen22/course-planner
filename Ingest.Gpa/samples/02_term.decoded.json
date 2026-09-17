@@ -1,0 +1,31 @@
+{
+ "refreshed": [],
+ "tiled": [
+  "Avg GPA",
+  "Grade Dist",
+  "Grade Tabs",
+  "Total Avg GPA"
+ ],
+ "absorbed": {},
+ "dictionary": {},
+ "segments_held": [],
+ "options": {
+  "term": {
+   "error": "Term/Snap filter not in this response"
+  },
+  "subject": {
+   "error": "Subject filter not in this response"
+  },
+  "course": {
+   "error": "Catnbr filter not in this response"
+  },
+  "section": {
+   "error": "Section filter not in this response"
+  }
+ },
+ "filters": {},
+ "tables": {
+  "Avg GPA": null,
+  "Grade Tabs": null
+ }
+}

@@ -1,0 +1,40 @@
+{
+ "course": {
+  "term": "Fall 2025 End of Term",
+  "section": "(all)",
+  "stats": {
+   "std_dev": "1.08",
+   "p75": "3.70",
+   "p50": "3.00",
+   "p25": "2.30",
+   "avg_gpa": "2.76"
+  },
+  "counts": {
+   "grade_other": 267,
+   "grade_w": 7,
+   "grade_e": 14,
+   "grade_d": 25,
+   "grade_c": 36,
+   "grade_b": 120,
+   "grade_a": 66
+  }
+ },
+ "section": {
+  "term": "Fall 2025 End of Term",
+  "section": "001",
+  "stats": {
+   "std_dev": "1.13",
+   "p75": "3.30",
+   "p50": "3.00",
+   "p25": "2.15",
+   "avg_gpa": "2.63"
+  },
+  "counts": {
+   "grade_e": 8,
+   "grade_d": 12,
+   "grade_c": 18,
+   "grade_b": 49,
+   "grade_a": 24
+  }
+ }
+}
