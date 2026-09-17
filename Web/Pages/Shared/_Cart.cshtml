@@ -4,18 +4,14 @@
     var brokenBreaks = Web.Schedule.Meetings.ConflictingBreaks(Model);
 }
 
-@* A running view of the schedule, sticky beside the results so it stays in
-   sight while they are scrolled. Everything in it can be taken back out here,
-   which is the whole reason it is worth showing. *@
+@* The schedule so far, sticky beside the results. Anything here can be removed. *@
 <aside class="cart" id="cart">
     <header class="cart-head">
         <span class="cart-title">@(Model.Name ?? "Your schedule")</span>
     </header>
 
     <div class="cart-body">
-        @* Breaks constrain the same schedule the sections go into, so they are
-           added from the same panel rather than a page away. Not on a UOnline
-           schedule, whose classes meet at no hour for a break to keep free. *@
+        @* Hours to keep free. Not on a UOnline schedule, which has no meeting times. *@
         @if (Model.Campus != "online")
         {
         <div class="cart-breaks cart-first">
@@ -35,7 +31,7 @@
                     {
                         <li class="@(brokenBreaks.Contains(b.Id) ? "cart-clash" : "")">
                             <div class="cart-what"><span class="cart-code">@b.Name</span></div>
-                            <p class="cart-when">@b.Days @b.From&ndash;@b.Until</p>
+                            <p class="cart-when">@Web.Schedule.Meetings.Label(b)</p>
                             <button class="cart-dropbreak" type="button" data-id="@b.Id"
                                     title="Remove this break"
                                     aria-label="Remove the break @b.Name">&times;</button>
@@ -66,7 +62,7 @@
                         <p class="cart-title-line">@s.Title</p>
                         @if (Model.Campus != "online")
                         {
-                            <p class="cart-when">@(string.IsNullOrWhiteSpace(s.Times) ? "No meeting time" : s.Times)</p>
+                            <p class="cart-when">@Web.Schedule.Meetings.Display(s.Times)</p>
                         }
                         <button class="cart-drop" type="button" data-key="@s.Key"
                                 title="Remove from your schedule"

@@ -10,9 +10,7 @@
     <h1>Find a Course</h1>
 </div>
 
-@* One page, not two. The search bar stays put and the results below it are
-   replaced as you type, so refining a search never costs a round trip through
-   a separate results page. Submitting still works with scripting off. *@
+@* The results are replaced as you type. Submitting still works without scripting. *@
 <form method="get" id="search">
     <div class="search-bar">
         <input name="q" value="@Model.Q" placeholder="CS 2420, calculus, ACCTG&hellip;"
@@ -20,7 +18,7 @@
         <noscript><button type="submit">Search</button></noscript>
     </div>
 
-    @* Inside the form, so the pager's buttons submit through it. *@
+    @* Inside the form, so the pager submits through it. *@
     <div id="results">
         <partial name="_CourseResults" model="Model"/>
     </div>

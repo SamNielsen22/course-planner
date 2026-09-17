@@ -6,32 +6,28 @@
     ViewData["Canonical"] = Model.Canonical;
 }
 
-@* Wherever you arrived from - a search, a section list, a course page -
-   is where back should return you. A fixed link only ever guesses. *@
+@* Back to wherever you came from, rather than a fixed page. *@
 <div class="page-head page-head-back">
     <button type="button" class="back-arrow" onclick="history.back()" aria-label="Back" title="Back">&larr;</button>
     <div>
         <h1>@Model.Display</h1>
         @if (Model.Course is not null)
         {
-            <p class="page-sub">@Model.Course@(Model.ClassTitle is null ? "" : " · " + Model.ClassTitle)</p>
+            <p class="page-sub">@Model.Course@(Model.ClassTitle is null ? "" : ":")@if (Model.ClassTitle is not null){<span class="ps-title">@Model.ClassTitle</span>}</p>
         }
     </div>
 </div>
 
-@* With no grades published for any of their classes there is nothing to
-   pick from and nothing to chart: one line says so, and the pickers stay away. *@
+@* Nothing published: one line says so, and the pickers stay away. *@
 @if (Model.Terms.Count == 0)
 {
     <p class="note">No published grades for this professor.</p>
 }
 else
 {
-    @* The chart is always one section's - the grain where every figure is the
-       registrar's own. A term (their latest by default) and a class are always
-       chosen; the section picker appears only when that pair has more than one. *@
-    @* The pickers always browse from the person's own address: a class address
-       names its class in the path, which would otherwise outrank the dropdown. *@
+    @* Always one section. Term and class are always chosen; the section picker
+       appears when that pair has more than one. *@
+    @* The pickers post to the person's own address, not the class one. *@
     <form method="get" class="inline-form" action="@Model.Base">
         <select name="term" onchange="location.replace(this.form.action + '?' + new URLSearchParams(new FormData(this.form)))" aria-label="Term">
             @foreach (var t in Model.Terms)
@@ -61,12 +57,11 @@ else
 
     @if (Model.Grades.Any)
     {
-        @* One section, so these are the published figures - all six. *@
+        @* One section, so all six figures are the published ones. *@
         <partial name="_GradeStats" model="Model.Grades"/>
 
-        @* The average covers every student; the bars only show groups of five or
-           more. When they diverge this far the chart is materially incomplete, and
-           the page should say so rather than leave two numbers arguing. *@
+        @* The average counts every student, the bars only groups of five or more.
+           Far apart means the chart is missing grades, so say so. *@
         @if (Model.Grades.HasHiddenGrades)
         {
             <p class="note">

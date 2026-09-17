@@ -5,9 +5,8 @@ public class Crawler
 {
     public const string Root = "https://class-schedule.app.utah.edu/";
 
-    // Which of the registrar's schedules this walk is on - main, uac or
-    // online - recorded on every section and on the progress rows, since a
-    // subject done on one schedule is not done on another.
+    // Which schedule this walk is on: main, uac or online. Recorded on every
+    // section and every progress row, since a subject done on one is not done on another.
     private string campus = "";
     private string baseUrl = "";
     static readonly HttpClient http = new HttpClient();
@@ -95,9 +94,7 @@ public class Crawler
 
             var sections = MainSearchScraper.Scrape(classListDoc);
             StoreSections(sections);
-            // A page that arrived cut off keeps what came - the cards before
-            // the cut are whole - but the subject is not marked done: the rest
-            // is still owed, and a later run asks for it again.
+            // A cut-off page keeps its whole cards but is not marked done, so a later run asks again.
             if (page!.Complete)
                 DbStore.MarkSubjectDone(termCode, campus, subjectLabel);
             else
@@ -112,13 +109,9 @@ public class Crawler
                               + "left unmarked - rerun to pick them up");
     }
     /// <summary>
-    /// Refresh the enrollment figures for one term and nothing else: seats,
-    /// cap, enrolled, waiting, class number. Costs one request per subject
-    /// plus the index - the registrar's sections table lists a whole subject
-    /// when the catalogue number is left blank, at a tenth the size of the
-    /// class list, and a subject the list splits into credit and noncredit
-    /// menus is one table all the same. No description pages, since counts
-    /// are the only thing being read. Cheap enough to run several times a day.
+    /// Refresh one term's enrollment figures: seats, cap, enrolled, waiting,
+    /// class number. One small request per subject, from the registrar's
+    /// sections table. Cheap enough to run several times a day.
     /// </summary>
     public int RefreshSeats(string campus, string termCode)
     {
@@ -161,9 +154,8 @@ public class Crawler
             updated += result.Updated;
 
             var line = $"  {subjectLabel}: {result.Updated} sections updated";
-            // The table is fed from the enrollment system and can run ahead of
-            // the class list: a section entered but not yet published shows here
-            // first. The other cause is a class list page that arrived cut off.
+            // The table runs ahead of the class list, so a section can be here
+            // before it is published; a cut-off list page does the same.
             if (result.Unknown > 0) line += $", {result.Unknown} on the registrar's table but not on the class list (not yet published, or the list page was cut off)";
             if (result.Removed > 0) line += $", {result.Removed} no longer listed - removed";
             if (!page.Complete) line += " (page cut off: what came was kept, nothing removed)";
@@ -173,6 +165,83 @@ public class Crawler
         return updated;
     }
 
+    /// <summary>
+    /// Re-read one term's class lists for the companion pairings alone. Only
+    /// pairs_with is written, and only the subjects the database says contain a
+    /// course with both a lecture and a companion section are fetched: on a
+    /// typical term that is about 34 subjects of 190, so the other 156 pages are
+    /// never asked for. For a term whose notes were added after it was crawled.
+    /// </summary>
+    public int RefreshPairings(string campus, string termCode)
+    {
+        this.campus = campus;
+        baseUrl = Root + campus + "/" + termCode + "/";
+
+        // Which subjects could possibly have a pairing to read. Nothing to do if none.
+        var wanted = DbStore.SubjectsWithCompanions(termCode, campus);
+        if (wanted.Count == 0)
+        {
+            // Either the term has no paired course, or it was never crawled and
+            // the database has nothing to go on. Say which, since the fix differs.
+            var known = DbStore.SectionCount(termCode, campus);
+            Console.WriteLine(known == 0
+                ? $"{campus} {termCode}: not crawled yet, so there is nothing to look up - run the crawl first"
+                : $"{campus} {termCode}: no course has both a lecture and a companion section - nothing to fetch");
+            return 0;
+        }
+
+        var indexUrl = baseUrl + "index.html";
+        Console.WriteLine($"Fetching subjects from {indexUrl}");
+        var indexDoc = LoadFromUrl(indexUrl);
+        if (indexDoc is null)
+        {
+            Console.WriteLine($"{campus} {termCode}: no schedule published, or the index would not load - nothing refreshed");
+            return 0;
+        }
+        var queries = SubjectScraper.Scrape(indexDoc)
+            .Where(q => wanted.Contains(SubjectScraper.Subject(q)))
+            .ToList();
+        Console.WriteLine($"{queries.Count} subject(s) to read, of {wanted.Count} the database expects");
+        foreach (var missing in wanted.Except(queries.Select(SubjectScraper.Subject)))
+            Console.WriteLine($"  ! {missing}: in the database but not on the index - not refreshed");
+
+        var updated = 0;
+        foreach (var query in queries)
+        {
+            var subject = SubjectScraper.Subject(query);
+            var page = Load(baseUrl + "class_list.html?" + query);
+            if (page is null)
+            {
+                Console.WriteLine($"  {subject}: page would not load - skipped");
+                continue;
+            }
+
+            // Some subjects answer with a credit/noncredit menu instead of cards,
+            // exactly as on the crawl: read each part the menu links to.
+            var parts = IsCreditMenu(page.Doc)
+                ? SubjectScraper.Scrape(page.Doc).Select(q => Load(baseUrl + "class_list.html?" + q)).ToList()
+                : new List<Fetched?> { page };
+
+            var named = 0; var changed = 0; var cutOff = false;
+            foreach (var part in parts)
+            {
+                if (part is null) { Console.WriteLine($"  ! part of {subject} would not load - that part skipped"); continue; }
+                var sections = MainSearchScraper.Scrape(part.Doc);
+                named += sections.Count(s => s.PairsWith is not null);
+                changed += DbStore.UpdatePairings(campus, sections);
+                cutOff |= !part.Complete;
+            }
+            updated += changed;
+            if (named > 0 || changed > 0 || cutOff)
+                Console.WriteLine($"  {subject}: {named} companion sections paired on the page, {changed} changed{(cutOff ? " (page cut off)" : "")}");
+        }
+        return updated;
+    }
+
+    /// <summary>The page that lists a subject's credit and noncredit halves rather than its classes.</summary>
+    private static bool IsCreditMenu(HtmlDocument doc) =>
+        doc.DocumentNode.SelectSingleNode("//div[contains(@class,'alert') and contains(.,'divided by credit and noncredit')]") is not null;
+
     /// <summary>A fetched page, and whether all of it arrived.</summary>
     private sealed record Fetched(HtmlDocument Doc, bool Complete);
 
@@ -180,24 +249,10 @@ public class Crawler
     private static HtmlDocument? LoadFromUrl(string url) => Load(url) is { Complete: true } page ? page.Doc : null;
 
     /// <summary>
-    /// Fetch a page, retrying; null once the retries are spent with nothing
-    /// usable. A page the server cuts off partway - it does that to a few,
-    /// the same few every time, apparently failing while rendering one
-    /// particular card - comes back after the last attempt with what did
-    /// arrive, the unfinished card dropped, and Complete false so the caller
-    /// can store the whole cards without marking the subject done.
+    /// Fetch a page, retrying, and return null once the retries are spent -
+    /// one unreadable page must cost one page, not the whole crawl. A page the
+    /// server cuts off partway comes back with its whole cards and Complete false.
     /// </summary>
-    /// <remarks>
-    /// Returns rather than throws once the retries are spent. It used to
-    /// throw, and because nothing upstream caught it the process died: on
-    /// 2026-09-04 the registrar's own Fall 2026 NURS page began returning a
-    /// 500 - their application error page, "the help desk has been notified" -
-    /// and that one broken page killed a nineteen-term crawl 133 subjects in.
-    ///
-    /// A page that stays broken would kill it again on every rerun, so the
-    /// crawl could never finish however many times it was started. One
-    /// unreadable page has to cost one page.
-    /// </remarks>
     private static Fetched? Load(string url)
     {
         Fetched? partial = null;
@@ -220,10 +275,7 @@ public class Crawler
             }
             catch (AggregateException error)
             {
-                // A page that is not there will not be there in thirty
-                // seconds either: a term whose schedule the registrar has not
-                // published yet answers 404, and retrying it five times would
-                // cost two and a half minutes per campus for nothing.
+                // A 404 will still be a 404 in thirty seconds; an unpublished term answers one.
                 if (error.InnerException is HttpRequestException { StatusCode: System.Net.HttpStatusCode.NotFound })
                 {
                     Console.WriteLine($"NOT FOUND {url}");
@@ -251,12 +303,9 @@ public class Crawler
     }
 
     /// <summary>
-    /// The page's text and whether it ended properly, read by hand rather than
-    /// with GetStringAsync. When the registrar's server cuts a response off it
-    /// closes the connection without the empty chunk that ends a chunked
-    /// response; curl hands over what came, .NET throws "The response ended
-    /// prematurely". What came is kept either way, and the closing tag says
-    /// whether it was the whole page.
+    /// The page's text and whether it ended properly. Read from the stream by
+    /// hand so a response the server cuts off keeps what arrived; the closing
+    /// tag says whether it was the whole page.
     /// </summary>
     private static async Task<(string Html, bool Complete)> Fetch(string url)
     {
@@ -305,10 +354,8 @@ public class Crawler
                     "&catno=" + section.CourseNumber +
                     "&section=" + section.SectionNumber;
 
-                    // A description that will not load costs the description,
-                    // not the section: the schedule row is still worth storing.
-                    // Left empty rather than cached as a wrong value, and not
-                    // memoised, so the next run fetches it again.
+                    // A description that will not load costs the description, not
+                    // the section. Left empty and not memoised, so the next run tries again.
                     var detailsDoc = LoadFromUrl(detailsUrl);
                     if (detailsDoc is null)
                     {

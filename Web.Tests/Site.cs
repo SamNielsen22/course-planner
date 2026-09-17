@@ -13,18 +13,15 @@ using Microsoft.Extensions.DependencyInjection;
 namespace Web.Tests;
 
 /// <summary>
-/// The real site, hosted in-process against the real catalogue, with accounts
-/// off. Every test drives it over HTTP the way a browser would - pages, the
-/// builder's handlers, the calendar file - so a change that breaks what a
-/// student sees fails here rather than on the site.
-///
-/// The catalogue is opened read-only: nothing here may write to it. Fixtures
-/// are discovered from it rather than hard-coded, so the suite survives a
-/// re-crawl - a test asks for "a Saturday section in the newest term", not
-/// for ESSF 1130-002.
+/// The real site, hosted in-process against the real catalogue with accounts
+/// off, driven over HTTP the way a browser would. The catalogue is read-only,
+/// and fixtures are discovered from it so the suite survives a re-crawl.
 /// </summary>
 public sealed class Site : WebApplicationFactory<Program>
 {
+    /// <summary>Set before the first request to host the site as it ships, hidden from search engines.</summary>
+    public bool Unlisted { get; init; }
+
     public static readonly string RepoRoot = FindRepoRoot();
     public static readonly string DatabasePath = Path.Combine(RepoRoot, "data", "courseplanner.db");
 
@@ -38,6 +35,10 @@ public sealed class Site : WebApplicationFactory<Program>
         builder.UseEnvironment("Testing");
         builder.UseSetting("ConnectionStrings:CoursePlanner", $"Data Source={DatabasePath};Mode=ReadOnly");
         builder.UseSetting("ConnectionStrings:UserData", "");
+        // Listed by default here, so the sitemap and robots tests see the
+        // public behaviour; <see cref="Unlisted"/> flips it for the tests that
+        // check the shipped default.
+        builder.UseSetting("Site:Unlisted", Unlisted ? "true" : "false");
         // The test server has no remote address, so the loopback-only trust
         // the site applies to X-Forwarded-* would drop the headers unread.
         builder.ConfigureTestServices(services => services.Configure<ForwardedHeadersOptions>(options =>
@@ -110,6 +111,22 @@ public sealed class Browser(HttpClient client)
         Assert.Equal(HttpStatusCode.OK, status);
     }
 
+    /// <summary>Add a lecture and a chosen companion together, as the popup does.</summary>
+    public async Task AddPair(Catalogue.Section lecture, string companionSection)
+    {
+        var status = await Post("AddPair", ("term", lecture.Term), ("subject", lecture.Subject),
+            ("number", lecture.Number), ("lecture", lecture.Number2), ("companion", companionSection));
+        Assert.Equal(HttpStatusCode.OK, status);
+    }
+
+    /// <summary>The embedded companion-choices JSON for a builder search page.</summary>
+    public async Task<System.Text.Json.JsonElement> CompanionData(string query, string term)
+    {
+        var doc = await Page($"/builder?term={term}&q={Uri.EscapeDataString(query)}&open=false&noClash=false");
+        var json = doc.DocumentNode.SelectSingleNode("//script[@id='companion-data']")!.InnerText;
+        return System.Text.Json.JsonDocument.Parse(json).RootElement;
+    }
+
     public Task<HttpStatusCode> AddBreak(string name, string days, string from, string until) =>
         Post("AddBreak", ("name", name), ("days", days), ("from", from), ("until", until));
 
@@ -148,6 +165,56 @@ public sealed class Catalogue(string path)
         return row ?? throw new InvalidOperationException($"no section matches: {where}");
     }
 
+    /// <summary>
+    /// A course with a published pairing that also has a self-contained lecture
+    /// (one with no companion paired to it, typically online). Returns the course
+    /// and both a lecture that needs a companion and one that does not.
+    /// </summary>
+    public (string Subject, string Number, string NeedsCompanion, string SelfContained) CourseWithAStandaloneLecture()
+    {
+        using var db = Open();
+        var row = db.QueryFirstOrDefault<(string Sub, string Num, string Need, string Solo)>(@"
+            SELECT c.subject AS Sub, c.course_number AS Num,
+                   (SELECT k.pairs_with FROM sections k WHERE k.term=c.term AND k.campus=c.campus
+                    AND k.subject=c.subject AND k.course_number=c.course_number AND k.pairs_with IS NOT NULL LIMIT 1) AS Need,
+                   MIN(CASE WHEN NOT EXISTS (SELECT 1 FROM sections p WHERE p.term=c.term AND p.campus=c.campus
+                        AND p.subject=c.subject AND p.course_number=c.course_number AND p.pairs_with=c.section_number)
+                        THEN c.section_number END) AS Solo
+            FROM sections c
+            WHERE c.term='Fall2026' AND c.campus='main' AND c.component='Lecture'
+              AND EXISTS (SELECT 1 FROM sections k WHERE k.term=c.term AND k.campus=c.campus
+                   AND k.subject=c.subject AND k.course_number=c.course_number AND k.pairs_with IS NOT NULL)
+            GROUP BY c.subject, c.course_number
+            HAVING Need IS NOT NULL AND Solo IS NOT NULL
+            ORDER BY c.subject, c.course_number LIMIT 1");
+        if (row.Sub is null) throw new InvalidOperationException("no published course with a standalone lecture in Fall2026");
+        return (row.Sub, row.Num, row.Need, row.Solo);
+    }
+
+    /// <summary>A lecture that requires a companion, and one companion section stored as paired to it.</summary>
+    public (Section Lecture, string Companion) LectureWithCompanion(string term) => LectureWithCompanion(term, spaceSubject: false);
+
+    /// <summary>
+    /// As above, optionally restricted to a subject whose code contains a space
+    /// ("ME EN"), the case where the lecture-companion link marker once mis-parsed.
+    /// </summary>
+    public (Section Lecture, string Companion) LectureWithCompanion(string term, bool spaceSubject)
+    {
+        using var db = Open();
+        var like = spaceSubject ? "AND c.subject LIKE '% %'" : "";
+        var row = db.QueryFirstOrDefault<(string Sub, string Num, string Lec, string Comp)>($@"
+            SELECT c.subject AS Sub, c.course_number AS Num, c.section_number AS Lec, k.section_number AS Comp
+            FROM sections c
+            JOIN sections k ON k.term = c.term AND k.campus = c.campus AND k.subject = c.subject
+                 AND k.course_number = c.course_number AND k.pairs_with = c.section_number
+            WHERE c.term = @term AND c.campus = 'main' AND c.component = 'Lecture' {like}
+            ORDER BY c.subject, c.course_number, c.section_number LIMIT 1", new { term });
+        if (row.Sub is null) throw new InvalidOperationException($"no paired lecture in {term}");
+        var lec = One("term=@t AND subject=@s AND course_number=@n AND section_number=@sec",
+            new { t = term, s = row.Sub, n = row.Num, sec = row.Lec });
+        return (lec, row.Comp);
+    }
+
     /// <summary>The term the builder browses: the newest one with sections.</summary>
     /// <summary>Terms the site keeps off its pickers (Terms:Hidden in the site's appsettings.json) - a schedule crawled ahead of registration.</summary>
     private static readonly HashSet<string> Hidden =
@@ -180,11 +247,7 @@ public sealed class Catalogue(string path)
     public Section Online(string term) => One("term = @term AND location = 'CANVAS .' AND times LIKE '%/%'", new { term });
     public Section InBuilding(string term, string code) => One("term = @term AND location LIKE @like AND times LIKE '%/%'", new { term, like = code + " %" });
 
-    /// <summary>
-    /// A full section that can be waited on and has people waiting, and how
-    /// many - from the newest term that has one, since a term just published
-    /// has nobody enrolled yet.
-    /// </summary>
+    /// <summary>A full section with people waiting, from the newest term that has one.</summary>
     public (Section Section, int Waiting) FullWithWaitlist()
     {
         using var db = Open();
@@ -197,6 +260,21 @@ public sealed class Catalogue(string path)
 
     /// <summary>A full section the class list says cannot be waited on.</summary>
     public Section FullWithoutWaitlist(string term) => One("term = @term AND seats_available <= 0 AND has_waitlist = 0", new { term });
+
+    /// <summary>A lab whose course has no lecture at all: the lab is the course, so it is not hidden from search.</summary>
+    public Section StandaloneLab(string term)
+    {
+        using var db = Open();
+        var row = db.QueryFirstOrDefault<Section>($"""
+            SELECT {Columns} FROM sections lab
+            WHERE lab.term = @term AND lab.campus = 'main' AND lab.component = 'Laboratory'
+              AND NOT EXISTS (SELECT 1 FROM sections x
+                   WHERE x.term = lab.term AND x.campus = lab.campus AND x.subject = lab.subject
+                     AND x.course_number = lab.course_number AND x.component = 'Lecture')
+            ORDER BY lab.subject, lab.course_number, lab.section_number LIMIT 1
+            """, new { term });
+        return row ?? throw new InvalidOperationException($"no standalone lab in {term}");
+    }
 
     /// <summary>Two sections of one course that meet at exactly the same time.</summary>
     public (Section A, Section B) SameTimePair(string term)
@@ -225,11 +303,7 @@ public sealed class Catalogue(string path)
         return ((string)pair[0].Unid, (string)pair[0].Term, (string)pair[0].Class, (int)(long)pair[0].N, (string)pair[1].Class, (int)(long)pair[1].N);
     }
 
-    /// <summary>
-    /// A professor whose latest graded term is a summer though most of their
-    /// graded sections are in fall or spring, with that summer term and their
-    /// latest fall-or-spring term.
-    /// </summary>
+    /// <summary>A professor whose latest graded term is a summer but who mostly teaches fall and spring.</summary>
     public (string Unid, string SummerTerm, string LatestRegularTerm) ProfessorWhoseLatestTermIsSummer()
     {
         using var db = Open();

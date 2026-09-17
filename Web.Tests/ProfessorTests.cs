@@ -2,11 +2,7 @@ using HtmlAgilityPack;
 
 namespace Web.Tests;
 
-/// <summary>
-/// The professor page is always at the section grain: a term and a class are
-/// always chosen, and the section picker appears only when that pair has more
-/// than one graded section. These tests follow a student through the dropdowns.
-/// </summary>
+/// <summary>The professor page's dropdowns: term, class, and the section picker.</summary>
 public class ProfessorTests(Site site) : IClassFixture<Site>
 {
     private static string Chosen(HtmlDocument doc, string select) =>

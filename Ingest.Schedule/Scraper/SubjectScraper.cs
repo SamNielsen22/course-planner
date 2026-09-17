@@ -1,8 +1,26 @@
 using System.Text.RegularExpressions;
 using HtmlAgilityPack;
 
+/// <summary>The subject index: every subject's class-list query string.</summary>
 class SubjectScraper
-{    
+{
+    /// <summary>
+    /// The subject a class-list query names, as the database stores it:
+    /// "subject=ME%20EN&amp;type=AOCE" is "ME EN". The index percent-encodes
+    /// the space; a plus sign is not decoded, since the index never writes one.
+    /// </summary>
+    public static string Subject(string query)
+    {
+        foreach (var part in query.Split('&'))
+        {
+            var eq = part.IndexOf('=');
+            if (eq > 0 && part.Substring(0, eq).Equals("subject", StringComparison.OrdinalIgnoreCase))
+                return Uri.UnescapeDataString(part.Substring(eq + 1));
+        }
+        return "";
+    }
+
+    /// <summary>The query part of each class_list link, such as "subject=CS".</summary>
     public static List<string> Scrape(HtmlDocument doc)
     {
         var aTags = doc.DocumentNode.SelectNodes("//a[contains(@href,'class_list.html?subject=')]");

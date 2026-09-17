@@ -2,13 +2,9 @@ using System.Text.RegularExpressions;
 using HtmlAgilityPack;
 
 /// <summary>
-/// One row of the registrar's sections table. sections.html lists a whole
-/// subject when the catalogue number is left blank, and it is the enrollment
-/// side of the schedule: how many may enrol, how many have, how many are
-/// waiting, and the class number a student types into registration. The
-/// class list carries none of that beyond seats available and a yes or no on
-/// the wait list - and it leaves the class number blank on a lecture that
-/// students reach through its lab.
+/// One row of the registrar's sections table - the enrollment side of the
+/// schedule. sections.html lists a whole subject when the catalogue number is
+/// left blank; the class list carries none of this but the seat count.
 /// </summary>
 record SectionCounts(
     string Subject,
@@ -23,12 +19,7 @@ record SectionCounts(
 
 static class SectionsTableScraper
 {
-    /// <summary>
-    /// The term the page is for, spelled as the catalogue spells it -
-    /// "Fall2026" - read from the heading "Main Campus - Fall 2026 Class
-    /// Schedule". Null when the heading is not there, which is the sign of a
-    /// page that is not the table at all.
-    /// </summary>
+    /// <summary>The term from the heading, as "Fall2026". Null when this is not a sections table.</summary>
     public static string? Term(HtmlDocument doc)
     {
         var heading = doc.DocumentNode.SelectSingleNode("//h1");
@@ -37,10 +28,7 @@ static class SectionsTableScraper
         return match.Success ? match.Groups[1].Value + match.Groups[2].Value : null;
     }
 
-    /// <summary>
-    /// Every row of the table. Cells are read by their data-label rather than
-    /// by position, because the title cell spans two columns.
-    /// </summary>
+    /// <summary>Every row. Cells are read by data-label, since the title cell spans two columns.</summary>
     public static List<SectionCounts> Scrape(HtmlDocument doc)
     {
         var rows = new List<SectionCounts>();
@@ -70,7 +58,7 @@ static class SectionsTableScraper
         return rows;
     }
 
-    /// <summary>A cell's number, or null for a blank or a dash. Seats available runs negative when a section is over-enrolled.</summary>
+    /// <summary>A cell's number, or null for a blank or a dash. Seats can be negative.</summary>
     private static int? Number(Dictionary<string, string> cells, string label) =>
         int.TryParse(cells.GetValueOrDefault(label, ""), out var n) ? n : null;
 }

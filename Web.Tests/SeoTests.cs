@@ -4,11 +4,7 @@ using HtmlAgilityPack;
 
 namespace Web.Tests;
 
-/// <summary>
-/// What a search engine sees: the sitemap that names every course and
-/// professor page, the addresses those pages answer on, the line each page
-/// offers as its description, and the personal pages kept out.
-/// </summary>
+/// <summary>What a search engine sees: the sitemaps, the canonical addresses, the descriptions, and the pages kept out.</summary>
 public class SeoTests(Site site) : IClassFixture<Site>
 {
     private static int Locs(string xml) => Regex.Matches(xml, "<loc>").Count;
@@ -73,10 +69,32 @@ public class SeoTests(Site site) : IClassFixture<Site>
     [Fact]
     public async Task RobotsPointsAtTheSitemapAndKeepsOutThePersonalPages()
     {
-        var robots = await site.Visitor().Get("/robots.txt");
-        Assert.Contains("Sitemap: https://utahcoursecompass.com/sitemap.xml", robots);
-        Assert.Contains("Disallow: /builder", robots);
-        Assert.Contains("Disallow: /account", robots);
+        var robots = await site.Visitor().Send("/robots.txt", ("X-Forwarded-Proto", "https"), ("Host", "utahcoursecompass.com"));
+        var text = await robots.Content.ReadAsStringAsync();
+        Assert.Contains("Sitemap: https://utahcoursecompass.com/sitemap.xml", text);
+        Assert.Contains("Disallow: /builder", text);
+        Assert.Contains("Disallow: /account", text);
+    }
+
+    [Fact]
+    public async Task UnlistedTheSiteRefusesEveryCrawlerAndServesNoSitemap()
+    {
+        // The shipped default: the site answers anyone with the address, but
+        // asks to stay out of search results.
+        using var hidden = new Site { Unlisted = true };
+        var visitor = hidden.Visitor();
+
+        var robots = await visitor.Get("/robots.txt");
+        Assert.Contains("Disallow: /", robots);
+        Assert.DoesNotContain("Sitemap:", robots);
+        Assert.DoesNotContain("Allow:", robots);
+
+        foreach (var path in new[] { "/sitemap.xml", "/sitemap-pages.xml", "/sitemap-courses.xml", "/sitemap-professors.xml", "/sitemap-classes.xml" })
+            Assert.Equal(HttpStatusCode.NotFound, (await visitor.Send(path)).StatusCode);
+
+        // Every page asks not to be indexed, the public ones included.
+        foreach (var path in new[] { "/", "/courses", "/Instructors" })
+            Assert.NotNull((await visitor.Page(path)).DocumentNode.SelectSingleNode("//meta[@name='robots'][@content='noindex']"));
     }
 
     [Fact]

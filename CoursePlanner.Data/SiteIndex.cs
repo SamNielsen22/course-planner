@@ -1,27 +1,15 @@
 namespace CoursePlanner.Data;
 
-/// <summary>
-/// Reference data that changes only when the crawler runs, held in memory.
-///
-/// Every builder page load used to re-read the term list, the subject list and
-/// the requirement designations - 19, 240 and 36 rows, about 16ms of the
-/// request - and the About page re-counted the whole database for seven
-/// figures. None of it moves between crawls. Read once here; the pages read
-/// fields.
-///
-/// Built at startup and not watched. After a re-crawl or a grade load, restart
-/// the site or call <see cref="Rebuild"/>.
-/// </summary>
-/// <summary>
-/// Terms the catalogue holds but the site does not offer yet - a schedule
-/// crawled ahead of its registration window, kept stored and out of every
-/// picker until the day it is opened. Named in configuration (Terms:Hidden).
-/// </summary>
+/// <summary>Terms kept off every picker, from the Terms:Hidden setting. Their data stays stored.</summary>
 public sealed record HiddenTerms(IReadOnlySet<string> Names)
 {
     public static readonly HiddenTerms None = new(new HashSet<string>());
 }
 
+/// <summary>
+/// Lists that change only when the crawler runs, read once at startup.
+/// Call <see cref="Rebuild"/> after a crawl or a grade load.
+/// </summary>
 public class SiteIndex(CourseQueries db, GradeIndex grades, HiddenTerms hidden)
 {
     private sealed record Snapshot(
@@ -44,27 +32,27 @@ public class SiteIndex(CourseQueries db, GradeIndex grades, HiddenTerms hidden)
         grades.CourseAverages,
         db.AllCourses());
 
-    /// <summary>Every term with a section that the site offers, in storage order. Pages sort as they need.</summary>
+    /// <summary>Every offered term with sections, in storage order.</summary>
     public IReadOnlyList<string> Terms => _now.Terms;
 
-    /// <summary>Every term with published grades - the historical lookup's range.</summary>
+    /// <summary>Every term with published grades.</summary>
     public IReadOnlyList<string> GradeTerms => _now.GradeTerms;
 
     /// <summary>Every subject code that has a section.</summary>
     public IReadOnlyList<string> Departments => _now.Departments;
 
-    /// <summary>Gen-ed designation atoms, for the requirement filter.</summary>
+    /// <summary>Requirement designations, for the filter.</summary>
     public IReadOnlyList<string> Designations => _now.Designations;
 
-    /// <summary>The size of the data, for the About page.</summary>
+    /// <summary>How much data there is.</summary>
     public CoverageCounts Coverage => _now.Coverage;
 
-    /// <summary>"SUBJ|NUMBER" to the course's headcount-weighted GPA across every term.</summary>
+    /// <summary>"SUBJ|NUMBER" to the course's average across every term.</summary>
     public IReadOnlyDictionary<string, double> CourseAverages => _now.CourseAverages;
 
     /// <summary>Every course, for the sitemap.</summary>
     public IReadOnlyList<(string Subject, string Number)> Courses => _now.Courses;
 
-    /// <summary>Re-reads everything. For after a crawl or a grade load.</summary>
+    /// <summary>Re-reads everything, for after a crawl or a grade load.</summary>
     public void Rebuild() => _now = Build(db, grades, hidden);
 }

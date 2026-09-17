@@ -1,27 +1,26 @@
 @model Web.Pages.BuilderAddModel
 @inject Web.Pages.PrereqMarkup Prereqs
 
+@* The companion choices for this page's required lectures, so the chooser opens
+   with no round trip. Rebuilt with the results on every search. *@
+<script id="companion-data" type="application/json">@Html.Raw(Model.CompanionData)</script>
+
 @if (Model.Total == 0)
 {
     <p class="empty">No sections matched.</p>
 }
 else
 {
-    @* Only a list that runs to more than one page has a head: "Page 1 of 311"
-       and two chevrons. A single page needs neither. *@
+    @* A head only when there is more than one page. *@
     @if (Model.LastPage > 1)
     {
     <div class="results-head">
-        @* The line reads naturally, and an unseen copy of its widest form -
-           the last page named twice - holds the width behind it, so the
-           chevrons after it stay put from page 1 to page 311. *@
+        @* An unseen copy of the widest form holds the width, so the chevrons never move. *@
         <p class="count">
             <span>Page @Model.Page of @Model.LastPage</span>
             <span class="count-widest" aria-hidden="true">Page @Model.LastPage of @Model.LastPage</span>
         </p>
-        @* The same steps as at the foot of the list, compact: two chevrons beside
-           the page number, so a reader who has seen enough of a page need not
-           scroll past the rest of it, and the row stays one line on a phone. *@
+        @* The same steps as at the foot, compact enough for one line on a phone. *@
             <nav class="pager-top" aria-label="Pages">
                 <button type="submit" name="pg" value="@(Model.Page - 1)" class="step"
                         disabled="@(!Model.HasPrevious)" aria-label="Previous page">
@@ -39,10 +38,7 @@ else
         @foreach (var s in Model.Results)
         {
             <article class="section-card">
-                @* The action sits in the corner of the heading rather than in a
-                   row of its own: it belongs to the card, not to the last thing
-                   on it, and a full-width button at the bottom read as the end
-                   of the content. *@
+                @* Add or remove, in the card's corner. *@
                 @{ var key = $"{Model.Term}|{s.Subject}|{s.CourseNumber}|{s.SectionNumber}"; }
                 @if (Model.Picked.Contains(key))
                 {
@@ -50,6 +46,16 @@ else
                             title="Remove this section from your schedule"
                             aria-label="Remove @s.Subject @s.CourseNumber section @s.SectionNumber"
                             data-key="@key">&minus;</button>
+                }
+                else if (s.RequiresCompanion)
+                {
+                    @* Adding a lecture opens a chooser for its required section. *@
+                    <button class="sc-corner add-section add-pair" type="button"
+                            title="Add this class and choose its @s.CompanionKind"
+                            aria-label="Add @s.Subject @s.CourseNumber section @s.SectionNumber and choose its @s.CompanionKind"
+                            data-term="@Model.Term" data-subject="@s.Subject"
+                            data-number="@s.CourseNumber" data-section="@s.SectionNumber"
+                            data-kind="@s.CompanionKind">+</button>
                 }
                 else
                 {
@@ -66,18 +72,14 @@ else
                 }
 
                 <div class="sc-row sc-head">
-                    @* from=builder: the course page hides its section picker for these. The
-                       builder plans a future term, which has no section grades to pick. *@
+                    @* from=builder hides the course page's section picker. *@
                     <a class="sc-code link" asp-page="/Course" asp-route-from="builder"
                        asp-route-subject="@s.Subject" asp-route-number="@s.CourseNumber">@s.Subject @s.CourseNumber</a>
                     <span class="sc-section">Section @s.SectionNumber</span>
                     <span class="sc-title">@s.Title</span>
                 </div>
 
-                @* Who teaches it, then how they grade it. The figures sit directly
-                   under the names because the comparison they invite is "this
-                   professor versus the course", and that only reads if the name
-                   is next to them. *@
+                @* Who teaches it, with their figures directly underneath. *@
                 <div class="sc-row">
                     <div class="sc-prof">
                         @if (s.Instructors.Count == 0)
@@ -86,11 +88,7 @@ else
                         }
                         else
                         {
-                            @* Everyone teaching it, each a link to their page with this
-                               class chosen, punctuated as prose - "A, B and C" - so a
-                               wrapped line ends on a comma rather than starting on a
-                               stray separator. Past three (team-taught clinical courses
-                               run to eighteen) the rest wait behind "and N more". *@
+                            @* Everyone teaching it, as prose. Past three, the rest fold behind "and N more". *@
                             var total = s.Instructors.Count;
                             var shown = s.Instructors.Take(3).ToList();
                             var rest = s.Instructors.Skip(3).ToList();
@@ -118,10 +116,7 @@ else
                         }
                     </div>
 
-                    @* The course's average, then how its professors grade it: one
-                       figure for the usual single professor, one per person for a
-                       pair or a trio, and none past that - a team-taught course is
-                       nobody's grading in particular. *@
+                    @* The course average, then each professor's, up to three. *@
                     <div class="sc-grades">
                         <div class="sc-fig">
                             <span class="sc-label">Course average</span>
@@ -148,12 +143,17 @@ else
                 </div>
 
                 <div class="sc-row sc-meet">
-                    @* UOnline sections never meet at an hour or in a room - none of
-                       the five thousand on file does - so the line is left off. *@
+                    @* A lecture whose course has a required lab, discussion or field-work
+                       section. The section itself is chosen in the popup when the class is added. *@
+                    @if (s.RequiresCompanion)
+                    {
+                        <p class="sc-pair"><span class="sc-req">@(char.ToUpper(s.CompanionKind![0]) + s.CompanionKind[1..]) required</span></p>
+                    }
+                    @* UOnline sections never meet at an hour or in a room. *@
                     @if (s.Campus != "online")
                     {
                         <p class="sc-when">
-                            @(string.IsNullOrWhiteSpace(s.Times) ? "No meeting time" : s.Times)
+                            @Web.Schedule.Meetings.Display(s.Times)
                             @if (!string.IsNullOrWhiteSpace(s.Location))
                             {
                                 <text>&middot; @s.Location</text>
@@ -170,17 +170,15 @@ else
                                 }
                                 else
                                 {
-                                    @* Full: how many are waiting, from the registrar's
-                                       sections table, and whether the section can be
-                                       waited on at all, from the class list. *@
+                                    @* Full: how many are waiting, and whether a wait list exists. *@
                                     <text>Full</text>
                                     @if (s.Waitlist is { } waiting && (waiting > 0 || s.HasWaitlist != false))
                                     {
-                                        <text> &middot; waitlist @waiting</text>
+                                        <text>: waitlist @waiting</text>
                                     }
                                     else if (s.HasWaitlist == false)
                                     {
-                                        <text> &middot; no waitlist</text>
+                                        <text>: no waitlist</text>
                                     }
                                 }
                             </span>
@@ -188,9 +186,7 @@ else
                     </p>
                 </div>
 
-                @* Registrar prose, shown verbatim. It is the only version that is
-                   certainly correct, and a student can read it faster than we can
-                   explain a parse of it. *@
+                @* The registrar's own prerequisite text, verbatim. *@
                 <div class="sc-row sc-prereq">
                     <span class="sc-label">Prerequisites</span>
                     @if (string.IsNullOrWhiteSpace(s.Prerequisites))

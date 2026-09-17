@@ -7,12 +7,8 @@ using Web.Accounts;
 
 var builder = WebApplication.CreateBuilder(args);
 
-// Behind Cloudflare Tunnel the app sees plain HTTP from cloudflared on the
-// same machine, and the tunnel says in X-Forwarded-Proto what the visitor
-// actually used. Without this every absolute URL the app builds - the Google
-// sign-in callback above all - would say http://, and Google would refuse it
-// against the https:// address it has on file. Honoured only from loopback,
-// the default, so the header means nothing from anywhere else.
+// Behind the Cloudflare tunnel the app sees plain HTTP; the forwarded headers
+// carry the visitor's real scheme and address. Trusted from localhost only.
 builder.Services.Configure<ForwardedHeadersOptions>(options =>
     options.ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto);
 
@@ -21,10 +17,7 @@ var connectionString = builder.Configuration.GetConnectionString("CoursePlanner"
 builder.Services.AddSingleton(new CourseQueries(connectionString));
 builder.Services.AddRazorPages();
 
-// The builder and professor pages are 65-70KB of HTML that gzips to about 6KB.
-// Without this every byte goes out uncompressed - measured, no Content-Encoding
-// on any response - which is what makes a home upload link the bottleneck
-// long before the CPU is. Brotli first; gzip for anything that lacks it.
+// Pages gzip about ten to one, and a home upload link is the bottleneck.
 builder.Services.AddResponseCompression(options =>
 {
     options.EnableForHttps = true;
@@ -32,48 +25,32 @@ builder.Services.AddResponseCompression(options =>
     options.Providers.Add<Microsoft.AspNetCore.ResponseCompression.GzipCompressionProvider>();
 });
 
-// Built once and held: it loads the whole catalogue of titles so a prerequisite
-// string can be marked up with dictionary lookups instead of queries.
+// Indexes built once at startup: course titles for prerequisite links, the
+// building list, the blank-search order, every grade row, every instructor,
+// the reference lists, and each term's sections.
 builder.Services.AddSingleton<Web.Pages.PrereqMarkup>();
-
-// Same again for the University's building list, so a room code can carry
-// its building's name on hover and its street address into a calendar.
 builder.Services.AddSingleton<Web.Pages.Buildings>();
 builder.Services.AddSingleton<Web.Pages.Spotlight>();
-
-// Every published grade row with its reconstruction, held in memory. The
-// reconstruction runs once here, at startup; every grade figure on the site
-// is then read or pooled from this one place.
 builder.Services.AddSingleton<GradeIndex>();
-
-// Same reason: the professor search ranks people by averages that used to
-// cost ~450ms to compute across the whole database on every request.
 builder.Services.AddSingleton<InstructorIndex>();
+// Unlisted: the site answers anyone with the address, but tells every search
+// engine to stay out and serves no sitemap. Set Site:Unlisted to false to be
+// findable.
+builder.Services.AddSingleton(new Web.Unlisted(builder.Configuration.GetValue("Site:Unlisted", true)));
 
-// Reference data - terms, subjects, designations, the About figures - read
-// once instead of on every request; and each term's sections held in memory,
-// refreshed every minute because the seat crawl rewrites seat counts.
-// Terms crawled ahead of their registration window stay stored but off every
-// picker until they are taken off this list.
+// Terms named in Terms:Hidden stay stored but off every picker.
 builder.Services.AddSingleton(new HiddenTerms(
     (builder.Configuration.GetSection("Terms:Hidden").Get<string[]>() ?? []).ToHashSet()));
 builder.Services.AddSingleton<SiteIndex>();
 builder.Services.AddSingleton<SectionIndex>();
 
-// The schedule under construction travels in a signed cookie, so no server
-// remembers anything about a visitor between requests. That is what lets a
-// second server answer the next request as well as the first did, and what
-// stops a restart or an idle timeout from emptying someone's cart. The cookie
-// is signed with the data-protection key ring; on more than one machine that
-// ring must be shared (PersistKeysToFileSystem on a common path), or each box
-// will reject the others' cookies.
+// A guest's schedule travels in a signed cookie, so any server can answer any
+// request and a restart empties nothing.
 builder.Services.AddHttpContextAccessor();
 builder.Services.AddScoped<Web.Schedule.ScheduleStore>();
 
-// Accounts are optional. They exist when a UserData (Postgres) connection is
-// configured; without one the account pages answer 404 and nothing else
-// changes. The public site never needs the user database - if it is
-// unreachable, signing in fails and the pages keep serving.
+// Accounts exist only when a UserData (Postgres) connection is configured.
+// The public pages never need it.
 var userData = builder.Configuration.GetConnectionString("UserData");
 var google = builder.Configuration.GetSection("Authentication:Google");
 builder.Services.AddSingleton(new AccountsFeature(
@@ -84,8 +61,7 @@ if (!string.IsNullOrEmpty(userData))
     builder.Services.AddDbContext<UserDbContext>(options => options.UseNpgsql(userData));
     builder.Services.AddIdentity<IdentityUser, IdentityRole>(options =>
     {
-        // Length over character classes, as current guidance has it. The
-        // email is the username, so it has to be unique.
+        // Length over character classes. The email is the username.
         options.Password.RequiredLength = 10;
         options.Password.RequireNonAlphanumeric = false;
         options.Password.RequireUppercase = false;
@@ -101,10 +77,7 @@ if (!string.IsNullOrEmpty(userData))
         options.SlidingExpiration = true;
     });
 
-    // Sign in with Google - the only way in. The button exists only when the
-    // credentials are configured (user-secrets here, environment variables on
-    // a server), so before they are set the sign-in page says so rather than
-    // offering a dead button.
+    // Google is the only way to sign in; the button appears once the credentials are configured.
     var external = builder.Services.AddAuthentication();
     if (!string.IsNullOrEmpty(google["ClientId"]))
     {
@@ -116,43 +89,64 @@ if (!string.IsNullOrEmpty(userData))
     }
 }
 
-// Both cookies - the schedule and the sign-in - are signed with this key ring.
-// One application name and one key folder shared across every server, or each
-// box rejects the others' cookies. Unset, keys live in the user profile, which
-// is right for a single machine.
+// Both cookies are signed with this key ring, and every server must share it or
+// each rejects the others' cookies and visitors are signed out as they move
+// between machines. With accounts on it lives in the Postgres they already
+// share, which works wherever the servers are; a KeysPath overrides that for a
+// single machine with no database. With neither, keys are per-process and a
+// restart signs everyone out.
 var keysPath = builder.Configuration["DataProtection:KeysPath"];
 var protection = builder.Services.AddDataProtection().SetApplicationName("CourseCompass");
-if (!string.IsNullOrEmpty(keysPath)) protection.PersistKeysToFileSystem(new DirectoryInfo(keysPath));
+if (!string.IsNullOrEmpty(keysPath))
+    protection.PersistKeysToFileSystem(new DirectoryInfo(keysPath));
+else if (!string.IsNullOrEmpty(userData))
+    protection.PersistKeysToDbContext<UserDbContext>();
 
-// Pages that read the same for every visitor - home, course and professor
-// pages, both searches, About - are rendered once a minute and replayed.
-// Opt-in per page: the builder is never cached, it shows YOUR schedule.
+// Public pages are rendered once a minute and replayed. Opt-in per page; the builder is never cached.
 builder.Services.AddOutputCache();
 
-// The Add button lives inside the search form, which is a GET, so no hidden
-// antiforgery field reaches it. Accepting the token as a header lets the
-// button post without nesting a second form inside the first, which HTML
-// forbids.
-builder.Services.AddAntiforgery(options => options.HeaderName = "RequestVerificationToken");
+// The Add button posts from inside the GET search form, so the antiforgery token
+// travels as a header. Its cookie is not marked Secure by default, unlike the
+// schedule and account cookies, so it is set to follow the request's scheme.
+builder.Services.AddAntiforgery(options =>
+{
+    options.HeaderName = "RequestVerificationToken";
+    options.Cookie.SecurePolicy = CookieSecurePolicy.SameAsRequest;
+});
 
 var app = builder.Build();
 
-// The site is server-rendered: pages call CourseQueries directly rather than
-// going back out over HTTP.
-// Compression wraps the whole pipeline so static files get it too. It sits
-// outside the output cache on purpose: the cache stores one uncompressed copy
-// and compression happens on the way out, so no Accept-Encoding variant is
-// needed and a stale-but-compressed body cannot be served to the wrong client.
+// Compression sits outside the output cache: the cache holds one plain copy and compression happens on the way out.
 app.UseForwardedHeaders();
+
+// A few free security headers on every response: no MIME sniffing, no framing
+// (clickjacking), and a trimmed referrer.
+app.Use(async (context, next) =>
+{
+    var h = context.Response.Headers;
+    h["X-Content-Type-Options"] = "nosniff";
+    h["Referrer-Policy"] = "strict-origin-when-cross-origin";
+    h["X-Frame-Options"] = "DENY";
+    await next();
+});
 app.UseResponseCompression();
-app.UseStaticFiles();
+
+// Assets are requested with a content hash (asp-append-version), so a versioned
+// URL can be cached hard: a changed file gets a new URL. An unversioned request
+// for the same file, say a bookmarked /css/site.css, gets an hour instead.
+app.UseStaticFiles(new StaticFileOptions
+{
+    OnPrepareResponse = ctx =>
+        ctx.Context.Response.Headers.CacheControl =
+            ctx.Context.Request.Query.ContainsKey("v")
+                ? "public,max-age=31536000,immutable"
+                : "public,max-age=3600",
+});
 app.UseRouting();
 app.UseAuthentication();
 app.UseAuthorization();
 
-// Caching only outside development. Locally, a page cached for sixty seconds
-// keeps showing the build before the one you just made, which reads as the
-// change not having landed. Production keeps the full cache.
+// No caching in development, so a change shows on the next reload.
 if (app.Environment.IsDevelopment())
 {
     app.Use(async (context, next) =>
@@ -175,5 +169,5 @@ Web.Sitemaps.Map(app);
 
 app.Run();
 
-// Lets the end-to-end tests host the site in-process (WebApplicationFactory<Program>).
+// Lets the tests host the site in-process.
 public partial class Program { }

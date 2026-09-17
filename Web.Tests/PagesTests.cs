@@ -38,6 +38,23 @@ public class PagesTests(Site site) : IClassFixture<Site>
     }
 
     [Fact]
+    public async Task ALabThatIsItsOwnCourseStillShowsInSearch()
+    {
+        // A lab with no lecture in its course is the course, so it is not hidden.
+        var term = site.Catalogue.NewestTerm();
+        var lab = site.Catalogue.StandaloneLab(term);
+        var doc = await site.Visitor().Page($"/builder?term={term}&q=" + Uri.EscapeDataString(lab.Code) + "&open=false&noClash=false");
+
+        var sections = doc.DocumentNode.SelectNodes("//span[@class='sc-section']")?.Select(n => n.InnerText.Trim()).ToList() ?? [];
+        Assert.Contains(sections, t => t.EndsWith(lab.Number2));
+    }
+
+    // The "no pairing published, so every section is offered" path is covered by
+    // the unit test CompanionTests.ChoicesForOffersEveryCompanionWhenNothingIsPublished.
+    // It has no builder integration test because the only term with unpaired courses
+    // (Spring 2027) is hidden from the builder, and the visible term is fully paired.
+
+    [Fact]
     public async Task CoursePageShowsTheRegistrarsAllTermsFigures()
     {
         var (subject, number, _) = site.Catalogue.GradedCourse();

@@ -6,67 +6,53 @@ using Microsoft.AspNetCore.Mvc.RazorPages;
 namespace Web.Pages;
 
 /// <summary>
-/// One instructor: how they grade, always at the section grain - the one
-/// grain where every figure shown is the registrar's own. The chart is one
-/// section's. Term (defaulting to their latest with grades) and class narrow
-/// which sections are in play; when more than one is, a section picker
-/// chooses among them, and the first is shown until it does.
+/// One professor's grades, one section at a time. Term and class narrow the
+/// sections; a picker chooses among them when there are several.
 /// </summary>
 [OutputCache(Duration = 60)]
 [ResponseCache(Duration = 60, Location = ResponseCacheLocation.Any)]
 public class InstructorModel(CourseQueries db, GradeIndex grades) : PageModel
 {
-    // The uNID identifies the person; two instructors can share a name, so the
-    // page cannot be addressed by one.
+    // The uNID identifies the person; names are not unique.
     [BindProperty(SupportsGet = true)] public string Unid { get; set; } = "";
 
-    /// <summary>A term; empty for the latest one with grades. After OnGet, the term in force.</summary>
+    /// <summary>The term, or empty for the latest with grades.</summary>
     [BindProperty(SupportsGet = true)] public string? Term { get; set; }
 
-    /// <summary>
-    /// The term the visitor is planning, when they came from the builder. A
-    /// summer plan wants summer figures; a fall or spring plan, or none, does not.
-    /// </summary>
+    /// <summary>The term the visitor is planning, from the builder. A summer plan wants summer figures.</summary>
     [BindProperty(SupportsGet = true)] public string? Planning { get; set; }
 
-    /// <summary>
-    /// "CS 2420" as picked from the class dropdown, or "cs-2420" from the
-    /// address; empty means the first class of the term. After OnGet, the
-    /// class in force.
-    /// </summary>
+    /// <summary>The class, as "CS 2420" or "cs-2420". Empty means the term's first.</summary>
     [BindProperty(SupportsGet = true)] public string? Course { get; set; }
 
-    /// <summary>
-    /// Whether a class was asked for. Then the page is that class's own, with
-    /// its own address - the page a search for "professor plus course" lands on.
-    /// </summary>
+    /// <summary>Whether a class was asked for. Then this is that class's own page.</summary>
     public bool ClassRequested { get; private set; }
     public string? ClassTitle { get; private set; }
     public double? ClassAverage { get; private set; }
     public int ClassSections { get; private set; }
 
-    /// <summary>The section shown, as "Term|Subject|Number|Section"; empty is the first in play.</summary>
+    /// <summary>The section shown, as a key. Empty means the first.</summary>
     [BindProperty(SupportsGet = true, Name = "section")] public string? SectionKey { get; set; }
 
-    /// <summary>One section the picker can choose: its key and how to name it.</summary>
+    /// <summary>One option in the section picker.</summary>
     public record Choice(string Key, string Label);
 
     public string Name { get; private set; } = "";
     public string Display => Names.Natural(Name);
 
-    /// <summary>The person's own address, which the pickers browse from.</summary>
+    /// <summary>The professor's own address.</summary>
     public string Base => $"/professor/{Unid}/{Names.Slug(Name)}";
 
-    /// <summary>The person's address, or the class's own when one was asked for.</summary>
+    /// <summary>The page's canonical address.</summary>
     public string Canonical => ClassRequested && Course is not null ? $"{Base}/{Names.CourseSlug(Course)}" : Base;
 
     public string PageTitle => ClassRequested && Course is not null ? $"{Display} {Course}" : Display;
 
-    /// <summary>Their average across every graded section, for the page's description.</summary>
+    /// <summary>The average across every graded section.</summary>
     public double? Average { get; private set; }
     public int GradedSections { get; private set; }
 
-    /// <summary>What a search result says about the page.</summary>
+    /// <summary>The search-result description.</summary>
     public string Description
     {
         get
@@ -75,8 +61,7 @@ public class InstructorModel(CourseQueries db, GradeIndex grades) : PageModel
             {
                 var named = $"{Course}{(ClassTitle is null ? "" : $" ({ClassTitle})")}";
                 var sections = $"{ClassSections} section{(ClassSections == 1 ? "" : "s")}";
-                // A class whose letter counts the University withheld has no
-                // poolable average; the page still shows each section's own.
+                // A class with withheld counts has no pooled average.
                 return ClassAverage is double inClass
                     ? $"{Display}'s grades in {named} at the University of Utah: average GPA {inClass:0.00} across {sections}."
                     : $"{Display}'s grades in {named} at the University of Utah: {sections} with published grades.";
@@ -87,16 +72,16 @@ public class InstructorModel(CourseQueries db, GradeIndex grades) : PageModel
         }
     }
 
-    /// <summary>Terms this professor has published grades in, newest first.</summary>
+    /// <summary>Terms with grades, newest first.</summary>
     public IReadOnlyList<string> Terms { get; private set; } = [];
 
     /// <summary>Classes with grades in the term in force.</summary>
     public IReadOnlyList<string> Classes { get; private set; } = [];
 
-    /// <summary>The sections in play. The picker is drawn only when there is more than one.</summary>
+    /// <summary>The sections in play. The picker shows when there are several.</summary>
     public IReadOnlyList<Choice> Sections { get; private set; } = [];
 
-    /// <summary>The section on show - its published figures, never pooled.</summary>
+    /// <summary>The section shown, as published.</summary>
     public GradeDistribution Grades { get; private set; } = GradeDistribution.Empty;
 
     public string RateMyProfessorUrl =>
@@ -106,7 +91,7 @@ public class InstructorModel(CourseQueries db, GradeIndex grades) : PageModel
     {
         if (string.IsNullOrWhiteSpace(Unid)) return;
         Name = db.InstructorName(Unid) ?? Unid;
-        // The address form of a class, "cs-2420", reads as the dropdown's "CS 2420".
+        // "cs-2420" in the address becomes "CS 2420".
         if (Names.ParseCourseSlug(Course) is { } slugged) Course = $"{slugged.Subject} {slugged.Number}";
         var requested = Course;
 
@@ -116,12 +101,8 @@ public class InstructorModel(CourseQueries db, GradeIndex grades) : PageModel
         Terms = Pages.Terms.NewestFirst(all.Select(r => r.Term).Distinct());
         static string Code(GradeIndex.Row r) => $"{r.Subject} {r.CourseNumber}";
 
-        // The term: as asked, or the latest one - for the class asked for, if
-        // a search tile named one, so the tile lands where that class has grades.
-        // Someone who teaches through the year but taught a summer class most
-        // recently lands on their latest fall or spring instead, unless the
-        // visitor is planning a summer: the summer section is the odd one out,
-        // and not what anyone planning a fall or spring came to see.
+        // Default term: the latest with grades for the class, skipping summer
+        // for someone who mostly teaches fall and spring, unless planning a summer.
         if (Term is null || !Terms.Contains(Term))
         {
             var candidates = Course is null ? all : all.Where(r => Code(r) == Course).ToList();
@@ -135,7 +116,7 @@ public class InstructorModel(CourseQueries db, GradeIndex grades) : PageModel
 
         var inTerm = all.Where(r => r.Term == Term).ToList();
         Classes = inTerm.Select(Code).Distinct().OrderBy(c => c, StringComparer.OrdinalIgnoreCase).ToList();
-        // Always one class: a mix of classes has no single honest chart.
+        // Always one class at a time.
         if (Course is null || !Classes.Contains(Course)) Course = Classes.FirstOrDefault();
         ClassRequested = requested is not null && requested == Course;
         if (Course is not null)

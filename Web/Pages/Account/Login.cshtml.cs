@@ -5,21 +5,16 @@ using Web.Accounts;
 
 namespace Web.Pages.Account;
 
-/// <summary>
-/// The one way in: sign in with Google. There is no password - the button
-/// sends the visitor to Google (see <see cref="ExternalModel"/>), which
-/// creates the account on first use. Identity's services are resolved by hand
-/// so the page still constructs, and answers 404, when accounts are off.
-/// </summary>
+/// <summary>The sign-in page. Google only, no password. Identity is resolved by hand so the page still answers 404 when accounts are off.</summary>
 [ResponseCache(NoStore = true)]
 public class LoginModel(AccountsFeature accounts, IServiceProvider services) : PageModel
 {
     [BindProperty(SupportsGet = true)] public string? ReturnUrl { get; set; }
 
-    /// <summary>A message from a failed Google sign-in, carried back here to show.</summary>
+    /// <summary>A message from a failed sign-in.</summary>
     [BindProperty(SupportsGet = true)] public string? Error { get; set; }
 
-    /// <summary>The configured sign-in providers - Google, when its credentials are set.</summary>
+    /// <summary>The configured sign-in providers.</summary>
     public IReadOnlyList<(string Name, string Display)> Providers { get; private set; } = [];
 
     public async Task<IActionResult> OnGetAsync()

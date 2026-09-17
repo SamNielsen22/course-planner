@@ -4,11 +4,7 @@ using Microsoft.Data.Sqlite;
 
 namespace ScraperTests;
 
-/// <summary>
-/// The grade loader and the two database helpers, against a throwaway
-/// database built from the real schema.sql - the same footing the query
-/// tests stand on.
-/// </summary>
+/// <summary>The grade loader and the two database helpers, against a throwaway database built from schema.sql.</summary>
 public class MaintenanceTests : IDisposable
 {
     private readonly string path;

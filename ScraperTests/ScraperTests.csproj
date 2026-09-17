@@ -24,6 +24,9 @@
     <Compile Include="..\Ingest.Schedule\Scraper\DescriptionScraper.cs" Link="Source\DescriptionScraper.cs" />
     <Compile Include="..\Ingest.Schedule\Scraper\CutOffPage.cs" Link="Source\CutOffPage.cs" />
     <Compile Include="..\Ingest.Schedule\Scraper\SectionsTableScraper.cs" Link="Source\SectionsTableScraper.cs" />
+    <Compile Include="..\Ingest.Schedule\Scraper\CompanionNotes.cs" Link="Source\CompanionNotes.cs" />
+    <Compile Include="..\Ingest.Schedule\Database\CompanionOverrides.cs" Link="Source\CompanionOverrides.cs" />
+    <Compile Include="..\Ingest.Schedule\Utils\TermCodes.cs" Link="Source\TermCodes.cs" />
     <Compile Include="..\Ingest.Schedule\Database\GradeLoader.cs" Link="Source\GradeLoader.cs" />
     <Compile Include="..\Ingest.Schedule\Database\Departments.cs" Link="Source\Departments.cs" />
     <Compile Include="..\Ingest.Schedule\Database\Titles.cs" Link="Source\Titles.cs" />
@@ -32,10 +35,12 @@
 
   <ItemGroup>
     <ProjectReference Include="..\CoursePlanner.Data\CoursePlanner.Data.csproj" />
+    <ProjectReference Include="..\Ingest.Gpa\Ingest.Gpa.csproj" />
   </ItemGroup>
 
   <ItemGroup>
     <None Include="..\samples\*.html" Link="samples\%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
+    <None Include="..\Ingest.Gpa\samples\*.json" Link="gpa-samples\%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
     <None Include="..\schema.sql" Link="schema.sql" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 

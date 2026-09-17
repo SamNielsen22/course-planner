@@ -5,12 +5,8 @@
     ViewData["NoIndex"] = true;
 }
 
-@* The term field was removed, so nothing on the page said which term these
-   sections belong to. Everything here - the results, the schedule, the
-   conflicts - is scoped to it. It is stated once, under the heading, rather
-   than repeated on the cart beside it. *@
-@* The arrow sits on the heading's own line, back to the schedule home this
-   one was opened from - a control beside the title rather than a line above it. *@
+@* The term and campus everything on this page is scoped to, stated once,
+   with the way back to the schedule home beside the heading. *@
 <div class="page-head page-head-back">
     <a class="back-arrow" asp-page="/Schedules" aria-label="Your schedules" title="Your schedules">&larr;</a>
     <div>
@@ -19,19 +15,14 @@
     </div>
 </div>
 
-@* One screen rather than four steps: each choice stays visible while the next
-   is made, the results update underneath, and any filter can be changed without
-   starting over. Everything is optional, so the order is the user's to pick. *@
+@* Filters, results and cart on one screen; the results update as filters change. *@
 @Html.AntiForgeryToken()
 
 <form method="get" id="search">
-    @* Carried so the live results ask for the same term the page shows. *@
+    @* So the live results ask for the term the page shows. *@
     <input type="hidden" name="term" value="@Model.Term"/>
-    @* One field rather than a subject dropdown beside a course field. Those two
-       did the same job by different means, could contradict each other, and the
-       dropdown ran to 200-odd codes. What is typed is inferred: an exact subject
-       code filters by subject, anything else is matched against numbers and
-       titles. *@
+    @* One field: an exact subject code filters by subject, anything else
+       matches numbers and titles. *@
     <div class="filters one-line">
         <label class="grow">
             Search
@@ -94,8 +85,7 @@
     </div>
 </form>
 
-@* Back to the top of a long list. Off screen until the page has been scrolled
-   a way down; bottom-left, where neither the cart nor the phone tab bar sits. *@
+@* Back to the top, shown once the page is scrolled down. Not on phones. *@
 <button type="button" id="to-top" class="to-top" aria-label="Back to top">
     <svg viewBox="0 0 20 20" width="18" height="18" aria-hidden="true" focusable="false">
         <path d="M4 12.5 10 6.5l6 6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
@@ -104,14 +94,15 @@
 
 <dialog id="break-dialog" class="modal">
     <form id="break-form" class="modal-form">
-        <h2>Add a break</h2>
+        @* The heading takes the focus, so opening the dialog does not put the
+           caret in a field or spring a keyboard. Its outline is removed in the
+           stylesheet; tabindex -1 keeps it focusable without joining the tab order. *@
+        <h2 tabindex="-1" autofocus>Add a break</h2>
         <label>
             Name
             <input name="name" placeholder="Lunch, work, practice&hellip;"/>
         </label>
-        @* One toggle per day, none on to begin with. The script joins the
-           chosen ones into the "MoWeFr" form the schedule keeps, and asks for
-           at least one rather than letting an empty choice mean every weekday. *@
+        @* One toggle per day, none on to start. The script joins them into "MoWeFr". *@
         <fieldset class="days" id="break-days">
             <legend>Days <span class="days-hint">pick at least one</span></legend>
             @foreach (var (code, letter, name) in new[]
@@ -135,6 +126,18 @@
             <button class="btn" type="submit">Add break</button>
         </div>
     </form>
+</dialog>
+
+@* Chooser for a lecture's required lab, discussion or field-work section. *@
+<dialog id="companion-dialog" class="modal">
+    <div class="modal-form">
+        <h2 id="companion-title">Choose a section</h2>
+        <p class="companion-note" id="companion-note" hidden></p>
+        <ul class="companion-list" id="companion-list"></ul>
+        <div class="modal-actions">
+            <button class="btn out" type="button" id="companion-cancel">Cancel</button>
+        </div>
+    </div>
 </dialog>
 
 @section Scripts {
@@ -272,6 +275,10 @@
         const remove = event.target.closest('button.drop-section');
         if (remove) { event.preventDefault(); drop(remove, remove.dataset.key); return; }
 
+        // A lecture with a required section opens the chooser instead of adding.
+        const pair = event.target.closest('button.add-pair');
+        if (pair) { event.preventDefault(); openCompanionChooser(pair); return; }
+
         const add = event.target.closest('button.add-section');
         if (add) {
             event.preventDefault();
@@ -291,6 +298,79 @@
         refresh();
         window.scrollTo({ top: 0, behavior: 'smooth' });
     });
+
+    // ------------------------------------------------------------ companion chooser
+    const companionDialog = document.getElementById('companion-dialog');
+    const companionList = document.getElementById('companion-list');
+    const companionTitle = document.getElementById('companion-title');
+    const companionNote = document.getElementById('companion-note');
+    let pairContext = null;   // {term, subject, number, lecture}
+
+    function seatLabel(seats) {
+        if (seats === null || seats === undefined) return '';
+        if (seats > 0) return seats + ' seat' + (seats === 1 ? '' : 's') + ' open';
+        return 'Full';
+    }
+
+    // The choices are embedded with the results, so the chooser opens instantly.
+    function companionChoices(lectureKey) {
+        const island = document.getElementById('companion-data');
+        if (!island) return null;
+        try { return (JSON.parse(island.textContent || '{}'))[lectureKey] || null; }
+        catch { return null; }
+    }
+
+    function openCompanionChooser(button) {
+        pairContext = {
+            term: button.dataset.term, subject: button.dataset.subject,
+            number: button.dataset.number, lecture: button.dataset.section
+        };
+        const kind = button.dataset.kind || 'section';
+        companionTitle.textContent = 'Choose a ' + kind;
+        companionList.innerHTML = '';
+        companionNote.hidden = true;
+        if (typeof companionDialog.showModal === 'function') companionDialog.showModal();
+
+        const key = pairContext.term + '|' + pairContext.subject + '|' + pairContext.number + '|' + pairContext.lecture;
+        const choices = companionChoices(key);
+        if (!choices) { companionList.innerHTML = '<li class="companion-loading">Could not load sections.</li>'; return; }
+
+        if (!choices.length) { companionList.innerHTML = '<li class="companion-loading">No sections to choose from.</li>'; return; }
+        if (choices.some(c => !c.published)) {
+            companionNote.textContent = 'The registrar has not published which ' + kind
+                + ' goes with this lecture, so every one is listed. Check with the department if unsure.';
+            companionNote.hidden = false;
+        }
+
+        companionList.innerHTML = '';
+        for (const c of choices) {
+            const li = document.createElement('li');
+            const full = (c.seats !== null && c.seats <= 0);
+            li.innerHTML =
+                '<button type="button" class="companion-pick" data-section="' + c.section + '"' + (full ? ' data-full="1"' : '') + '>'
+                + '<span class="companion-sec">Section ' + c.section + '</span>'
+                + '<span class="companion-when">' + (c.times ? c.times : 'No meeting time')
+                + (c.location ? ' &middot; ' + c.location : '') + '</span>'
+                + (c.professor ? '<span class="companion-who">' + c.professor + '</span>' : '')
+                + '<span class="companion-seats ' + (full ? 'full' : 'open') + '">' + seatLabel(c.seats) + '</span>'
+                + '</button>';
+            companionList.appendChild(li);
+        }
+    }
+
+    companionList.addEventListener('click', async function (event) {
+        const pick = event.target.closest('button.companion-pick');
+        if (!pick || !pairContext) return;
+        pick.disabled = true;
+        const response = await post('AddPair', {
+            term: pairContext.term, subject: pairContext.subject,
+            number: pairContext.number, lecture: pairContext.lecture, companion: pick.dataset.section
+        });
+        if (response.ok) { companionDialog.close(); refresh(); refreshCart(); }
+        else pick.disabled = false;
+    });
+    document.getElementById('companion-cancel').addEventListener('click', () => companionDialog.close());
+    companionDialog.addEventListener('click', e => { if (e.target === companionDialog) companionDialog.close(); });
 
     // Back to top: shown once the reader is a screen or so down the list.
     const toTop = document.getElementById('to-top');

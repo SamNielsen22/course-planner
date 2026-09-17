@@ -5,20 +5,9 @@ using Microsoft.Data.Sqlite;
 namespace Ingest.Schedule.Database;
 
 /// <summary>
-/// Replace each course's short title with the full one from its description
-/// page.
-///
-/// The class listing carries the registrar's 30-character short title -
-/// "Manufact for Eng Sys" - and that is what the crawler stored for every
-/// course before it learned to read the description page's heading, "ME EN
-/// 2650 - Manufacturing for Engineering Systems". The crawler keeps the full
-/// name for anything it reads now; this is the pass over courses already
-/// stored, which the crawler never re-reads.
-///
-/// One request per course, two seconds apart, close to the crawler's own
-/// pace. Resumable: courses already visited are listed in
-/// data/titles_done.txt and skipped, so a stopped run picks up where it left
-/// off. Ported from FillTitles.py on 2026-09-13.
+/// Replaces a course's short title with the full one from its description
+/// page, for courses stored before the crawler read headings. One request per
+/// course, two seconds apart, resumable through data/titles_done.txt.
 /// </summary>
 public static class Titles
 {
@@ -27,7 +16,7 @@ public static class Titles
     private static readonly TimeSpan Pause = TimeSpan.FromSeconds(2);
     private static readonly HttpClient Http = new() { Timeout = TimeSpan.FromSeconds(30) };
 
-    /// <summary>'Fall2026' -> '1268': the registrar's 1, two-digit year, season digit.</summary>
+    /// <summary>"Fall2026" as the registrar's "1268".</summary>
     public static string TermCode(string term)
     {
         var season = term[..^4];
@@ -36,7 +25,7 @@ public static class Titles
         return $"1{year[2..]}{digit}";
     }
 
-    /// <summary>The full title in a description page's heading, or empty when the heading is not where expected.</summary>
+    /// <summary>The full title from the page heading, or empty.</summary>
     public static string FullTitle(string html)
     {
         var doc = new HtmlDocument();
@@ -65,7 +54,7 @@ public static class Titles
         return null;
     }
 
-    /// <summary>The command: `titles [--db path] [--limit N]`.</summary>
+    /// <summary>The `titles` command.</summary>
     public static int Run(string databasePath, int? limit)
     {
         if (!File.Exists(databasePath)) { Console.Error.WriteLine($"no database at {databasePath}"); return 1; }
@@ -73,8 +62,7 @@ public static class Titles
 
         using var database = new SqliteConnection($"Data Source={databasePath}");
         database.Open();
-        // One section per course to address the page with - the newest
-        // stored one, since the page needs a term and a section number.
+        // The page address needs a term and a section, so take the newest stored one.
         var courses = database.Query<(string Subject, string Number, string? Title, string Term, string Section, long RowId)>("""
             SELECT c.subject, c.course_number, c.title, s.term, s.section_number, MAX(s.rowid)
             FROM courses c
@@ -94,7 +82,7 @@ public static class Titles
             var (subject, number, title, term, section, _) = todo[i];
             var url = Base + TermCode(term) + "/description.html?subj=" + Uri.EscapeDataString(subject) + "&catno=" + Uri.EscapeDataString(number) + "&section=" + Uri.EscapeDataString(section);
             var page = FetchAsync(url).GetAwaiter().GetResult();
-            if (page is null) { Thread.Sleep(Pause); continue; }   // not marked done: the next run tries again
+            if (page is null) { Thread.Sleep(Pause); continue; }   // not marked done, so the next run retries
 
             var found = FullTitle(page);
             if (found.Length == 0) missing++;

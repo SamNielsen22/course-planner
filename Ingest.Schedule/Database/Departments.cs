@@ -4,28 +4,14 @@ using Microsoft.Data.Sqlite;
 namespace Ingest.Schedule.Database;
 
 /// <summary>
-/// Give every instructor a department, inferred from what they teach.
-///
-/// The registrar publishes no department for a person - only the subject
-/// code on each section. So the department is worked out from teaching load:
-/// map each subject to a department (departments.csv, beside this file), then
-/// give the instructor whichever department they teach the most sections in.
-///
-/// The result is written to instructors.department rather than computed on
-/// read. Deriving it means grouping every section a person has ever taught,
-/// and the professor search shows twenty-four people at a time; that is
-/// twenty-four such groupings per keystroke. It changes only when the
-/// schedule is re-crawled, so run this after a crawl.
-///
-/// Ties are broken toward the department with more sections overall, which
-/// keeps a person who taught one class in each of two units with the one
-/// they belong to rather than with whichever sorted first.
-///
-/// Ported from AssignDepartments.py on 2026-09-13.
+/// Gives every instructor a department, since the registrar publishes none:
+/// each subject maps to a department (departments.csv, beside this file) and
+/// the instructor takes whichever they teach most, ties going to the larger
+/// department. Stored rather than derived on read, so run it after a crawl.
 /// </summary>
 public static class Departments
 {
-    /// <summary>subject -> department, from a two-column csv with a header.</summary>
+    /// <summary>subject to department, from the csv.</summary>
     public static Dictionary<string, string> LoadMapping(string path)
     {
         var mapping = new Dictionary<string, string>();
@@ -48,7 +34,7 @@ public static class Departments
 
     public static Result Assign(SqliteConnection database, IReadOnlyDictionary<string, string> subjectToDepartment)
     {
-        // Every subject a person has taught, and how many sections in each.
+        // Every subject a person taught, and how many sections in each.
         var taught = new Dictionary<string, Dictionary<string, int>>();
         foreach (var row in database.Query<(string Unid, string Subject)>("SELECT instructor_unid, subject FROM section_instructors"))
         {
@@ -92,7 +78,7 @@ public static class Departments
         return new Result(total, named, unmapped, largest);
     }
 
-    /// <summary>The command: `departments [--db path]`. The mapping is the departments.csv shipped beside the program.</summary>
+    /// <summary>The `departments` command.</summary>
     public static int Run(string databasePath)
     {
         if (!File.Exists(databasePath)) { Console.Error.WriteLine($"no database at {databasePath}"); return 1; }

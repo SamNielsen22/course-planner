@@ -23,27 +23,23 @@ public record Section(
     string? SeatsUpdated,
     double? GpaAvg,
     IReadOnlyList<SectionInstructor> Instructors,
-    // The enrollment side, where the registrar's sections table has been read:
-    // how many are waiting, whether the section can be waited on at all, the
-    // cap, the enrolled, and the class number a student registers with.
+    // Enrollment figures from the registrar's sections table; null until read.
     int? Waitlist = null,
     bool? HasWaitlist = null,
     int? EnrollmentCap = null,
     int? Enrolled = null,
-    string? ClassNumber = null);
+    string? ClassNumber = null,
+    // On a lab: the lecture section it registers you into, "*" for any, null
+    // when the registrar published no pairing. Always null on a lecture.
+    string? PairsWith = null);
 
-// Unid is the identity; Name is only for display. Two people can share a
-// name, so anything that looks an instructor up must use the Unid.
+// Unid is the identity. Names are not unique.
 public record Instructor(string Unid, string Name, int SectionCount);
 
-/// <summary>
-/// An instructor as attached to a section. The uNID travels with the name so a
-/// link out of a section list can address the person rather than the spelling -
-/// routing by name merges the two "Nguyen, Khoi" who both teach MATH.
-/// </summary>
+/// <summary>An instructor on a section. Links use the uNID, never the name.</summary>
 public record SectionInstructor(string Unid, string Name);
 
-/// <summary>Read side of the database. The ingest projects own the writes.</summary>
+/// <summary>Reads the catalogue database. Only the ingest projects write to it.</summary>
 public class CourseQueries(string connectionString)
 {
     private SqliteConnection Open()
@@ -60,13 +56,7 @@ public class CourseQueries(string connectionString)
             "SELECT DISTINCT term FROM sections ORDER BY term").ToList();
     }
 
-    /// <summary>Every section of one course in one term.</summary>
-    /// <summary>
-    /// The registrar numbers a sequence in Roman - "Calculus I", "Physics
-    /// for Scientists and Engineers II" - and nobody types that. A query whose
-    /// last word is a small number gets a second form with it in Roman, so
-    /// "calculus 1" finds Calculus I. Null when the query ends in no such number.
-    /// </summary>
+    /// <summary>"calculus 1" as "calculus I", since titles use Roman numerals. Null when the query ends in no small number.</summary>
     public static string? RomanTitle(string query)
     {
         var at = query.LastIndexOf(' ');
@@ -75,12 +65,7 @@ public class CourseQueries(string connectionString)
         return query[..at] + " " + roman[n - 1];
     }
 
-    /// <summary>
-    /// Courses matching text, from the whole catalogue rather than one term.
-    /// The lookup page: you find the class first, then choose the term and
-    /// section on its page, so a course that last ran in 2021 still has to
-    /// be findable. Average is pooled across every term it has grades in.
-    /// </summary>
+    /// <summary>Courses matching text, across every term, with the average pooled over all their grades.</summary>
     public IReadOnlyList<Course> SearchAllCourses(string? query)
     {
         query = (query ?? "").Trim();
@@ -90,11 +75,7 @@ public class CourseQueries(string connectionString)
         var tail = parts.Length == 2 ? parts[1] : "";
 
         using var database = Open();
-        // "cs" is a subject, not a substring: left as text it matched Analytics,
-        // Ethics and Genetics, sorted them alphabetically, and hit the row cap
-        // before a single CS course. An exact subject code returns that subject
-        // and nothing else; anything else is ranked so that subject and code
-        // matches come before title matches.
+        // An exact subject code returns that subject only; other text is ranked code matches first.
         return database.Query(@"
             SELECT c.subject AS Subject, c.course_number AS CourseNumber, c.title AS Title,
                    c.requirement_designation AS RequirementDesignation,
@@ -116,21 +97,21 @@ public class CourseQueries(string connectionString)
                          OR (c.subject || ' ' || c.course_number) LIKE @Like
                          OR (@Head <> '' AND c.subject LIKE @HeadLike AND c.course_number LIKE @TailLike)
                   END
-              -- The builder's credit rule, applied at the course grain: a
-              -- three-digit number whose sections have never carried credit
-              -- is the non-credit shadow of a real course (CS 140 is CS 1400
-              -- on Canvas for no units), not something to plan a degree around.
+              -- Three-digit courses that never carried credit are non-credit shadows; skip them,
+              -- unless another course lists them as a prerequisite (e.g. MATH 980).
               AND NOT (LENGTH(c.course_number) = 3
                        AND NOT EXISTS (SELECT 1 FROM sections s
                                        WHERE s.subject = c.subject AND s.course_number = c.course_number
-                                         AND s.units > 0))
+                                         AND s.units > 0)
+                       AND (c.subject || '|' || c.course_number) NOT IN @Prereqs)
             ORDER BY CASE WHEN c.subject LIKE @StartsLike THEN 0
                           WHEN (c.subject || ' ' || c.course_number) LIKE @StartsLike THEN 1
                           WHEN c.course_number LIKE @StartsLike THEN 2
                           ELSE 3 END,
                      c.subject, c.course_number;",
             new { Upper = query.ToUpperInvariant(), Like = $"%{query}%", RomanLike = $"%{RomanTitle(query) ?? query}%",
-                  StartsLike = $"{query}%", Head = head, HeadLike = $"{head}%", TailLike = $"{tail}%" })
+                  StartsLike = $"{query}%", Head = head, HeadLike = $"{head}%", TailLike = $"{tail}%",
+                  Prereqs = PrereqCourses })
             .Select(r => new Course((string)r.Subject, (string)r.CourseNumber, (string)r.Title,
                                     (string?)r.RequirementDesignation,
                                     r.GpaAvg is double gpa ? gpa : null))
@@ -163,7 +144,7 @@ public class CourseQueries(string connectionString)
     private static readonly Regex TimePattern =
         new Regex(@"(\d{1,2}):(\d{2})(AM|PM)-(\d{1,2}):(\d{2})(AM|PM)", RegexOptions.Compiled);
 
-    /// <summary>A clock time to minutes past midnight, or null.</summary>
+    /// <summary>"9:10AM" as minutes past midnight, or null.</summary>
     internal static int? ToMinutes(string? clockTime)
     {
         if (string.IsNullOrWhiteSpace(clockTime)) return null;
@@ -179,10 +160,7 @@ public class CourseQueries(string connectionString)
         return hour * 60 + minute;
     }
 
-    /// <summary>
-    /// The earliest start across every meeting pattern in a times string. Sections
-    /// can meet several times, separated by semicolons.
-    /// </summary>
+    /// <summary>The earliest start in a times string, which may hold several patterns.</summary>
     public static int? EarliestStart(string? times)
     {
         if (string.IsNullOrWhiteSpace(times)) return null;
@@ -209,11 +187,7 @@ public class CourseQueries(string connectionString)
         return database.Query<string>("SELECT DISTINCT term FROM section_grades;").ToList();
     }
 
-    /// <summary>
-    /// Sections in a term narrowed by any combination of text, requirement designation,
-    /// open seats and start time. Time filtering happens in memory because the stored
-    /// times are display strings, sometimes several patterns per section.
-    /// </summary>
+    /// <summary>Sections in a term, filtered by text, requirement, open seats and start time. Times are filtered in memory.</summary>
     public IReadOnlyList<Section> FindSections(
         string term,
         string? subject = null,
@@ -230,21 +204,18 @@ public class CourseQueries(string connectionString)
             SELECT s.term, s.subject, s.course_number, s.section_number, s.campus, c.title,
                    s.component, s.type, s.units, s.location, s.times,
                    s.seats_available, s.seats_updated, CAST(g.gpa_avg AS REAL) AS gpa_avg,
-                   s.waitlist, s.has_waitlist, s.enrollment_cap, s.enrolled, s.class_number
+                   s.waitlist, s.has_waitlist, s.enrollment_cap, s.enrolled, s.class_number, s.pairs_with
             FROM sections s
             JOIN courses c ON c.subject = s.subject AND c.course_number = s.course_number
-            -- Grades are a separate source and do not cover every term, so this
-            -- is a LEFT JOIN: a section with no published grades still lists.
+            -- LEFT JOIN: a section without grades still lists.
             LEFT JOIN section_grades g ON g.term = s.term AND g.subject = s.subject
                               AND g.course_number = s.course_number
                               AND g.section_number = s.section_number
             WHERE s.term = @Term
-              -- One of the registrar's three schedules, or all of them.
               AND (@Campus = '' OR s.campus = @Campus)
               AND (@Subject = '' OR s.subject = @Subject)
               AND (@CourseNumber = '' OR s.course_number = @CourseNumber)
-              -- The same split SearchCourses does. A code like CS 2420 matches
-              -- nothing column by column, because no single column holds it.
+              -- Same text rules as SearchAllCourses.
               AND (@Query = ''
                    OR s.subject LIKE @Like
                    OR s.course_number LIKE @Like
@@ -255,13 +226,7 @@ public class CourseQueries(string connectionString)
                        AND s.course_number LIKE @TailLike))
               AND (@Requirement = '' OR c.requirement_designation LIKE @RequirementLike)
               AND (@OpenOnly = 0 OR s.seats_available > 0)
-              -- Continuing Education: zero credit, three-digit course numbers,
-              -- taught at UUCE and the satellite campuses. No 3-digit course has
-              -- ever appeared in the grade data, and they count toward nothing,
-              -- so they are noise for anyone planning a degree. Both halves of
-              -- the test are needed: 3-digit alone would hide real labs like
-              -- MATH 225, and units=0 alone would hide thesis Continuing
-              -- Registration and the zero-credit labs attached to real courses.
+              -- Continuing Education is three digits AND zero credit; either test alone hides real classes.
               AND (@CreditOnly = 0
                    OR NOT (s.units = 0 AND LENGTH(s.course_number) = 3))
             ORDER BY s.subject, s.course_number, s.section_number;";
@@ -269,7 +234,7 @@ public class CourseQueries(string connectionString)
         subject ??= ""; courseNumber ??= ""; requirement ??= "";
         query = (query ?? "").Trim();
 
-        // A two-part query is read as subject then number: "CS 2420", "math 1210".
+        // "CS 2420" is read as subject then number.
         var parts = query.Split(' ', 2, StringSplitOptions.RemoveEmptyEntries);
         var head = parts.Length == 2 ? parts[0] : "";
         var tail = parts.Length == 2 ? parts[1] : "";
@@ -317,7 +282,8 @@ public class CourseQueries(string connectionString)
             (long?)row.has_waitlist is { } waitable ? waitable != 0 : null,
             (int?)(long?)row.enrollment_cap,
             (int?)(long?)row.enrolled,
-            (string?)row.class_number
+            (string?)row.class_number,
+            (string?)row.pairs_with
         ));
 
         var after = ToMinutes(startAfter);
@@ -326,7 +292,7 @@ public class CourseQueries(string connectionString)
             sections = sections.Where(section =>
             {
                 var start = EarliestStart(section.Times);
-                if (start is null) return false;   // no meeting time cannot satisfy a time filter
+                if (start is null) return false;   // no meeting time, no match
                 if (after is not null && start < after) return false;
                 if (before is not null && start > before) return false;
                 return true;
@@ -335,18 +301,13 @@ public class CourseQueries(string connectionString)
         return sections.ToList();
     }
 
-    /// <summary>One published grade row as stored. Bucket counts are null where the registrar blanked them (under five).</summary>
+    /// <summary>One published grade row. A count is null where the registrar blanked it (under five students).</summary>
     public sealed record GradeRow(
         string Term, string Subject, string CourseNumber, string? SectionNumber,
         double Avg, double? P25, double? P50, double? P75, double? Sd,
         int? A, int? B, int? C, int? D, int? E, int Cr, int Nc, int W, int Other);
 
-    /// <summary>
-    /// Every graded row of one grain, for <see cref="GradeIndex"/>: sections,
-    /// terms of a course, or the all-terms row. Rows without an average are
-    /// non-graded components - labs, discussions - and are left out here as
-    /// they are everywhere else.
-    /// </summary>
+    /// <summary>Every graded row of one table, for <see cref="GradeIndex"/>. Rows without an average are left out.</summary>
     public IReadOnlyList<GradeRow> GradeRows(string table)
     {
         var (termColumn, sectionColumn) = table switch
@@ -377,7 +338,7 @@ public class CourseQueries(string connectionString)
 
     public sealed record SectionInstructorLink(string Term, string Subject, string CourseNumber, string SectionNumber, string Unid);
 
-    /// <summary>Who taught which section - the join <see cref="GradeIndex"/> pools a professor's rows through.</summary>
+    /// <summary>Who taught which section.</summary>
     public IReadOnlyList<SectionInstructorLink> SectionInstructorLinks()
     {
         using var database = Open();
@@ -400,11 +361,7 @@ public class CourseQueries(string connectionString)
             ORDER BY term;", new { Subject = subject, Number = courseNumber }).ToList();
     }
 
-    /// <summary>
-    /// The builder's cards for a page of sections. The two averages - the
-    /// course's, and THIS professor's in it - come from <see cref="GradeIndex"/>
-    /// through the lookups passed in, so a card and a page never disagree.
-    /// </summary>
+    /// <summary>The builder's cards for a page of sections. Averages come from <see cref="GradeIndex"/> through the lookups passed in.</summary>
     public IReadOnlyList<SectionCard> Cards(
         IReadOnlyList<Section> sections,
         Func<string, string, double?> courseAverage,
@@ -416,8 +373,7 @@ public class CourseQueries(string connectionString)
 
         using var database = Open();
 
-        // Prerequisites belong to the course, not the section, so they are read
-        // once per course rather than once per row.
+        // Prerequisites are per course, so read once per course.
         var prereqs = database.Query(@"
             SELECT subject AS Subject, course_number AS Number, prerequisites AS Text
             FROM courses
@@ -426,23 +382,62 @@ public class CourseQueries(string connectionString)
             new { Codes = codes })
             .ToDictionary(r => (string)r.Subject + "|" + (string)r.Number, r => (string)r.Text);
 
+        // Every section of each course on this page, not just the ones shown. A
+        // page is one slice of one filter, so a lecture's companion list would
+        // otherwise grow and shrink with the page number.
+        var courseSections = database.Query(@"
+            SELECT term AS Term, campus AS Campus, subject AS Subject, course_number AS Number,
+                   section_number AS SectionNumber, component AS Component, pairs_with AS PairsWith
+            FROM sections
+            WHERE term IN @Terms AND subject || '|' || course_number IN @Codes;",
+            new { Terms = sections.Select(s => s.Term).Distinct().ToList(), Codes = codes })
+            .GroupBy(r => ((string)r.Term, (string)r.Campus, (string)r.Subject, (string)r.Number))
+            .ToDictionary(g => g.Key, g => g.Select(r =>
+                new CourseSection((string)r.SectionNumber, (string?)r.Component, (string?)r.PairsWith)).ToList());
+        var whole = courseSections.ToDictionary(kv => kv.Key, kv => Companions.Resolve(kv.Value));
+
         return sections.Select(s =>
         {
             var code = s.Subject + "|" + s.CourseNumber;
-            // Each professor's own average in this course, by uNID: a co-taught
-            // section shows one figure per person rather than one person's
-            // number under a label that says "this professor".
+            // One average per professor, by uNID, so co-taught sections show one figure each.
             var averages = s.Instructors
                 .GroupBy(t => t.Unid)
                 .ToDictionary(g => g.Key, g => instructorCourseAverage(g.Key, s.Subject, s.CourseNumber));
+
+            string? pairsWith = null;
+            IReadOnlyList<string> labs = Array.Empty<string>();
+            var requiresCompanion = false;
+            string? companionKind = null;
+            // A course with no lecture has nothing to pair: its lab is the course.
+            var hasLecture = whole.TryGetValue((s.Term, s.Campus, s.Subject, s.CourseNumber), out var course) && course.HasLecture;
+            if (hasLecture)
+            {
+                if (Companions.IsCompanion(s.Component)) pairsWith = course!.PairsWith.GetValueOrDefault(s.SectionNumber);
+                else if (s.Component == "Lecture") labs = course!.Companions.GetValueOrDefault(s.SectionNumber, Array.Empty<string>());
+
+                // A lecture requires a companion when one is paired to it. When the
+                // course published no pairing at all we cannot tell which lectures
+                // are self-contained, so every lecture asks. But once the pairing is
+                // published, a lecture with none paired to it (an online or standalone
+                // section) needs no lab, so it is left alone.
+                var kinds = courseSections[(s.Term, s.Campus, s.Subject, s.CourseNumber)]
+                    .Where(x => Companions.IsCompanion(x.Component)).Select(x => x.Component).ToList();
+                var anyPublished = course!.PairsWith.Values.Any(v => v is not null);
+                if (s.Component == "Lecture" && kinds.Count > 0 && (labs.Count > 0 || !anyPublished))
+                {
+                    requiresCompanion = true;
+                    companionKind = Companions.Kind(kinds);
+                }
+            }
             return new SectionCard(s.Subject, s.CourseNumber, s.SectionNumber, s.Campus, s.Title,
                                    s.Times, s.Location, s.SeatsAvailable, s.Units, s.Instructors,
                                    courseAverage(s.Subject, s.CourseNumber), averages,
-                                   prereqs.GetValueOrDefault(code), s.Waitlist, s.HasWaitlist);
+                                   prereqs.GetValueOrDefault(code), s.Waitlist, s.HasWaitlist,
+                                   s.Component, pairsWith, labs, hasLecture, requiresCompanion, companionKind);
         }).ToList();
     }
 
-    /// <summary>Every course in the catalogue, in order - the sitemap's list.</summary>
+    /// <summary>Every course, in order. Used by the sitemap.</summary>
     public IReadOnlyList<(string Subject, string Number)> AllCourses()
     {
         using var database = Open();
@@ -450,7 +445,7 @@ public class CourseQueries(string connectionString)
             .Select(r => ((string)r.subject, (string)r.course_number)).ToList();
     }
 
-    /// <summary>Catalogue prose, independent of any term.</summary>
+    /// <summary>One course's title, description and prerequisites.</summary>
     public CourseInfo? Course(string subject, string courseNumber)
     {
         using var database = Open();
@@ -470,12 +465,7 @@ public class CourseQueries(string connectionString)
             "SELECT display_name FROM instructors WHERE unid = @Unid", new { Unid = unid });
     }
 
-    /// <summary>
-    /// Course titles keyed "SUBJ NUMBER". Fetched whole and held by the caller
-    /// so marking up a prerequisite string is a dictionary hit per reference
-    /// rather than a query - 13,000 short rows, and the catalogue only changes
-    /// when the crawler runs.
-    /// </summary>
+    /// <summary>Every course title keyed "SUBJ NUMBER", fetched once for the prerequisite markup.</summary>
     public Dictionary<string, string> CourseTitles()
     {
         using var database = Open();
@@ -486,7 +476,7 @@ public class CourseQueries(string connectionString)
         return titles;
     }
 
-    /// <summary>The requirement designations actually in use, most common first.</summary>
+    /// <summary>The requirement designations in use, for the filter.</summary>
     public IReadOnlyList<string> Designations()
     {
         using var database = Open();
@@ -494,9 +484,7 @@ public class CourseQueries(string connectionString)
         foreach (var row in database.Query<string>(@"
             SELECT requirement_designation FROM courses
             WHERE requirement_designation IS NOT NULL AND TRIM(requirement_designation) <> ''"))
-            // The registrar packs several into one field, separated by commas,
-            // slashes or ampersands. A LIKE on one atom still finds the combined
-            // strings, so the atoms are what the filter offers.
+            // One field can hold several designations; the filter offers each one.
             foreach (var part in row.Split([',', '/', '&'], StringSplitOptions.RemoveEmptyEntries))
             {
                 var atom = part.Trim();
@@ -509,12 +497,7 @@ public class CourseQueries(string connectionString)
                      .Select(p => p.Key).ToList();
     }
 
-    /// <summary>
-    /// How much data the site is standing on, counted rather than written down.
-    /// Terms sort alphabetically in storage - every Fall, then every Spring -
-    /// so the first and last graded term are picked in real time order here
-    /// rather than by MIN and MAX.
-    /// </summary>
+    /// <summary>Row counts and the first and last terms. Terms are ordered by date, not alphabetically.</summary>
     public CoverageCounts Coverage()
     {
         using var db = Open();
@@ -535,7 +518,7 @@ public class CourseQueries(string connectionString)
             schedule.LastOrDefault());
     }
 
-    /// <summary>"Fall2026" as (2026, 2), so terms order chronologically.</summary>
+    /// <summary>"Fall2026" as (2026, 2), for date order.</summary>
     private static (int Year, int Season) TermKey(string term)
     {
         var year = term.Length >= 4 && int.TryParse(term[^4..], out var y) ? y : 0;
@@ -545,10 +528,7 @@ public class CourseQueries(string connectionString)
         return (year, season < 0 ? 3 : season);
     }
 
-    /// <summary>
-    /// "SUBJ|NUMBER" to the course's requirement designation, so the section
-    /// index can apply the requirement filter without a join per search.
-    /// </summary>
+    /// <summary>"SUBJ|NUMBER" to the course's requirement designation.</summary>
     public Dictionary<string, string?> RequirementDesignations()
     {
         using var database = Open();
@@ -560,7 +540,46 @@ public class CourseQueries(string connectionString)
                           r => (string?)r.Designation);
     }
 
-    /// <summary>Every subject code that has a section, for the department filter.</summary>
+    // Computed once from the courses table; a search reuses it rather than re-scanning.
+    private HashSet<string>? _prereqCourses;
+
+    /// <summary>The prerequisite set, cached for the life of the process.</summary>
+    public HashSet<string> PrereqCourses => _prereqCourses ??= PrerequisiteCourses();
+
+    /// <summary>
+    /// Every course named in another course's prerequisite text, as "SUBJECT|NUMBER".
+    /// Used to keep a prerequisite visible even when it carries no credit. A bare
+    /// number inherits the subject before it ("MATH 1050 OR 1060"), as on the course page.
+    /// </summary>
+    public HashSet<string> PrerequisiteCourses()
+    {
+        using var database = Open();
+        var subjects = database.Query<string>("SELECT DISTINCT subject FROM courses;")
+            .OrderByDescending(s => s.Length).Select(Regex.Escape);
+        var reference = new Regex(
+            @"\b(?<subj>" + string.Join("|", subjects) + @")\s*(?<num>\d{3,4}[A-Z]?)\b|\b(?<bare>\d{3,4}[A-Z]?)\b",
+            RegexOptions.IgnoreCase | RegexOptions.Compiled);
+
+        var referenced = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var text in database.Query<string>(
+            "SELECT prerequisites FROM courses WHERE prerequisites IS NOT NULL AND TRIM(prerequisites) <> '';"))
+        {
+            string? carried = null;
+            foreach (Match m in reference.Matches(text))
+            {
+                if (m.Groups["subj"].Success)
+                {
+                    carried = m.Groups["subj"].Value.ToUpperInvariant();
+                    referenced.Add($"{carried}|{m.Groups["num"].Value}");
+                }
+                else if (carried is not null)   // a bare number inherits the last subject
+                    referenced.Add($"{carried}|{m.Groups["bare"].Value}");
+            }
+        }
+        return referenced;
+    }
+
+    /// <summary>Every subject code with a section.</summary>
     public IReadOnlyList<string> Departments()
     {
         using var database = Open();
@@ -569,47 +588,18 @@ public class CourseQueries(string connectionString)
     }
 
     /// <summary>
-    /// The components that are a class in the sense a student means: something
-    /// you enrol in, attend, and are graded on by the person running it.
-    /// Lecture, Seminar, Studio, Workshop, Special Topics, Ensemble, Private
-    /// Instruction, and Activity (fitness and dance, graded mostly CR/NC).
-    ///
-    /// Used only for the section count behind the busiest-first tiebreak. The
-    /// search card and the graded-class count do NOT use it: they require
-    /// letter grades instead, which excludes the same rotations while keeping
-    /// a graded practicum - 924 graded classes sit in components outside this
-    /// list, and hiding them contradicted the professor's own page.
-    ///
-    /// Out: anything the instructor of record supervises rather than teaches -
-    /// Clinical, Practicum, Field Work, Independent Study, Research, Thesis -
-    /// and the TA-run halves of a lecture, Laboratory and Discussion, whose
-    /// grade lives on the lecture. Without this a pharmacy coordinator who is
-    /// instructor of record on 1,283 clinical rotations showed as teaching 89
-    /// classes and topped the busiest-first sort.
+    /// Components that count as teaching for the section count. Supervised
+    /// work (clinical, practicum, thesis) and TA-run labs are left out.
     /// </summary>
     private const string TeachingComponents =
         "('Lecture','Seminar','Studio','Workshop','Special Topics','Ensemble'," +
         "'Private Instruction','Activity')";
 
-    /// <summary>
-    /// Every instructor with their headcount-weighted average GPA, in one pass.
-    /// Weighted so a six-student seminar cannot outvote a three-hundred-student
-    /// lecture.
-    /// </summary>
-    /// <remarks>
-    /// Read once, at startup, by <see cref="InstructorIndex"/>. It is the whole
-    /// table by design: run per request to fill a page of twenty-four it cost
-    /// about 450ms, because the work is the same either way - join every
-    /// section assignment to every graded section and group the lot. The only
-    /// saving available is to stop doing it per request.
-    /// </remarks>
+    /// <summary>Every instructor with their section and graded-class counts. Read once at startup by <see cref="InstructorIndex"/>.</summary>
     public IReadOnlyList<InstructorIndex.Entry> InstructorAverages()
     {
         using var database = Open();
-        // Mapped by hand rather than by constructor. SQLite hands COUNT(*) back
-        // as Int64 and Dapper will not narrow it to the record's int, so
-        // automatic materialisation fails at runtime rather than at compile
-        // time. The same trap as SearchCourses.
+        // Mapped by hand: SQLite counts are Int64 and Dapper will not narrow them to int.
         return database.Query(@"
             WITH load AS (
                 SELECT i.instructor_unid AS unid, COUNT(*) AS n
@@ -619,8 +609,7 @@ public class CourseQueries(string connectionString)
                 WHERE s.component IN " + TeachingComponents + @"
                 GROUP BY i.instructor_unid
             ),
-            -- Distinct classes with published letter grades: exactly the set
-            -- the search card draws a tile for, so the sort and the card agree.
+            -- Distinct classes with letter grades, the same set the search card shows.
             graded AS (
                 SELECT i.instructor_unid AS unid,
                        COUNT(DISTINCT i.subject || '|' || i.course_number) AS k
@@ -650,13 +639,7 @@ public class CourseQueries(string connectionString)
             .ToList();
     }
 
-    /// <summary>
-    /// For each of the given instructors, every course they teach AND have
-    /// published grades in, with
-    /// THIS professor's average in that course - not the course's overall
-    /// average, which is the same number on every professor's card and so says
-    /// nothing about the person whose card you are reading.
-    /// </summary>
+    /// <summary>For each instructor, the courses they have published grades in. The average is filled in by <see cref="InstructorIndex"/>.</summary>
     public Dictionary<string, IReadOnlyList<InstructorCourse>> InstructorCourseAverages(
         IReadOnlyList<string> unids)
     {
@@ -680,23 +663,14 @@ public class CourseQueries(string connectionString)
              AND n.c > 0
             WHERE i.instructor_unid IN @Unids
             GROUP BY i.instructor_unid, i.subject, i.course_number
-            -- Graded classes only, of ANY component. A tile with no number on
-            -- it says nothing about how the person grades, which is the only
-            -- thing it is for; and a practicum with twenty-six letter grades
-            -- in it is a class however the registrar files it. Requiring
-            -- grades is what keeps a coordinator's rotations off the card.
+            -- Graded classes only, whatever the component.
             HAVING SUM(n.c) > 0;", new { Unids = unids })
             .GroupBy(r => (string)r.Unid)
             .ToDictionary(g => g.Key, g => (IReadOnlyList<InstructorCourse>)g
                 .Select(r => new InstructorCourse((string)r.Subject, (string)r.CourseNumber,
                                                   (string)r.Title,
                                                   r.Gpa is double gpa ? gpa : null))
-                // Graded classes first - the card exists to show how this person
-                // grades - then the rest; each group in catalogue order. Every
-                // class is returned; the card decides how many to draw and says
-                // how many it left out, rather than silently keeping the first
-                // four alphabetically and dropping a graded KINES class behind
-                // an ungraded CTLE one.
+                // Graded classes first, then catalogue order. The card decides how many to show.
                 .OrderBy(c => c.AvgGpa is null)
                 .ThenBy(c => c.Subject, StringComparer.OrdinalIgnoreCase)
                 .ThenBy(c => c.CourseNumber, StringComparer.OrdinalIgnoreCase).ToList());
@@ -706,14 +680,8 @@ public class CourseQueries(string connectionString)
 // ------------------------------------------------------------ grade shapes
 
 /// <summary>
-/// A grade distribution, at whatever grain the caller asked for. Cr/Nc/W are
-/// kept apart from Other because a withdrawal is a different decision from an
-/// unusual mark, even though the chart pools them.
-///
-/// P25/P50/P75 are GPA-point percentiles and StdDev the spread. For one term
-/// or one section they are the dashboard's own. Pooled across terms or
-/// sections they come from <see cref="GradeIndex.Pool"/>: the deviation
-/// combined exactly, the percentiles read off reconstructed lists.
+/// A grade distribution at any grain. Percentiles and the deviation are the
+/// dashboard's own for a single row and null when rows are pooled.
 /// </summary>
 public record GradeDistribution(
     int A, int B, int C, int D, int E,
@@ -724,54 +692,25 @@ public record GradeDistribution(
 
     public int Graded => A + B + C + D + E;
 
-    /// <summary>
-    /// Everyone who received a mark - a letter grade, CR/NC, or a W. "Other"
-    /// is excluded: it is lab and discussion enrolment, and those students are
-    /// already counted once through the lecture section they belong to.
-    /// </summary>
+    /// <summary>Everyone with a mark. "Other" is lab enrolment already counted through the lecture, so it is left out.</summary>
     public int Total => Graded + Cr + Nc + W;
     public bool Any => Total > 0;
 
-    /// <summary>
-    /// Every bucket the dashboard publishes, in order.
-    ///
-    /// Note what Other means at the course grain: it is the headcount of
-    /// non-graded components. CS 2420's six laboratory sections contribute 260
-    /// students who are the same people already counted in the lecture's letter
-    /// grades, so on any course with a lab this bar roughly duplicates the
-    /// enrolment rather than adding a new outcome.
-    /// </summary>
-    /// <summary>
-    /// What the chart draws. "Other" is left out: it is lab and discussion
-    /// enrolment rather than a grade, and on any course with a lab it towered
-    /// over every real grade and flattened the distribution people came to
-    /// read. It still counts toward <see cref="Total"/>.
-    /// </summary>
+    /// <summary>The bars the chart draws. "Other" is left out for the same reason as in <see cref="Total"/>.</summary>
     public IReadOnlyList<(string Label, int Count)> Bars =>
         [("A", A), ("B", B), ("C", C), ("D", D), ("E", E),
          ("CR", Cr), ("NC", Nc), ("W", W)];
 
-    /// <summary>
-    /// The average implied by the bars alone. Compared with the published
-    /// AvgGpa it reveals how much of the class the chart is not showing.
-    /// </summary>
+    /// <summary>The average the bars alone imply. Its distance from the published one shows how much is hidden.</summary>
     public double? ImpliedAvg =>
         Graded == 0 ? null : (A * 4.0 + B * 3.0 + C * 2.0 + D * 1.0) / Graded;
 
-    /// <summary>
-    /// Whether the bars are materially at odds with the published average.
-    ///
-    /// The threshold is 0.5, not zero, because two things push them apart and
-    /// only one is worth mentioning. Every section is inflated a little by the
-    /// coarse buckets - the "A" bar counts A and A- alike, scored 4.0 - which is
-    /// a median of +0.17 across all 37,279 graded sections. Suppression of
-    /// sub-five grade groups is what produces the large gaps: 14.6% clear 0.5.
-    /// </summary>
+    /// <summary>Whether the bars are well above the published average. Coarse buckets add about 0.17 on their own; 0.5 means grades were suppressed.</summary>
     public bool HasHiddenGrades =>
         AvgGpa is { } published && ImpliedAvg is { } shown && shown - published > 0.5;
 }
 
-/// <summary>An instructor plus the courses they teach, for the search cards.</summary>
+/// <summary>A professor search card.</summary>
 public record InstructorCard(
     string Unid,
     string Name,
@@ -783,25 +722,33 @@ public record InstructorCard(
 public record InstructorCourse(
     string Subject, string CourseNumber, string Title, double? AvgGpa);
 
-/// <summary>
-/// A section as the schedule builder shows it: the class, who teaches it, how
-/// the course grades on average, and how each of its professors grades it,
-/// by uNID. The last two are the comparison the card exists to make.
-/// </summary>
+/// <summary>A builder card: the section, its professors, the course average and each professor's average, by uNID.</summary>
 public record SectionCard(
     string Subject, string CourseNumber, string SectionNumber, string Campus, string Title,
     string? Times, string? Location, int? SeatsAvailable, int? Units,
     IReadOnlyList<SectionInstructor> Instructors,
     double? CourseAvgGpa, IReadOnlyDictionary<string, double?> InstructorAverages,
     string? Prerequisites,
-    int? Waitlist = null, bool? HasWaitlist = null);
+    int? Waitlist = null, bool? HasWaitlist = null,
+    string? Component = null,
+    // A lab, discussion or field-work section: the lecture it registers you
+    // into, "*" for any, null if unknown. A lecture: the sections that register you into it.
+    string? PairsWith = null,
+    IReadOnlyList<string>? PairedSections = null,
+    // Whether the course has a lecture at all. False for a course whose lab is
+    // the course, where there is no pairing to report either way.
+    bool CourseHasLecture = false,
+    // On a lecture whose course has companion sections: that a companion must be
+    // chosen too, and the word for it ("lab", "discussion", "field work").
+    bool RequiresCompanion = false,
+    string? CompanionKind = null);
 
-/// <summary>Catalogue prose for one course.</summary>
+/// <summary>One course's text from the catalogue.</summary>
 public record CourseInfo(
     string Subject, string CourseNumber, string? Title,
     string? Description, string? Prerequisites, string? RequirementDesignation);
 
-/// <summary>What the About page reports: the size and reach of the data.</summary>
+/// <summary>How much data there is.</summary>
 public record CoverageCounts(
     int Courses, int Sections, int Instructors, int GradedSections,
     string? FirstGradeTerm, string? LastGradeTerm, string? LastScheduleTerm);

@@ -7,31 +7,25 @@ using Web.Schedule;
 
 namespace Web.Pages;
 
-/// <summary>
-/// The schedule home - where "Schedule Builder" leads. A guest has the one
-/// schedule their browser keeps and continues straight into it; a signed-in
-/// student sees every schedule they have listed, opens one for the builder,
-/// creates another for a chosen term, renames or deletes. Personal, so never
-/// cached.
-/// </summary>
+/// <summary>The schedule home. A guest continues into their one schedule; a student manages several. Never cached.</summary>
 [ResponseCache(NoStore = true)]
 public class SchedulesModel(ScheduleStore store, AccountsFeature accounts, SiteIndex site) : PageModel
 {
     public bool SignedIn => store.SignedIn;
 
-    /// <summary>Whether a sign-in can be offered: accounts on, Google configured.</summary>
+    /// <summary>Whether sign-in is configured.</summary>
     public bool CanSignIn => accounts.Google;
 
-    /// <summary>Every term with sections, newest first - what a new schedule can be for.</summary>
+    /// <summary>Terms a schedule can be for, newest first.</summary>
     public IReadOnlyList<string> Terms { get; private set; } = [];
 
-    /// <summary>Signed in: every schedule, most recently touched first.</summary>
+    /// <summary>A student's schedules, most recently touched first.</summary>
     public IReadOnlyList<ScheduleSummary> Schedules { get; private set; } = [];
 
     /// <summary>True when the account database could not be reached.</summary>
     public bool Unavailable { get; private set; }
 
-    /// <summary>A guest: the campus and term their schedule is for, which their way in offers first.</summary>
+    /// <summary>A guest's current campus and term, offered first in the dialog.</summary>
     public string GuestCampus { get; private set; } = Campus.Main;
     public string? GuestTerm { get; private set; }
 
@@ -49,14 +43,14 @@ public class SchedulesModel(ScheduleStore store, AccountsFeature accounts, SiteI
         catch (NpgsqlException) { Unavailable = true; }
     }
 
-    /// <summary>Signed in: a new schedule for a term and a campus, opened for the builder.</summary>
+    /// <summary>A new schedule, opened for the builder.</summary>
     public IActionResult OnPostNew(string? name, string? term, string? campus)
     {
         store.Create(name, Known(term), Campus.Known(campus));
         return RedirectToPage("/BuilderAdd");
     }
 
-    /// <summary>A guest's way in: their one schedule, for the term and campus they choose.</summary>
+    /// <summary>A guest's way in, with their term and campus.</summary>
     public IActionResult OnPostGuest(string? campus, string? term)
     {
         store.StartGuest(Campus.Known(campus), Known(term));
@@ -81,6 +75,6 @@ public class SchedulesModel(ScheduleStore store, AccountsFeature accounts, SiteI
         return RedirectToPage();
     }
 
-    /// <summary>A term the catalogue has, or null - never a typed-in string.</summary>
+    /// <summary>A known term, or null.</summary>
     private string? Known(string? term) => term is not null && site.Terms.Contains(term) ? term : null;
 }

@@ -3,7 +3,6 @@
 @{
     ViewData["Title"] = "Your Account";
     ViewData["NoIndex"] = true;
-    var problem = ViewData.ModelState.ErrorCount > 0;
 }
 
 <div class="page-head center">
@@ -22,13 +21,10 @@
         <button type="submit" class="btn out">Sign out</button>
     </form>
 
-    @* Out of the way until wanted; opens itself if the confirmation was missed. *@
-    <details class="account-danger" open="@problem">
+    @* Folded away until wanted. *@
+    <details class="account-danger">
         <summary>Delete account</summary>
-        <p class="muted">Removes your account and your saved schedule. There is no undo.</p>
         <form method="post" asp-page-handler="Delete">
-            <label class="check"><input type="checkbox" name="confirm" value="true"/> I understand</label>
-            <div asp-validation-summary="All" class="errors"></div>
             <button type="submit" class="btn out danger">Delete my account</button>
         </form>
     </details>

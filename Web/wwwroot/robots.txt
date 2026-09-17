@@ -1,8 +1,0 @@
-User-agent: *
-Allow: /
-Disallow: /builder
-Disallow: /schedules
-Disallow: /BuilderSchedule
-Disallow: /account
-
-Sitemap: https://utahcoursecompass.com/sitemap.xml

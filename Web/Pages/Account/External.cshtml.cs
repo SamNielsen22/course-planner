@@ -8,26 +8,20 @@ using Web.Schedule;
 namespace Web.Pages.Account;
 
 /// <summary>
-/// Sign in with Google or Apple. A POST sends the visitor to the provider; the
-/// provider sends them back to the Callback handler, where an existing account
-/// is signed in or a new one is made from the email the provider vouches for.
+/// Sign-in through Google. The visitor goes to the provider and comes back to
+/// the callback, where an existing account is signed in or a new one is made
+/// from the verified email.
 /// </summary>
 [ResponseCache(NoStore = true)]
 public class ExternalModel(AccountsFeature accounts, IServiceProvider services, ScheduleStore schedule) : PageModel
 {
-    // Arriving here by plain GET means nothing was in flight.
+    // A plain GET means no sign-in was in flight.
     public IActionResult OnGet() => RedirectToPage("/Account/Login");
 
-    /// <summary>Off to the provider, from the sign-in page's button.</summary>
+    /// <summary>To the provider, from the sign-in page.</summary>
     public IActionResult OnPost(string provider, string? returnUrl) => Start(provider, returnUrl);
 
-    /// <summary>
-    /// Off to the provider, from the nav's "Sign in" link. A GET, because the
-    /// nav sits on pages the output cache serves to everyone, where a per-user
-    /// antiforgery form cannot live. Starting a sign-in has no effect of its
-    /// own - the account only changes when the provider sends the person back,
-    /// and that return carries the OAuth state the handler checks.
-    /// </summary>
+    /// <summary>To the provider, from the nav link. A GET, since the nav is on cached pages; the OAuth state is checked on return.</summary>
     public IActionResult OnGetStart(string provider, string? returnUrl) => Start(provider, returnUrl);
 
     private IActionResult Start(string provider, string? returnUrl)
@@ -62,10 +56,8 @@ public class ExternalModel(AccountsFeature accounts, IServiceProvider services, 
         }
         else
         {
-            // First time with this provider. Google verifies the address it
-            // sends, so an existing account with the same email is this
-            // person's and gets the login attached; otherwise a new account is
-            // made, with no password of its own.
+            // First time with this provider. The email is verified, so an
+            // account with the same one is theirs; otherwise make a new one.
             var email = info.Principal.FindFirstValue(ClaimTypes.Email);
             if (string.IsNullOrEmpty(email) || !email.Contains('@'))
                 return Failed($"{info.ProviderDisplayName} didn't share an email address, so an account can't be made.");

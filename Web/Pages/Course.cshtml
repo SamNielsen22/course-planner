@@ -2,13 +2,12 @@
 @model CourseModel
 @inject Web.Pages.PrereqMarkup Prereqs
 @{
-    ViewData["Title"] = Model.Title is null ? $"{Model.Subject} {Model.Number}" : $"{Model.Subject} {Model.Number} {Model.Title}";
+    ViewData["Title"] = Model.Title is null ? $"{Model.Subject} {Model.Number}" : $"{Model.Subject} {Model.Number}: {Model.Title}";
     ViewData["Description"] = Model.Description;
     ViewData["Canonical"] = Model.Canonical;
 }
 
-@* Back returns you to wherever you came from - a search, a section card, a
-   professor page. A fixed link only ever guesses one of them. *@
+@* Back to wherever you came from, rather than a fixed page. *@
 <div class="page-head page-head-back">
     <button type="button" class="back-arrow" onclick="history.back()" aria-label="Back" title="Back">&larr;</button>
     <div>
@@ -46,9 +45,10 @@
     </section>
 </div>
 
-@* Pooled across every term by default: one term of one course is often a
-   single small section, and the shape only becomes readable once the terms
-   are put together. *@
+@* The term and section filters, only when the course has grades to filter.
+   Every term is pooled by default; one term alone is often a single small section. *@
+@if (Model.Terms.Count > 0)
+{
 <form method="get" class="inline-form">
     @if (!Model.ShowSections)
     {
@@ -61,10 +61,8 @@
             <option value="@t" selected="@(t == Model.Term)">@Terms.Display(t)</option>
         }
     </select>
-    @* Always present, so it is obvious a section can be chosen; live once a
-       term is picked. Listed by professor, since that is how a student
-       remembers which one they were in. Hidden when the visitor arrived from
-       the builder - see CourseModel.ShowSections. *@
+    @* The section picker, listed by professor. Live once a term is picked,
+       and hidden for visitors from the builder. *@
     @if (!Model.ShowSections)
     {
     }
@@ -94,19 +92,18 @@
     }
     <noscript><button type="submit">Go</button></noscript>
 </form>
+}
 
 <partial name="_GradeChart" model="Model.Grades"/>
 
 @if (Model.Grades.Any)
 {
-    @* For a term or a section these are the dashboard's own figures. Across
-       terms only the average is pooled, until the registrar's all-terms row is
-       scraped, when its published figures take over. *@
+    @* Published figures for a term or a section; pooled across terms until the
+       registrar's own all-terms row exists. *@
     <partial name="_GradeStats" model="Model.Grades"/>
 
-    @* The average covers every student; the bars only show groups of five or
-       more. When they diverge this far the chart is materially incomplete, and
-       the page should say so rather than leave two numbers arguing. *@
+    @* The average counts every student, the bars only groups of five or more.
+       Far apart means the chart is missing grades, so say so. *@
     @if (Model.Grades.HasHiddenGrades)
     {
         <p class="note">

@@ -42,18 +42,13 @@ else
                     <div class="class-grid">
                         @foreach (var course in person.Courses)
                         {
-                            @* Stays on the person: their page with this class
-                               already chosen, which is the question the tile
-                               raises - how does THIS professor grade it. *@
+                            @* Their page with this class already chosen. *@
                             <a class="class-card" asp-page="/Instructor"
                                asp-route-unid="@person.Unid" asp-route-slug="@Web.Pages.Names.Slug(person.Name)"
                                asp-route-course="@Web.Pages.Names.CourseSlug(course.Subject, course.CourseNumber)">
                                 <span class="class-code">@course.Subject @course.CourseNumber</span>
                                 <span class="class-title">@course.Title</span>
-                                @* Their own average in this class, not the
-                                   course's. A course average is the same number
-                                   on every professor's card and says nothing
-                                   about the person whose card you are reading. *@
+                                @* Their own average in this class, not the course's. *@
                                 <span class="class-gpa">
                                     @if (course.AvgGpa is { } gpa)
                                     {

@@ -4,11 +4,7 @@ using HtmlAgilityPack;
 
 namespace Web.Tests;
 
-/// <summary>
-/// Signed in: the schedule home lists every schedule, the builder edits the
-/// open one, and new/open/rename/delete all round-trip through Postgres.
-/// Each test starts from an account with no schedules.
-/// </summary>
+/// <summary>Signed in: listing, opening, renaming and deleting schedules, round-tripped through Postgres.</summary>
 public class AccountTests : IClassFixture<AccountSite>, IDisposable
 {
     private readonly AccountSite _site;

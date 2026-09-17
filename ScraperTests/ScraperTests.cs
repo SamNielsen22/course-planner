@@ -65,6 +65,126 @@ public class ScraperTests
     }
 
     [Fact]
+    public void MainSearchScraper_PairsEachLabWithTheLectureWhoseNoteNamesIt()
+    {
+        // Fall 2026 Math. The registrar writes the note several ways on this one
+        // page: "Sections 14, 15, and 19 belong to this lecture", "31-32, 51-52",
+        // "2-3, 7" and "2 - 3" with spaces.
+        var sections = MainSearchScraper.Scrape(LoadSample("math.html"));
+        string? Lecture(string course, string lab) =>
+            sections.Single(s => s.Subject == "MATH" && s.CourseNumber == course && s.SectionNumber == lab).PairsWith;
+
+        // Math 2250: lab 019 belongs to lecture 013, not 016, though 016 meets
+        // at the same hour. The registration service confirmed this pairing.
+        Assert.Equal("013", Lecture("2250", "019"));
+        Assert.Equal("013", Lecture("2250", "014"));
+        Assert.Equal("016", Lecture("2250", "017"));
+        Assert.Equal("001", Lecture("2250", "002"));    // "Sections 2 - 3"
+
+        // Math 1210: a block added late, numbered after another lecture's labs.
+        Assert.Equal("015", Lecture("1210", "040"));
+        Assert.Equal("015", Lecture("1210", "041"));
+        Assert.Equal("033", Lecture("1210", "034"));
+
+        // Math 1010: two ranges in one note.
+        Assert.Equal("030", Lecture("1010", "051"));
+        Assert.Equal("033", Lecture("1010", "038"));
+
+        // Lectures are never paired themselves.
+        Assert.Null(Lecture("2250", "013"));
+        Assert.DoesNotContain(sections, s => s.Component == "Lecture" && s.PairsWith is not null);
+    }
+
+    [Fact]
+    public void MainSearchScraper_PairsDiscussionSectionsTheSameWayAsLabs()
+    {
+        // Fall 2026 Biology. BIOL 1620 has two lectures and no lab at all: you
+        // register for a discussion and the lecture comes with it. Lecture 001
+        // names 002-009, lecture 011 names 012-018, and 019 exists but is named
+        // by neither, so it stays unpaired rather than guessed.
+        var sections = MainSearchScraper.Scrape(LoadSample("biol.html"));
+        SectionRecord Sec(string n) => sections.Single(s => s.CourseNumber == "1620" && s.SectionNumber == n);
+
+        Assert.Equal("Discussion", Sec("002").Component);
+        Assert.Equal("001", Sec("002").PairsWith);
+        Assert.Equal("001", Sec("009").PairsWith);
+        Assert.Equal("011", Sec("012").PairsWith);
+        Assert.Equal("011", Sec("018").PairsWith);
+        Assert.Null(Sec("019").PairsWith);
+    }
+
+    [Fact]
+    public void MainSearchScraper_LeavesALabUnpairedWhenNoLectureNamesIt()
+    {
+        // Spring 2026 CS: CS 2420 has two lectures and its notes name no labs.
+        // No guessing from numbering or counts - the lab stays unpaired.
+        var sections = MainSearchScraper.Scrape(LoadSample("cs.html"));
+        var labs = sections.Where(s => s.CourseNumber == "2420" && s.Component == "Laboratory").ToList();
+        Assert.NotEmpty(labs);
+        Assert.All(labs, lab => Assert.Null(lab.PairsWith));
+    }
+
+    [Fact]
+    public void CompanionNotes_ReadsTheTemplateSentenceAndItsNumberFormats()
+    {
+        Assert.Equal(new[] { "016", "017", "040", "041" }, CompanionNotes.Owned("Sections 16, 17, 40, and 41 belong to this lecture."));
+        Assert.Equal(new[] { "031", "032", "051", "052" }, CompanionNotes.Owned("Sections 31-32, 51-52 belong to this lecture."));
+        Assert.Equal(new[] { "002", "003" }, CompanionNotes.Owned("Sections 2 - 3 belong to this section."));
+        Assert.Equal(new[] { "002", "003", "004", "005", "006" }, CompanionNotes.Owned("Sections 002-006 belong to this section."));
+        Assert.Equal(new[] { "022", "023", "024", "025" }, CompanionNotes.Owned("Lab sections 022 - 025 correspond to this lecture section."));
+
+        // Nothing named, or text about another course, pairs nothing.
+        Assert.Null(CompanionNotes.Owned("This course requires registration for a lab section."));
+        Assert.Null(CompanionNotes.Owned("Students will be registered when registering for one of the lab sections."));
+        Assert.Null(CompanionNotes.Owned("ECE 2240 together with ECE 3960-003 are equivalent to ECE 3500."));
+        Assert.Null(CompanionNotes.Owned(null));
+
+        // Two sentences in one note are read whole, and a repeat is counted once.
+        Assert.Equal(new[] { "002", "003", "007", "008" },
+            CompanionNotes.Owned("Sections 2-3 belong to this lecture. Sections 7 and 8 belong to this section. Sections 2-3 belong to this lecture."));
+
+        // Rarer phrasings, deliberately not read: on four terms of data none of
+        // them changed a course's answer. Kept here so they are not re-added by accident.
+        Assert.Null(CompanionNotes.Owned("Sections 002-003 are associated with this lecture section."));
+        Assert.Null(CompanionNotes.Owned("This course requires registration for lab section 006."));
+        Assert.Null(CompanionNotes.Owned("This course requires registration for a once-a-week, in-person discussion section (022 or 023)."));
+    }
+
+    [Fact]
+    public void SubjectScraper_ReadsTheSubjectOutOfAQueryAsTheDatabaseSpellsIt()
+    {
+        Assert.Equal("CS", SubjectScraper.Subject("subject=CS"));
+        Assert.Equal("ME EN", SubjectScraper.Subject("subject=ME%20EN"));
+        Assert.Equal("CS", SubjectScraper.Subject("subject=CS&type=AOCE"));
+        Assert.Equal("ME EN", SubjectScraper.Subject("type=AOCE&subject=ME%20EN"));
+        Assert.Equal("", SubjectScraper.Subject("type=AOCE"));
+
+        // Every link on a real index resolves to a plain subject code.
+        var queries = SubjectScraper.Scrape(LoadSample("index.html"));
+        Assert.All(queries, q => Assert.Matches(@"^[A-Z][A-Z ]{0,6}$", SubjectScraper.Subject(q)));
+        Assert.Contains("ME EN", queries.Select(SubjectScraper.Subject));
+    }
+
+    [Fact]
+    public void SubjectScraper_FindsBothHalvesOfACreditNoncreditMenu()
+    {
+        // Some subjects answer with a menu instead of cards. Its two links are
+        // absolute paths with extra query fields, and both the crawl and the
+        // pairing refresh rely on the scraper reading them off this page.
+        var doc = LoadSample("menu_essf.html");
+        Assert.NotNull(doc.DocumentNode.SelectSingleNode("//div[contains(@class,'alert') and contains(.,'divided by credit and noncredit')]"));
+
+        var parts = SubjectScraper.Scrape(doc);
+
+        Assert.Equal(2, parts.Count);
+        Assert.All(parts, q => Assert.Equal("ESSF", SubjectScraper.Subject(q)));
+        Assert.Contains(parts, q => q.Contains("credit=Y"));
+        Assert.Contains(parts, q => q.Contains("credit=N"));
+        // And each is a query the crawl can append to class_list.html? directly.
+        Assert.All(parts, q => Assert.StartsWith("subject=ESSF&", q));
+    }
+
+    [Fact]
     public void SectionsTableScraper_ReadsEverySectionOfASubject()
     {
         // sections.html with the catalogue number left blank: the whole subject, one row each.

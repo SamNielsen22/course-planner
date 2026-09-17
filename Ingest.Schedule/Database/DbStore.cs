@@ -7,10 +7,8 @@ static class DbStore
 {
     const string ConnectionString = "Data Source=data/courseplanner.db";
 
-    // Instructor anchors that carried no uNID, and so could not be stored.
-    // Measured coverage is 100%, so this is expected to stay at zero; a run that
-    // ends with it above zero has hit a change on the schedule site, and the
-    // count is the only evidence of what was silently dropped.
+    // Instructor anchors with no uNID, which cannot be stored. Expected to stay
+    // at zero; above zero means the schedule site changed.
     static int skippedWithoutUnid;
     public static int SkippedWithoutUnid => skippedWithoutUnid;
 
@@ -31,8 +29,8 @@ static class DbStore
         """;
 
         const string upsertSectionSql = """
-            INSERT INTO sections (term, subject, course_number, section_number, campus, component, type, units, location, times, seats_available, seats_updated, has_waitlist)
-            VALUES (@Term, @Subject, @CourseNumber, @SectionNumber, @Campus, @Component, @Type, @Units, @Location, @Times, @SeatsAvailable, @SeatsUpdated, @HasWaitlist)
+            INSERT INTO sections (term, subject, course_number, section_number, campus, component, type, units, location, times, seats_available, seats_updated, has_waitlist, pairs_with)
+            VALUES (@Term, @Subject, @CourseNumber, @SectionNumber, @Campus, @Component, @Type, @Units, @Location, @Times, @SeatsAvailable, @SeatsUpdated, @HasWaitlist, @PairsWith)
             ON CONFLICT(term, subject, course_number, section_number) DO UPDATE SET
               campus = excluded.campus,
               component = excluded.component,
@@ -43,7 +41,9 @@ static class DbStore
               seats_available = excluded.seats_available,
               seats_updated = excluded.seats_updated,
               -- A list that lost its wait-list line keeps what was known.
-              has_waitlist = COALESCE(excluded.has_waitlist, sections.has_waitlist);
+              has_waitlist = COALESCE(excluded.has_waitlist, sections.has_waitlist),
+              -- A published note wins; without one, a hand-entered pairing survives the crawl.
+              pairs_with = COALESCE(excluded.pairs_with, sections.pairs_with);
         """;
 
         const string deleteSectionInstructorsSql = """
@@ -99,7 +99,8 @@ static class DbStore
             section.Times,
             section.SeatsAvailable,
             SeatsUpdated = section.SeatsAvailable is null ? null : DateTime.UtcNow.ToString("o"),
-            HasWaitlist = section.HasWaitlist is { } waitable ? (waitable ? 1 : 0) : (int?)null
+            HasWaitlist = section.HasWaitlist is { } waitable ? (waitable ? 1 : 0) : (int?)null,
+            section.PairsWith
         }, tx);
 
         database.Execute(deleteSectionInstructorsSql, new
@@ -112,13 +113,7 @@ static class DbStore
 
         foreach (var instructor in section.Instructors ?? new List<InstructorRef>())
         {
-            // No uNID, no row. Identity comes from the registrar's id and nothing
-            // else - a name is not a person, and writing one without an id is how
-            // two different "Nguyen, Khoi" in MATH become one professor page.
-            // Coverage was measured at 100% (1,421 anchors, zero without a link),
-            // so this should drop nothing; if it starts dropping, that is a real
-            // change on the schedule site and worth knowing about rather than
-            // papering over.
+            // No uNID, no row: a name is not a person, and two "Nguyen, Khoi" teach MATH.
             if (instructor.Unid is null || string.IsNullOrWhiteSpace(instructor.Name))
             {
                 skippedWithoutUnid++;
@@ -179,6 +174,21 @@ static class DbStore
             new { TermCode = termCode, Campus = campus, Subject = subject });
     }
 
+    /// <summary>
+    /// Forget that a term's subjects were crawled, so the next crawl walks them
+    /// again. Scoped to one term: the marks for finished terms stay, because a
+    /// term that has ended cannot change and re-reading it is wasted traffic.
+    /// </summary>
+    public static int ClearProgress(string termCode)
+    {
+        using IDbConnection database = new SqliteConnection(ConnectionString);
+        database.Open();
+        database.Execute(createProgressSql);
+
+        return database.Execute(
+            "DELETE FROM crawl_progress WHERE term_code = @TermCode", new { TermCode = termCode });
+    }
+
     // A courses row only exists once its description page has been fetched, so its
     // presence means the fetch can be skipped - even across restarts.
     public static DetailsRecord? StoredDetails(string subject, string courseNumber)
@@ -198,6 +208,69 @@ static class DbStore
     }
 
     /// <summary>Columns added after the first crawl, so an existing database keeps working.</summary>
+    /// <summary>
+    /// The subjects worth re-reading for a pairing: those with a course that has
+    /// both a lecture and a companion section. Roughly a sixth of the schedule,
+    /// so asking the database first saves fetching the rest.
+    /// </summary>
+    public static HashSet<string> SubjectsWithCompanions(string termCode, string campus)
+    {
+        var term = DisplayTerm(termCode);
+        using IDbConnection database = new SqliteConnection(ConnectionString);
+        database.Open();
+        return database.Query<string>("""
+            SELECT DISTINCT s.subject
+            FROM sections s
+            WHERE s.term = @term AND s.campus = @campus
+              AND s.component IN ('Laboratory', 'Lab/ Discussion', 'Discussion', 'Field Work')
+              AND EXISTS (SELECT 1 FROM sections l
+                          WHERE l.term = s.term AND l.campus = s.campus
+                            AND l.subject = s.subject AND l.course_number = s.course_number
+                            AND l.component = 'Lecture')
+            """, new { term, campus }).ToHashSet();
+    }
+
+    /// <summary>The registrar's code ("1268") as the term the crawl stores ("Fall2026").</summary>
+    public static string DisplayTerm(string termCode) => TermCodes.Display(termCode);
+
+    /// <summary>How many sections of a term are stored, to tell "not crawled" from "nothing to pair".</summary>
+    public static int SectionCount(string termCode, string campus)
+    {
+        using IDbConnection database = new SqliteConnection(ConnectionString);
+        database.Open();
+        return database.ExecuteScalar<int>(
+            "SELECT COUNT(*) FROM sections WHERE term = @term AND campus = @campus",
+            new { term = DisplayTerm(termCode), campus });
+    }
+
+    /// <summary>
+    /// Write only the companion pairings from a freshly read class list, leaving every
+    /// other column alone. Labs the page names are stamped; labs it does not
+    /// name keep whatever they had, so a hand-entered pairing survives.
+    ///
+    /// Known limit: a pairing is never cleared, only overwritten. If a note
+    /// stops naming a lab and no other note picks it up, the old pairing stays.
+    /// Clearing would also erase hand-entered rows, and nothing stored says
+    /// which is which. The enrollment checksum is the way to catch it.
+    /// </summary>
+    public static int UpdatePairings(string campus, IEnumerable<SectionRecord> sections)
+    {
+        using IDbConnection database = new SqliteConnection(ConnectionString);
+        database.Open();
+        using var tx = database.BeginTransaction();
+
+        var updated = 0;
+        foreach (var s in sections)
+        {
+            if (s.PairsWith is null) continue;
+            updated += database.Execute(
+                "UPDATE sections SET pairs_with = @PairsWith WHERE term = @Term AND campus = @Campus AND subject = @Subject AND course_number = @CourseNumber AND section_number = @SectionNumber AND pairs_with IS NOT @PairsWith",
+                new { s.PairsWith, s.Term, Campus = campus, s.Subject, s.CourseNumber, s.SectionNumber }, tx);
+        }
+        tx.Commit();
+        return updated;
+    }
+
     public static void EnsureColumns()
     {
         using IDbConnection database = new SqliteConnection(ConnectionString);
@@ -215,15 +288,16 @@ static class DbStore
             if (!sectionColumns.Contains(column))
                 database.Execute($"ALTER TABLE sections ADD COLUMN {column} {type}");
 
-        // Which of the registrar's schedules listed the section: main, uac or
-        // online. Everything crawled before the column existed came from the
-        // main one, which is what the default records.
+        // On a lab, discussion or field-work section, the lecture it registers you
+        // into. From the registrar's note, or data/companion-pairs.tsv where none was published.
+        if (!sectionColumns.Contains("pairs_with"))
+            database.Execute("ALTER TABLE sections ADD COLUMN pairs_with TEXT");
+
+        // Which schedule listed the section. Rows from before the column are main's.
         if (!sectionColumns.Contains("campus"))
             database.Execute("ALTER TABLE sections ADD COLUMN campus TEXT NOT NULL DEFAULT 'main'");
 
-        // Progress is per schedule too - CS finished on main is not CS
-        // finished on the Asia Campus - so the table is rebuilt around the
-        // wider key, every existing row kept as main's.
+        // Progress is per schedule too, so the table is rebuilt around the wider key.
         var progressColumns = database.Query<string>("SELECT name FROM pragma_table_info('crawl_progress')").ToHashSet();
         if (progressColumns.Count > 0 && !progressColumns.Contains("campus"))
         {
@@ -236,6 +310,13 @@ static class DbStore
         var courseColumns = database.Query<string>("SELECT name FROM pragma_table_info('courses')").ToHashSet();
         if (!courseColumns.Contains("requirement_designation"))
             database.Execute("ALTER TABLE courses ADD COLUMN requirement_designation TEXT");
+        // When this course's description page was last read. A course carries one
+        // description, prerequisite list and designation for every term, and the
+        // registrar edits them between terms, so they have to be re-read rather
+        // than fetched once and trusted forever. Null means never re-read since
+        // the column arrived, which sorts oldest-first and so gets picked up.
+        if (!courseColumns.Contains("details_updated"))
+            database.Execute("ALTER TABLE courses ADD COLUMN details_updated TEXT");
 
         // Instructor identity, keyed on the registrar's uNID rather than the name.
         database.Execute("""
@@ -245,15 +326,8 @@ static class DbStore
             );
         """);
 
-        // Rebuild section_instructors around the uNID. This DISCARDS the old
-        // rows, and it has to: they were crawled before the uNID was captured,
-        // the href was never stored, and a name cannot be turned back into a
-        // person - two "Nguyen, Khoi" both teach MATH. There is nothing to
-        // migrate, only to re-crawl. crawl_progress is cleared with it so the
-        // next run actually re-walks the subjects rather than skipping them.
-        //
-        // Detected by the absence of instructor_unid OR the presence of the old
-        // instructor column, so this is idempotent and a no-op once done.
+        // Rebuild section_instructors around the uNID, discarding rows keyed by
+        // name - they cannot be migrated, only re-crawled, so progress is cleared too.
         var instructorColumns = database.Query<string>(
             "SELECT name FROM pragma_table_info('section_instructors')").ToHashSet();
         var needsRebuild = instructorColumns.Count > 0
@@ -284,24 +358,9 @@ static class DbStore
               ON section_instructors(instructor_unid);
         """);
 
-        // Grades moved out of sections and split by grain. Three shapes have to
-        // be cleared out of older databases, and CREATE TABLE IF NOT EXISTS will
-        // not do it - a stale table keeps its old columns and silently answers
-        // with the wrong grain.
-        //
-        //   sections.gpa_*/grade_*  grades used to live on the schedule row,
-        //                           which gave that table two writers and meant
-        //                           a grade could not be stored unless the
-        //                           crawler had already seen the section.
-        //   grades                  a single mixed-grain table; SUM over it
-        //                           counted every student three times.
-        //   course_grades WITH a
-        //   term column             the old per-term rollup. The name is reused
-        //                           for the all-terms rollup, so an old one left
-        //                           in place would answer the wrong question.
-        //
-        // Nothing is migrated across: every row is reloaded from the csv by
-        // the `grades` command (GradeLoader), which is the source of truth.
+        // Grades now live in their own tables, one per grain. Older shapes are
+        // dropped rather than migrated: the csv is the source of truth and the
+        // `grades` command reloads every row.
         database.Execute("DROP TABLE IF EXISTS grades");
 
         var oldCourseGrades = database.Query<string>(
@@ -317,20 +376,13 @@ static class DbStore
             database.Execute($"ALTER TABLE sections DROP COLUMN {column}");
     }
 
-    /// <summary>What one subject's refresh did: rows updated, rows the registrar lists that the catalogue lacks, rows removed because the registrar no longer lists them.</summary>
+    /// <summary>What a refresh did: rows updated, rows only the registrar has, rows removed.</summary>
     public sealed record CountsResult(int Updated, int Unknown, int Removed);
 
     /// <summary>
-    /// Refresh the enrollment figures of one subject in one term from the
-    /// registrar's sections table: seats, cap, enrolled, waiting, class
-    /// number. Everything else about a section is left alone, so this can run
-    /// often without re-crawling description pages.
-    ///
-    /// A section the catalogue has but the table no longer lists has been
-    /// cancelled - the registrar drops cancelled sections rather than marking
-    /// them - and is removed, instructor rows first. Only when the whole page
-    /// arrived and listed something: a cut-off page or an empty one is not
-    /// evidence that anything is gone.
+    /// Refresh one subject's enrollment figures from the registrar's sections
+    /// table. Sections the table no longer lists have been cancelled and are
+    /// removed - but only from a whole, non-empty page.
     /// </summary>
     public static CountsResult UpdateCounts(string term, string campus, string subject, IReadOnlyList<SectionCounts> counts, bool complete)
     {

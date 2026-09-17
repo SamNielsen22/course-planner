@@ -7,7 +7,7 @@
 }
 
 <div class="schedules">
-    @* The heading sits on the list's own left edge, like every other page's. *@
+    @* The heading, on the list's left edge. *@
     <div class="page-head">
         <h1>Your Schedules</h1>
         @if (!Model.SignedIn && Model.CanSignIn)
@@ -34,9 +34,7 @@
 
 @if (!Model.SignedIn)
 {
-    @* A guest keeps one schedule, in their browser, and it is never listed
-       here as something they made: one button, which asks for the campus and
-       goes straight into the builder. *@
+    @* A guest has one schedule and is never shown a list: one button into the builder. *@
     <div class="center"><button class="btn" type="button" id="guest">Continue as guest</button></div>
 }
 else if (none)
@@ -53,9 +51,7 @@ else if (Model.Unavailable)
 }
 else
 {
-    @* The whole row opens the schedule: it is one submit button wearing the
-       dot, the name and the facts. Only the menu at its right is outside it.
-       The dot marks the schedule the builder is editing. *@
+    @* The whole row is the button that opens the schedule; the dot marks the open one. *@
     <ul class="sched-list">
         @foreach (var s in Model.Schedules)
         {
@@ -105,8 +101,7 @@ else
 }
 </div>
 
-@* Creating a schedule: a name, a term and a campus. The button above opens
-   the dialog; with scripting off the form simply shows in place. *@
+@* New schedule: a name, a term and a campus. Without scripting the form shows in place. *@
 @if (Model.SignedIn)
 {
     <dialog id="create-dialog" class="modal">
@@ -126,7 +121,7 @@ else
                     }
                 </select>
             </label>
-            @* Main first, so it is what a schedule is for unless said otherwise. *@
+            @* Main first, so it is the default. *@
             <label>
                 Campus
                 <select name="campus">
@@ -145,8 +140,7 @@ else
     <noscript><style>#create-dialog { display: block; position: static; }</style></noscript>
 }
 
-@* A guest's way in: the campus, then the builder. The same dialog the
-   account version uses, with nothing to name. *@
+@* A guest's way in: term and campus, then the builder. *@
 @if (!Model.SignedIn)
 {
     <dialog id="guest-dialog" class="modal">

@@ -6,11 +6,7 @@ using Web.Schedule;
 
 namespace Web.Tests;
 
-/// <summary>
-/// The schedule builder end to end: add sections through the handler the
-/// page's script uses, then read the cart, the week grid, the conflicts and
-/// the calendar file the way a student would.
-/// </summary>
+/// <summary>The builder end to end: adding sections, then the cart, the grid, the clashes and the calendar file.</summary>
 public class ScheduleTests(Site site) : IClassFixture<Site>
 {
     private string Term => site.Catalogue.NewestTerm();
@@ -30,6 +26,87 @@ public class ScheduleTests(Site site) : IClassFixture<Site>
 
     private static List<string> Conflicts(HtmlDocument doc) =>
         doc.DocumentNode.SelectNodes("//ul[@class='clash-list']/li")?.Select(n => System.Text.RegularExpressions.Regex.Replace(n.InnerText, @"\s+", " ").Trim()).ToList() ?? [];
+
+    [Fact]
+    public async Task AddingALectureBringsItsChosenCompanionAndDroppingEitherRemovesBoth()
+    {
+        var (lecture, companion) = site.Catalogue.LectureWithCompanion(Term);
+        var visitor = site.Visitor();
+
+        // The popup would offer the companion; adding the pair puts both in the cart.
+        await visitor.AddPair(lecture, companion);
+        Assert.Equal(2, (await visitor.Cart()).Count);
+        var cart = await visitor.Page("/builder?handler=Cart");
+        var sections = cart.DocumentNode.SelectNodes("//span[@class='cart-sec']")?.Select(n => n.InnerText.Trim()).ToList() ?? [];
+        Assert.Contains(sections, t => t.EndsWith(lecture.Number2));
+        Assert.Contains(sections, t => t.EndsWith(companion));
+
+        // Dropping the lecture removes the companion with it.
+        var lectureKey = $"{lecture.Term}|{lecture.Subject}|{lecture.Number}|{lecture.Number2}";
+        await visitor.Post("Drop", ("key", lectureKey));
+        Assert.Empty(await visitor.Cart());
+    }
+
+    [Fact]
+    public async Task RemovingALectureAlsoRemovesItsCompanionForASpaceSubject()
+    {
+        // A subject like "ME EN" has a space, which the link marker once split on.
+        // Removing the lecture must still take its companion with it.
+        var (lecture, companion) = site.Catalogue.LectureWithCompanion(Term, spaceSubject: true);
+        var visitor = site.Visitor();
+
+        await visitor.AddPair(lecture, companion);
+        Assert.Equal(2, (await visitor.Cart()).Count);
+
+        var lectureKey = $"{lecture.Term}|{lecture.Subject}|{lecture.Number}|{lecture.Number2}";
+        await visitor.Post("Drop", ("key", lectureKey));
+        Assert.Empty(await visitor.Cart());
+    }
+
+    [Fact]
+    public async Task ASelfContainedLectureInAPairedCourseDoesNotAskForACompanion()
+    {
+        // A course can have an online lecture that needs no lab even when its
+        // in-person lectures do. Once the pairing is published, that lecture has
+        // none paired to it, so it must not show the "required" pill or a chooser.
+        var (subject, number, needs, solo) = site.Catalogue.CourseWithAStandaloneLecture();
+        var doc = await site.Visitor().Page(
+            $"/builder?term={Term}&q={Uri.EscapeDataString(subject + " " + number)}&open=false&noClash=false");
+
+        HtmlAgilityPack.HtmlNode Card(string sec) => doc.DocumentNode
+            .SelectNodes("//article[contains(@class,'section-card')]")!
+            .Single(a => a.SelectSingleNode(".//span[@class='sc-section']")!.InnerText.Trim() == $"Section {sec}");
+
+        Assert.NotNull(Card(needs).SelectSingleNode(".//span[@class='sc-req']"));   // in-person lecture asks
+        Assert.Null(Card(solo).SelectSingleNode(".//span[@class='sc-req']"));       // self-contained one does not
+        Assert.NotNull(Card(solo).SelectSingleNode(".//button[contains(@class,'add-section') and not(contains(@class,'add-pair'))]"));
+    }
+
+    [Fact]
+    public async Task ACompanionSectionIsNotOfferedOnItsOwnInSearch()
+    {
+        var (lecture, companion) = site.Catalogue.LectureWithCompanion(Term);
+        var doc = await site.Visitor().Page(
+            $"/builder?term={Term}&q={Uri.EscapeDataString(lecture.Code)}&open=false&noClash=false");
+
+        var sections = doc.DocumentNode.SelectNodes("//span[@class='sc-section']")?.Select(n => n.InnerText.Trim()).ToList() ?? [];
+        Assert.Contains(sections, t => t.EndsWith(lecture.Number2));       // the lecture shows
+        Assert.DoesNotContain(sections, t => t.EndsWith(companion));       // its companion does not
+        // And the lecture card announces the requirement.
+        Assert.NotNull(doc.DocumentNode.SelectSingleNode("//span[@class='sc-req']"));
+    }
+
+    [Fact]
+    public async Task TheChooserDataEmbeddedWithTheResultsListsTheSectionsForThatLecture()
+    {
+        var (lecture, companion) = site.Catalogue.LectureWithCompanion(Term);
+        var data = await site.Visitor().CompanionData(lecture.Code, Term);
+        var key = $"{lecture.Term}|{lecture.Subject}|{lecture.Number}|{lecture.Number2}";
+
+        Assert.True(data.TryGetProperty(key, out var choices), "no embedded choices for the lecture");
+        var sections = choices.EnumerateArray().Select(c => c.GetProperty("section").GetString()).ToList();
+        Assert.Contains(companion, sections);
+    }
 
     [Fact]
     public async Task AnAddedSectionIsInTheCartAndOnTheGrid()
@@ -79,12 +156,12 @@ public class ScheduleTests(Site site) : IClassFixture<Site>
         var (waited, waiting) = site.Catalogue.FullWithWaitlist();
         var term = waited.Term;
         var doc = await site.Visitor().Page($"/builder?term={term}&q={Uri.EscapeDataString(waited.Code)}&open=false&noClash=false");
-        Assert.Contains($"Full · waitlist {waiting}", Facts(doc, waited.Subject, waited.Number, waited.Number2));
+        Assert.Contains($"Full: waitlist {waiting}", Facts(doc, waited.Subject, waited.Number, waited.Number2));
 
         // Full, and the class list says it cannot be waited on.
         var closed = site.Catalogue.FullWithoutWaitlist(term);
         doc = await site.Visitor().Page($"/builder?term={term}&q={Uri.EscapeDataString(closed.Code)}&open=false&noClash=false");
-        Assert.Contains("Full · no waitlist", Facts(doc, closed.Subject, closed.Number, closed.Number2));
+        Assert.Contains("Full: no waitlist", Facts(doc, closed.Subject, closed.Number, closed.Number2));
     }
 
     [Fact]

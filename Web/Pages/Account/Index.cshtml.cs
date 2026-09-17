@@ -5,18 +5,13 @@ using Web.Accounts;
 
 namespace Web.Pages.Account;
 
-/// <summary>
-/// The signed-in person's page: who they are, sign out,
-/// and - behind a disclosure - delete the account. No [Authorize]: with
-/// accounts off there is no authentication scheme for it to use, so the page
-/// answers 404 itself instead.
-/// </summary>
+/// <summary>The account page: who you are, sign out, delete. No [Authorize], since there is no scheme when accounts are off.</summary>
 [ResponseCache(NoStore = true)]
 public class IndexModel(AccountsFeature accounts, IServiceProvider services) : PageModel
 {
     public string Email { get; private set; } = "";
 
-    /// <summary>"Google" - how they signed in. Null for an account with no external login.</summary>
+    /// <summary>How they signed in, such as "Google".</summary>
     public string? Provider { get; private set; }
 
     public async Task<IActionResult> OnGetAsync()
@@ -28,8 +23,7 @@ public class IndexModel(AccountsFeature accounts, IServiceProvider services) : P
         var user = await users.GetUserAsync(User);
         if (user is null)
         {
-            // A sign-in cookie for an account that no longer exists - deleted,
-            // most likely. Clear it, or the sign-in page would bounce back here.
+            // A cookie for an account that no longer exists; clear it.
             await services.GetRequiredService<SignInManager<IdentityUser>>().SignOutAsync();
             return RedirectToPage("/Account/Login");
         }
@@ -46,20 +40,13 @@ public class IndexModel(AccountsFeature accounts, IServiceProvider services) : P
         return LocalRedirect("/");
     }
 
-    /// <summary>Deletes the person and their saved schedule. The checkbox is the confirmation.</summary>
-    public async Task<IActionResult> OnPostDeleteAsync(bool confirm)
+    /// <summary>Deletes the account and its schedules.</summary>
+    public async Task<IActionResult> OnPostDeleteAsync()
     {
         if (!accounts.Enabled) return NotFound();
         var users = services.GetRequiredService<UserManager<IdentityUser>>();
         var user = await users.GetUserAsync(User);
         if (user is null) return RedirectToPage("/Account/Login");
-        if (!confirm)
-        {
-            Email = user.Email ?? "";
-            Provider = (await users.GetLoginsAsync(user)).FirstOrDefault()?.ProviderDisplayName;
-            ModelState.AddModelError("", "Tick the box to confirm.");
-            return Page();
-        }
 
         var db = services.GetRequiredService<UserDbContext>();
         db.Schedules.RemoveRange(db.Schedules.Where(s => s.UserId == user.Id));

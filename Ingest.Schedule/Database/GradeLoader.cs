@@ -5,35 +5,21 @@ using Microsoft.Data.Sqlite;
 namespace Ingest.Schedule.Database;
 
 /// <summary>
-/// Load the GPA csv into the grade tables, routed by grain.
-///
-/// The csv carries two of the three grains, told apart by the section column:
-///
-///     section != '(all)'  ->  section_grades      one section, one term
-///     section == '(all)'  ->  course_term_grades  one course, one term
-///
-/// Separate tables because they have different keys and neither can be
-/// derived from the other: any grade group under five students is
-/// suppressed, so summing the sections undercounts the course. The third
-/// grain - course_grades, one course across all terms - is the row that
-/// carries '(all)' in BOTH columns, from the scraper's all-terms pass.
-///
-/// Nothing is matched against the schedule. Grades come from the Tableau
-/// dashboard and sections from the class schedule; the dashboard covers terms
-/// the crawler does not, and matching would throw those rows away.
-///
-/// Safe to rerun: every write is an idempotent overwrite of the same primary
-/// key. Ported from Ingest.Gpa/LoadGpa.py on 2026-09-13, rule for rule.
+/// Loads the GPA csv into the grade tables, routed by grain: a real section
+/// number is a section row, "(all)" is the course's row for that term, and
+/// "(all)" in both columns is the course across every term. The three cannot
+/// be derived from each other, because groups under five students are
+/// suppressed. Nothing is matched against the schedule, and rerunning is safe.
 /// </summary>
 public static class GradeLoader
 {
-    /// <summary>The scraper writes the whole-course row under this section name, and the all-terms pass under this term.</summary>
+    /// <summary>The scraper's marker for a whole-course row and an all-terms row.</summary>
     public const string CourseSection = "(all)";
     public const string AllTerms = "(all)";
 
     public sealed record Key(string Term, string Subject, string CourseNumber, string SectionNumber);
 
-    /// <summary>One row's figures. Null where the dashboard published nothing.</summary>
+    /// <summary>One row's figures. Null where nothing was published.</summary>
     public sealed record Figures(
         double? GpaAvg, double? GpaP25, double? GpaP50, double? GpaP75, double? GpaStdDev,
         int? A, int? B, int? C, int? D, int? E, int? Cr, int? Nc, int? W, int? Other)
@@ -45,17 +31,13 @@ public static class GradeLoader
         public Figures WithoutStats() => this with { GpaAvg = null, GpaP25 = null, GpaP50 = null, GpaP75 = null, GpaStdDev = null };
     }
 
-    /// <summary>What a csv held: rows keyed by term, subject, course and section, last row winning; and what was passed over.</summary>
+    /// <summary>What a csv held, keyed by term, subject, course and section. The last row wins.</summary>
     public sealed record Read(Dictionary<Key, Figures> Graded, int Blank, int Duplicates);
 
-    /// <summary>The dashboard writes 'Fall 2020'; the schedule crawler writes 'Fall2020'.</summary>
+    /// <summary>"Fall 2020" as the catalogue's "Fall2020".</summary>
     public static string NormalizeTerm(string term) => string.Concat(term.Where(c => !char.IsWhiteSpace(c)));
 
-    /// <summary>
-    /// A grade point average, or null. Blank means the dashboard published
-    /// nothing. Anything outside 0-4 is a stray cell the scraper picked up - a
-    /// course number or a headcount - and is dropped rather than written.
-    /// </summary>
+    /// <summary>A grade point average, or null. Anything outside 0-4 is a stray cell.</summary>
     public static double? ToGpa(string? value)
     {
         value = (value ?? "").Trim();
@@ -64,7 +46,7 @@ public static class GradeLoader
         return number is >= 0.0 and <= 4.0 ? number : null;
     }
 
-    /// <summary>A headcount, or null. Older rows have no grade columns at all.</summary>
+    /// <summary>A headcount, or null. Older rows have no grade columns.</summary>
     public static int? ToCount(string? value)
     {
         value = (value ?? "").Trim();
@@ -99,9 +81,8 @@ public static class GradeLoader
             var figures = new Figures(stats[0], stats[1], stats[2], stats[3], stats[4],
                                       counts[0], counts[1], counts[2], counts[3], counts[4], counts[5], counts[6], counts[7], counts[8]);
 
-            // Every statistic zero means no letter grades were awarded - not a
-            // section where everybody failed - so the stats are discarded. The
-            // headcounts stay: a credit/no credit section still reports them.
+            // All zeroes means no letter grades were awarded, not that everyone
+            // failed: drop the statistics, keep the headcounts.
             var published = figures.Stats.Where(s => s is not null).ToList();
             if (published.Count > 0 && published.All(s => s == 0.0)) figures = figures.WithoutStats();
 
@@ -114,7 +95,7 @@ public static class GradeLoader
         return new Read(graded, blank, duplicates);
     }
 
-    /// <summary>A csv line's cells. Quotes are honoured, though the scraper never needs them.</summary>
+    /// <summary>A csv line's cells, quotes honoured.</summary>
     public static string[] SplitCsv(string line)
     {
         var cells = new List<string>();
@@ -139,12 +120,7 @@ public static class GradeLoader
 
     public sealed record Loaded(int Sections, int Courses, int Totals);
 
-    /// <summary>
-    /// Route each row to the table for its grain and overwrite it there. The
-    /// section column tells them apart: a real section number is a
-    /// section-grain row, '(all)' is the whole-course row for that term, and
-    /// '(all)' in the term column too is the course across every term.
-    /// </summary>
+    /// <summary>Routes each row to the table for its grain and overwrites it there.</summary>
     public static Loaded Load(SqliteConnection database, IReadOnlyDictionary<Key, Figures> graded)
     {
         var sections = new Dictionary<Key, Figures>();
@@ -174,12 +150,7 @@ public static class GradeLoader
         return new Loaded(sections.Count, courses.Count, totals.Count);
     }
 
-    /// <summary>
-    /// The command: `grades [--db path] csv [csv ...]`. Several csvs can be
-    /// given, so the per-term sweep and the all-terms pass load together;
-    /// they key differently and never collide. A key repeated across files
-    /// is taken from the later file.
-    /// </summary>
+    /// <summary>The `grades` command. Several csvs can be given; a repeated key is taken from the later file.</summary>
     public static int Run(string databasePath, IReadOnlyList<string> csvPaths)
     {
         if (!File.Exists(databasePath)) { Console.Error.WriteLine($"no database at {databasePath}"); return 1; }

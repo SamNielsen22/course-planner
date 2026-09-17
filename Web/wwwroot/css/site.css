@@ -357,10 +357,8 @@ nav .links { display: flex; gap: 2rem; align-items: center; }
 
 /* =================================================== professor search */
 
-/* The search box and its filters. A centred wrapping flex row let each
-   wrapped item centre on its own line, so at middling widths the controls
-   came apart into a ragged stack. A centred block that fills its width keeps
-   them aligned however they wrap. */
+/* The search box and its filters. A block that fills its width, so the
+   controls stay aligned however they wrap. */
 .search-bar {
   display: flex; justify-content: center; gap: .6rem;
   margin: 0 auto 1.5rem; flex-wrap: wrap;
@@ -475,10 +473,8 @@ main:has(> .hero) {
 .filters.one-line > * { min-width: 0; }
 .filters.one-line input, .filters.one-line select { min-width: 0; width: 100%; }
 
-/* A select sizes itself to its longest option, and one designation reads
-   "Methods Requirement: Quantitative Intensive" - left alone it took a third of
-   the row and squeezed the course box down to five characters. Every dropdown
-   is capped, and the text box is the one field that grows. */
+/* Dropdowns are capped, or the longest designation takes a third of the row.
+   The text box is the one field that grows. */
 .filters.one-line label { flex: 0 1 9rem; }
 .filters.one-line select { text-overflow: ellipsis; }
 .filters.one-line .grow { flex: 3 1 16rem; }
@@ -563,6 +559,40 @@ main:has(> .hero) {
   font-size: .75rem; font-weight: 700;
   text-transform: uppercase; letter-spacing: .05em;
 }
+/* Which lecture a lab registers you into, or which labs a lecture takes. */
+.sc-pair {
+  margin: .3rem 0 0; text-align: center;
+  font-size: .8rem; color: var(--text); font-variant-numeric: tabular-nums;
+}
+/* "Lab required" on a lecture whose course needs a companion section. */
+.sc-req {
+  display: inline-block; padding: .12rem .5rem; border-radius: 999px;
+  background: var(--card-soft); color: var(--label);
+  font-size: .68rem; font-weight: 700; text-transform: uppercase; letter-spacing: .06em;
+}
+
+/* ---- the companion chooser ---- */
+.companion-note {
+  margin: 0 0 .6rem; padding: .5rem .7rem; border-radius: 8px;
+  background: var(--card-soft); color: var(--text);
+  font-size: .8rem; line-height: 1.4;
+}
+.companion-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: .4rem; max-height: 60vh; overflow-y: auto; }
+.companion-loading { color: var(--label); font-size: .85rem; padding: .5rem; }
+.companion-pick {
+  width: 100%; text-align: left; cursor: pointer;
+  display: grid; grid-template-columns: 1fr auto; gap: .1rem .6rem; align-items: baseline;
+  padding: .55rem .7rem; border: 1px solid var(--border); border-radius: 10px;
+  background: var(--panel); color: var(--text); font: inherit;
+}
+.companion-pick:hover { background: var(--card-soft); }
+.companion-pick[data-full] { opacity: .6; }
+.companion-sec { font-weight: 700; }
+.companion-when { grid-column: 1; font-size: .8rem; color: var(--text); font-variant-numeric: tabular-nums; }
+.companion-who { grid-column: 1; font-size: .78rem; color: var(--label); }
+.companion-seats { grid-column: 2; grid-row: 1 / span 3; align-self: center; font-size: .72rem; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; }
+.companion-seats.open { color: var(--ok, #2e7d32); }
+.companion-seats.full { color: var(--label); }
 /* White: the meeting details are the plain facts of the section, and tinting
    them made a third band competing with the header and the prerequisites. */
 .sc-meet { background: var(--panel); }
@@ -742,10 +772,8 @@ td form { display: inline; }
      was short - which is most of the time. */
   max-height: calc(100vh - 2rem);
   background: var(--panel); border: 1px solid var(--border);
-  /* No overflow:hidden here. It was only rounding the corners, but any overflow
-     on an ancestor makes that ancestor the sticky footer's scrollport - and a
-     box that never scrolls means the footer never sticks. The children round
-     their own corners instead. */
+  /* No overflow:hidden: it would make this the sticky footer's scrollport and
+     stop the footer sticking. The children round their own corners. */
   border-radius: 12px;
 }
 .cart-head {
@@ -854,10 +882,8 @@ td form { display: inline; }
    sticky cart on the right never covers it. Faded and inert until the page
    has been scrolled a way down, then it rises in. */
 .to-top {
-  /* Just outside the cards' left edge on a wide screen - the content column
-     is 72rem centred with 1.5rem padding, so the cards start at
-     50% - 34.5rem; the disc's right edge sits 4.75rem before that - and at
-     the viewport's edge when there is no room outside the column. */
+  /* Outside the cards' left edge on a wide screen, and at the window's edge
+     when there is no room beside the column. */
   position: fixed; left: max(1.25rem, calc(50% - 42rem)); bottom: 1.25rem; z-index: 40;
   width: 2.75rem; height: 2.75rem; padding: 0; border-radius: 50%;
   display: grid; place-items: center;
@@ -994,6 +1020,8 @@ td form { display: inline; }
   font-size: 1.8rem; letter-spacing: -.02em; line-height: 1.15;
 }
 .page-sub { margin: .3rem 0 0; font-size: .9rem; color: var(--label); }
+/* A clear gap after the "MATH 1310:" code, wider than a bare space. */
+.page-sub .ps-title { margin-left: .4em; }
 /* A heading that opens with a round letter looks indented beside a straight
    one below it, though the ink lines up; a pixel to the left settles the eye. */
 .page-head h1.round-start { margin-left: -1px; }
@@ -1109,10 +1137,8 @@ label.check {
 /* The action sits on the card's left edge, just above it. */
 .sched-bar { margin: 0 0 .7rem; }
 
-/* Rows: the whole row is the way in, as a course row is on the course
-   search - the same quiet lift under the pointer, no button and no arrow.
-   Only the menu at the right sits outside the press. The rows carry the
-   card's corners so the hover tint does too. */
+/* The whole row is the way in, with a quiet lift under the pointer. Only the
+   menu at the right sits outside it. */
 .sched-list {
   list-style: none; margin: 0; padding: 0;
   background: var(--card); border: 1px solid var(--border); border-radius: 12px;

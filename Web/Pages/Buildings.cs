@@ -3,21 +3,14 @@ using System.Text;
 namespace Web.Pages;
 
 /// <summary>
-/// The University's building list - every abbreviation with its full name and
-/// street address - held in memory so a location like "SFEBB 3180" can carry
-/// its building's name on hover and its address in a calendar event.
-///
-/// The list is the Office of Space Planning's own (space.utah.edu, "Request a
-/// building list"), saved to data/buildings.tsv, plus the few spellings the
-/// class schedule uses that the list does not (M LI, SANDY, HPEB, HON CTR).
-/// About a fifth of locations name no building at all - CANVAS, SLC UTAH,
-/// Online - and those resolve to nothing and are shown as written.
+/// The University's building codes with names and addresses, from
+/// data/buildings.tsv. Locations that name no building resolve to null.
 /// </summary>
 public class Buildings
 {
     public sealed record Building(string Name, string Address);
 
-    /// <summary>A location split into its building, the code as the schedule wrote it, and the room.</summary>
+    /// <summary>A location split into building, code and room.</summary>
     public sealed record Place(Building Building, string Code, string Room);
 
     private readonly Dictionary<string, Building> _byCode = new(StringComparer.OrdinalIgnoreCase);
@@ -33,12 +26,7 @@ public class Buildings
         }
     }
 
-    /// <summary>
-    /// The building and room in a registrar location - "SFEBB 3180", "HON CTR
-    /// 150" - or null when it names no building. Codes can contain spaces, so
-    /// the longest leading run of words that is a known code wins. A room of
-    /// "." is the registrar's way of writing none.
-    /// </summary>
+    /// <summary>The building and room in "SFEBB 3180" or "HON CTR 150", or null. The longest known code wins.</summary>
     public Place? Resolve(string? location)
     {
         if (string.IsNullOrWhiteSpace(location)) return null;

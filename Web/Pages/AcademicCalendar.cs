@@ -1,15 +1,9 @@
 namespace Web.Pages;
 
 /// <summary>
-/// When each term's classes run, from the registrar's academic calendars
-/// (registrar.utah.edu/academic-calendars): the first and last day of
-/// semester-length classes and the days off between them. The class schedule
-/// carries no dates, so the calendar export takes them from here. Add a term
-/// when the crawl adds one; a term with no entry cannot be exported.
-///
-/// The Asia Campus keeps its own calendar - its spring runs March to June,
-/// and it takes Chuseok off rather than Labor Day - so its terms are listed
-/// separately. UOnline follows the main campus.
+/// When each term's classes run, from the registrar's academic calendars:
+/// first day, last day, and days off. The calendar export needs these, so add
+/// a term when the crawl adds one. The Asia Campus has its own dates.
 /// </summary>
 public static class AcademicCalendar
 {
@@ -17,7 +11,7 @@ public static class AcademicCalendar
 
     public sealed record TermDates(DateOnly FirstDay, DateOnly LastDay, IReadOnlyList<Holiday> Holidays)
     {
-        /// <summary>Every day off, one by one, for the export to skip.</summary>
+        /// <summary>Every day off, one by one.</summary>
         public IEnumerable<DateOnly> DaysOff =>
             Holidays.SelectMany(h => Enumerable.Range(0, h.To.DayNumber - h.From.DayNumber + 1).Select(h.From.AddDays));
 

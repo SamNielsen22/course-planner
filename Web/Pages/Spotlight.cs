@@ -6,21 +6,10 @@ using CoursePlanner.Data;
 namespace Web.Pages;
 
 /// <summary>
-/// The order a blank search shows sections in.
-///
-/// It is a fixed order, the same on every start of the server. The one the
-/// user chose to keep is written down in data/spotlight-order.txt, one
-/// section key per line, first line first; sections named there come in
-/// that order. Sections not named - another term, a section added since -
-/// follow in a draw that is random but stable, hashed from the section's
-/// key with a fixed seed rather than the process's, and weighted toward the
-/// sections worth a look: one professor, grades on file, and that professor
-/// grading the course at least 0.1 away from the course's own average.
-///
-/// The first card is held to more: it is the example of what a card can
-/// show, so it must have prerequisites that name courses, a course average
-/// and its professor's average, and a meeting time. The earliest section in
-/// the order that has all three is moved to the front; nothing else moves.
+/// The order a blank search shows sections in. Fixed across restarts: keys
+/// listed in data/spotlight-order.txt come first, in file order; the rest
+/// follow in a stable weighted draw. The first card must have prerequisites,
+/// both grade figures and a meeting time.
 /// </summary>
 public sealed partial class Spotlight
 {
@@ -35,7 +24,7 @@ public sealed partial class Spotlight
         _kept = Load(config["Spotlight:Order"] is { Length: > 0 } relative ? Path.Combine(env.ContentRootPath, relative) : null);
     }
 
-    /// <summary>The kept order: line number by section key. Empty when there is no file.</summary>
+    /// <summary>The kept order: line number by key. Empty when there is no file.</summary>
     private static Dictionary<string, int> Load(string? path)
     {
         var kept = new Dictionary<string, int>();
@@ -50,7 +39,7 @@ public sealed partial class Spotlight
         return kept;
     }
 
-    /// <summary>The order, with the first fully furnished section brought to the front.</summary>
+    /// <summary>The order, with the first full card brought to the front.</summary>
     public List<Section> Order(IEnumerable<Section> sections)
     {
         var drawn = sections.OrderByDescending(Key).ToList();
@@ -64,11 +53,7 @@ public sealed partial class Spotlight
         return drawn;
     }
 
-    /// <summary>
-    /// Higher comes first. A kept section's key is above 1, earlier lines
-    /// higher; anything else is a weighted draw without replacement below 1,
-    /// u^(1/w) per section.
-    /// </summary>
+    /// <summary>Higher comes first. Kept keys score above 1 by line; the rest draw below 1.</summary>
     public double Key(Section s)
     {
         var key = $"{s.Term}|{s.Subject}|{s.CourseNumber}|{s.SectionNumber}";
@@ -77,7 +62,7 @@ public sealed partial class Spotlight
         return Math.Pow(Math.Clamp(u, 1e-9, 1 - 1e-9), 1.0 / Weight(s));
     }
 
-    /// <summary>FNV-1a over the key: the same number on every run, unlike HashCode, which reseeds per process.</summary>
+    /// <summary>FNV-1a: the same number on every run, unlike HashCode.</summary>
     private static uint StableHash(string key)
     {
         var hash = 2166136261u;
@@ -97,7 +82,7 @@ public sealed partial class Spotlight
         return course is double c && theirs is double t && Math.Abs(t - c) >= 0.1 ? 80 : 1;
     }
 
-    /// <summary>A meeting time, both grade figures, and prerequisites that name at least one course.</summary>
+    /// <summary>Has a meeting time, both grade figures, and prerequisites naming a course.</summary>
     private bool IsFullExample(Section s) =>
         s.Times is { } times && times.Contains('/')
         && s.Instructors.Count == 1
@@ -105,15 +90,14 @@ public sealed partial class Spotlight
         && _grades.InstructorCourseAverage(s.Instructors[0].Unid, s.Subject, s.CourseNumber) is not null
         && NamesPrerequisiteCourses(s.Subject, s.CourseNumber);
 
-    // Prerequisites are read from the database and remembered per course, so
-    // the search for a first card costs a handful of lookups once, not per visit.
+    // Prerequisites are read once per course and remembered.
     private readonly ConcurrentDictionary<string, bool> _prerequisites = new();
 
     private bool NamesPrerequisiteCourses(string subject, string courseNumber) =>
         _prerequisites.GetOrAdd(subject + "|" + courseNumber,
             _ => CourseCode().IsMatch(_db.Course(subject, courseNumber)?.Prerequisites ?? ""));
 
-    /// <summary>A course code inside prerequisite prose: "CS 1410", "MATH 1210", "CH EN 2300".</summary>
+    /// <summary>A course code inside prerequisite text.</summary>
     [GeneratedRegex(@"\b[A-Z]{2,5}(?: [A-Z]{1,2})? \d{3,4}[A-Z]?\b")]
     private static partial Regex CourseCode();
 }

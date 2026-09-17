@@ -1,16 +1,13 @@
-@* The landing page carries its own wordmark, so the header would only repeat
-   it. Everything else keeps the banner. *@
+@* For the landing page, which carries its own wordmark instead of the banner. *@
+@inject Web.Unlisted Unlisted
 <!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="utf-8"/>
     <meta name="viewport" content="width=device-width, initial-scale=1"/>
-    @* Public pages carry their own plain title, which is also the headline a
-       search result shows; the personal pages, kept out of the index, read the
-       site's name. *@
+    @* Public pages carry their own title; personal ones read the site's name. *@
     <title>@(ViewData["NoIndex"] is null && ViewData["Title"] is string title ? title : "Utah Course Compass")</title>
-    @* What a search engine shows and indexes: the page's own line, its one
-       address, and a keep-out on the personal pages. *@
+    @* What a search engine shows: the description, the canonical address, and noindex on personal pages. *@
     @if (ViewData["Description"] is string description)
     {
         <meta name="description" content="@description"/>
@@ -22,15 +19,17 @@
     {
         <link rel="canonical" href="@($"{Context.Request.Scheme}://{Context.Request.Host}{canonical}")"/>
     }
-    @if (ViewData["NoIndex"] is true)
+    @if (ViewData["NoIndex"] is true || Unlisted.Yes)
     {
         <meta name="robots" content="noindex"/>
     }
-    <link rel="icon" href="/favicon.svg" asp-append-version="true"/>
-    @* Plus Jakarta Sans for the wordmark and the home page buttons only - the
-       rest of the site stays on the system sans. Two weights, so the load is
-       small. SIL Open Font License. display=swap so the name renders in the
-       fallback first rather than sitting invisible. *@
+    @* The compass rose. Browsers pick the size they want; iOS takes the padded one. *@
+    <link rel="icon" href="/favicon.ico" sizes="48x48 32x32 16x16" asp-append-version="true"/>
+    <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png" asp-append-version="true"/>
+    <link rel="icon" type="image/png" sizes="192x192" href="/favicon-192x192.png" asp-append-version="true"/>
+    <link rel="icon" type="image/png" sizes="512x512" href="/favicon-512x512.png" asp-append-version="true"/>
+    <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png" asp-append-version="true"/>
+    @* Plus Jakarta Sans. Two weights, swapped in so text shows in the fallback first. *@
     <link rel="preconnect" href="https://fonts.googleapis.com"/>
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
     <link rel="stylesheet"
@@ -46,13 +45,8 @@
     <p>Utah Course Compass &middot; Not affiliated with the University of Utah.</p>
 </footer>
 
-@* The page's search box takes focus on load - on a desktop. On a phone a
-   focused field raises the keyboard over half the screen before anything
-   has been read, so there it is left alone; the markup carries
-   data-autofocus rather than autofocus so the browser never does it on its
-   own. A box that comes back with its text - the browser's back button
-   restores it - gets the caret after the text, on load and again when the
-   page is restored from the back-forward cache. *@
+@* The search box takes focus on desktop only: on a phone it would raise the
+   keyboard. The caret goes after any restored text. *@
 <script>
 (function () {
     const desktop = matchMedia('(hover: hover) and (pointer: fine) and (min-width: 721px)');

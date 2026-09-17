@@ -3,25 +3,9 @@ using System.Collections.Concurrent;
 namespace CoursePlanner.Data;
 
 /// <summary>
-/// A term's sections, held in memory and searched there.
-///
-/// The builder was the slowest page on the site by a wide margin - 60% of all
-/// capacity for two of every eleven requests - because each load pulled the
-/// whole term out of the database (7,500 sections, 8,700 instructor rows),
-/// built the objects, sorted the lot, and showed twenty-four. The same query
-/// restricted to what the page shows takes 0.1ms; the cost was the
-/// materialisation, and this stops repeating it.
-///
-/// Filtering and sorting cannot simply move into SQL, because two of the
-/// builder's features live in C#: the time sorts parse "TuTh/09:10AM-10:30AM",
-/// and "no time conflicts" reads the visitor's own schedule. So the term is
-/// built once and those run over cached objects instead.
-///
-/// It is NOT built once and forgotten, unlike <see cref="SiteIndex"/>: the
-/// seat crawl rewrites seats_available every ten minutes, and "open seats
-/// only" is a filter on exactly that column. Each term is rebuilt when it is
-/// older than <see cref="MaxAge"/> - about 40ms once a minute, which is
-/// nothing - and readers keep the old copy while one thread refreshes.
+/// A term's sections, in memory, so the builder does not reload the term on
+/// every search. Each term is rebuilt once it is older than <see cref="MaxAge"/>,
+/// since the seats pass keeps changing the seat counts.
 /// </summary>
 public class SectionIndex(CourseQueries db)
 {
@@ -36,7 +20,7 @@ public class SectionIndex(CourseQueries db)
     private readonly ConcurrentDictionary<string, Entry> _terms = new();
     private readonly ConcurrentDictionary<string, object> _gates = new();
 
-    /// <summary>"Term|Subject|Number|Section" - the same shape the schedule uses.</summary>
+    /// <summary>"Term|Subject|Number|Section", the key a schedule stores.</summary>
     public static string KeyOf(string term, string subject, string courseNumber, string sectionNumber) =>
         $"{term}|{subject}|{courseNumber}|{sectionNumber}";
 
@@ -51,12 +35,7 @@ public class SectionIndex(CourseQueries db)
         return Get(key[..split]).ByKey.GetValueOrDefault(key);
     }
 
-    /// <summary>
-    /// The builder's search, with the same meaning as
-    /// <see cref="CourseQueries.FindSections"/> - each test here mirrors one
-    /// clause of that WHERE, LIKE included, so the two cannot disagree on what
-    /// a query matches.
-    /// </summary>
+    /// <summary>The builder's search. Each test mirrors a clause of <see cref="CourseQueries.FindSections"/>.</summary>
     public IReadOnlyList<Section> Find(
         string term,
         string? subject = null,
@@ -71,7 +50,7 @@ public class SectionIndex(CourseQueries db)
         var q = (query ?? "").Trim();
         var req = requirement ?? "";
 
-        // "CS 2420" is read as subject then number, as the SQL does.
+        // "CS 2420" is read as subject then number.
         var parts = q.Split(' ', 2, StringSplitOptions.RemoveEmptyEntries);
         var head = parts.Length == 2 ? parts[0] : "";
         var tail = parts.Length == 2 ? parts[1] : "";
@@ -95,15 +74,15 @@ public class SectionIndex(CourseQueries db)
                 || (entry.Requirements.GetValueOrDefault(s.Subject + "|" + s.CourseNumber)
                         ?.Contains(req, Like) ?? false))
             && (!openOnly || s.SeatsAvailable > 0)
-            // Continuing Education: three-digit number and no credit. NULL units
-            // fail the SQL's NOT(...) the same way zero does, so both are
-            // excluded here too - the test must read exactly as the query's.
+            // Continuing Education: three digits and no credit. Null units count as none, as in SQL.
+            // A course another course requires (e.g. MATH 980) is kept even so.
             && (!creditOnly
-                || !(s.CourseNumber.Length == 3 && (s.Units is null || s.Units == 0))))
+                || !(s.CourseNumber.Length == 3 && (s.Units is null || s.Units == 0))
+                || db.PrereqCourses.Contains(s.Subject + "|" + s.CourseNumber)))
             .ToList();
     }
 
-    /// <summary>Throws away every cached term. The next read rebuilds.</summary>
+    /// <summary>Drops every cached term. The next read rebuilds.</summary>
     public void Clear() => _terms.Clear();
 
     private Entry Get(string term)
@@ -115,8 +94,7 @@ public class SectionIndex(CourseQueries db)
 
         if (have is not null)
         {
-            // Stale but present. One thread refreshes; everyone else keeps
-            // serving the copy they have rather than queueing behind it.
+            // Stale but present: one thread refreshes, the rest keep the old copy.
             if (Monitor.TryEnter(gate))
             {
                 try
@@ -129,7 +107,7 @@ public class SectionIndex(CourseQueries db)
             return _terms[term];
         }
 
-        // Nothing yet: build once, and anyone arriving meanwhile waits for it.
+        // Nothing yet: build once; others wait.
         lock (gate)
         {
             if (!_terms.TryGetValue(term, out have))
@@ -143,8 +121,7 @@ public class SectionIndex(CourseQueries db)
 
     private Entry Build(string term)
     {
-        // creditOnly: false - the index holds everything, and the credit test
-        // is applied per search like every other filter.
+        // The index holds everything; the credit filter is applied per search.
         var sections = db.FindSections(term, creditOnly: false);
         return new Entry(
             sections,

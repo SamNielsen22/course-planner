@@ -17,10 +17,10 @@ public record PickedSection(
     public string Key => $"{Term}|{Subject}|{CourseNumber}|{SectionNumber}";
     public string Code => $"{Subject} {CourseNumber}";
 
-    /// <summary>The professors' names as people write them, in the registrar's order.</summary>
+    /// <summary>The professors' names, first name first.</summary>
     public IReadOnlyList<string> Professors => Instructors.Select(i => Names.Natural(i.Name)).ToList();
 
-    /// <summary>The professors on one line: one, both, or the first and how many more.</summary>
+    /// <summary>The professors on one line.</summary>
     public string? Professor => Names.Line(Professors);
 }
 
@@ -30,67 +30,42 @@ public record Break(string Id, string Name, string Days, string From, string Unt
 /// <summary>Everything the builder is holding for one visitor.</summary>
 public record BuiltSchedule
 {
-    /// <summary>The account schedule's name. Null for a guest, who has just the one.</summary>
+    /// <summary>The schedule's name. Null for a guest.</summary>
     public string? Name { get; init; }
 
-    /// <summary>The term this schedule is for: chosen at creation, or that of its first class; null when neither.</summary>
+    /// <summary>The term, chosen at creation or taken from the first class.</summary>
     public string? Term { get; init; }
 
-    /// <summary>
-    /// Which of the registrar's schedules this is for - main, uac or online -
-    /// chosen at creation, or that of its first class. One schedule is one
-    /// campus: a week in Incheon and a week in Salt Lake share no grid.
-    /// </summary>
+    /// <summary>The campus: main, uac or online. One schedule is one campus.</summary>
     public string Campus { get; init; } = Web.Pages.Campus.Main;
     public List<PickedSection> Sections { get; init; } = [];
     public List<Break> Breaks { get; init; } = [];
 
-    /// <summary>Credit hours across the classes, as the registrar lists them.</summary>
+    /// <summary>Credit hours across the classes.</summary>
     public int Units => Sections.Sum(s => s.Units ?? 0);
 
-    /// <summary>Classes that overlap another class or a break - the tile says so before the grid does.</summary>
+    /// <summary>How many classes overlap another class or a break.</summary>
     public int Conflicts => Meetings.Conflicting(this).Count;
 }
 
-/// <summary>One of a signed-in student's schedules, as the schedule home lists them.</summary>
+/// <summary>One saved schedule, as the schedule home lists it.</summary>
 public record ScheduleSummary(string Id, string Name, string? Term, string Campus, int Classes, int Units, int Conflicts,
                               DateTime UpdatedAt, bool IsOpen);
 
 /// <summary>
-/// A guest's schedule lives in a signed cookie in their own browser - not in a
-/// session, not in the database.
-///
-/// It used to be session state, and that was the one thing on the site that
-/// tied a visitor to a particular server: their cart existed in one process's
-/// memory, so a second server could not have answered them, a restart emptied
-/// it, and eight idle hours threw it away. A cookie makes every request
-/// self-describing. Any server can serve it, and it survives everything short
-/// of the visitor clearing their cookies.
-///
-/// Only KEYS are stored - "Term|Subject|Number|Section" - plus the breaks,
-/// and only one term's: the first class added for a new term starts a new
-/// schedule, so last term's classes never sit on this term's grid.
-/// Titles, times, rooms and professors are looked up on every read from the
-/// section index, so a schedule kept for months never shows last month's room.
-/// A section the registrar has since withdrawn simply does not come back.
-///
-/// Signed in, a student keeps any number of schedules in Postgres. A second
-/// cookie names the one the builder is editing - the "open" one - and the
-/// most recently touched stands in when it names nothing. The guest cookie
-/// is adopted into the account at sign-in. If Postgres cannot be reached the
-/// request falls back to the cookie rather than failing.
+/// Where a schedule lives. A guest's is a signed cookie holding section keys
+/// and breaks for one term; the details are looked up fresh on every read.
+/// A signed-in student's schedules are rows in Postgres, with a second cookie
+/// naming the one the builder is editing. The guest cookie joins the account
+/// at sign-in. If Postgres is down the cookie is used instead.
 /// </summary>
 public class ScheduleStore(IHttpContextAccessor accessor, IDataProtectionProvider protection,
                            SectionIndex sections, IServiceProvider services)
 {
-    private const string CookieName = "schedule";        // a guest's one schedule, signed
-    private const string OpenCookieName = "schedule-open"; // which account schedule the builder edits
+    private const string CookieName = "schedule";        // a guest's schedule, signed
+    private const string OpenCookieName = "schedule-open"; // which saved schedule the builder edits
 
-    /// <summary>
-    /// Well inside the 4KB a browser allows, with the signature on top. Both
-    /// are capped: past 4KB the browser drops the cookie whole, and one break
-    /// too many would have thrown away the entire schedule.
-    /// </summary>
+    // Caps keep the cookie under the browser's 4KB limit.
     private const int MaxSections = 40;
     private const int MaxBreaks = 12;
     private const int MaxBreakName = 40;
@@ -98,30 +73,27 @@ public class ScheduleStore(IHttpContextAccessor accessor, IDataProtectionProvide
 
     private static readonly TimeSpan Lifetime = TimeSpan.FromDays(180);
 
-    // The purpose string is part of the key: a cookie signed for anything else
-    // will not unprotect here, and bumping "v1" retires every old cookie at once.
+    // Bumping "v1" retires every old cookie at once.
     private readonly IDataProtector _protector = protection.CreateProtector("Web.Schedule.v1");
 
-    /// <summary>What actually goes in the cookie: keys, breaks, and the term and campus it is for.</summary>
+    /// <summary>The cookie's contents: section keys, breaks, term and campus.</summary>
     private sealed record Stored(List<string> S, List<Break> B, string? T = null, string? C = null);
 
-    // A write in this request must be visible to a read later in the same
-    // request; Request.Cookies still holds what the browser sent.
+    // A write earlier in this request, since Request.Cookies still holds what the browser sent.
     private Stored? _written;
 
-    // The account schedule this request is editing, once looked up.
+    // The saved schedule this request is editing, once looked up.
     private SavedSchedule? _open;
 
     private HttpContext Http =>
         accessor.HttpContext ?? throw new InvalidOperationException("no request in progress");
 
-    // Signed in, the schedule lives under the account rather than in the cookie.
     private string? UserId =>
         Http.User.Identity?.IsAuthenticated == true ? Http.User.FindFirstValue(ClaimTypes.NameIdentifier) : null;
 
     public bool SignedIn => UserId is not null;
 
-    // Null when accounts are off; the cookie is then the only store.
+    // Null when accounts are off.
     private UserDbContext? Db => services.GetService<UserDbContext>();
 
     private Stored Read()
@@ -130,7 +102,7 @@ public class ScheduleStore(IHttpContextAccessor accessor, IDataProtectionProvide
         if (UserId is { } userId && Db is { } db)
         {
             try { return FromRow(OpenRow(db, userId)); }
-            catch (NpgsqlException) { /* unreachable: this request uses the cookie */ }
+            catch (NpgsqlException) { /* Postgres down: use the cookie */ }
         }
         return ReadCookie();
     }
@@ -139,8 +111,7 @@ public class ScheduleStore(IHttpContextAccessor accessor, IDataProtectionProvide
     {
         var raw = Http.Request.Cookies[CookieName];
         if (string.IsNullOrEmpty(raw)) return new([], []);
-        // A cookie from an older build, or one signed by another machine, must
-        // not throw on read: an unreadable schedule is an empty one.
+        // An unreadable cookie is an empty schedule, not an error.
         try
         {
             return JsonSerializer.Deserialize<Stored>(_protector.Unprotect(raw)) ?? new([], []);
@@ -158,11 +129,11 @@ public class ScheduleStore(IHttpContextAccessor accessor, IDataProtectionProvide
         {
             try
             {
-                // A first write with no schedule yet starts one.
+                // A first write starts a schedule.
                 Save(db, OpenRow(db, userId) ?? NewRow(db, userId, null, stored.T, stored.C), stored);
                 return;
             }
-            catch (NpgsqlException) { /* unreachable: keep it in the cookie for now */ }
+            catch (NpgsqlException) { /* Postgres down: keep it in the cookie */ }
         }
         WriteCookie(stored);
     }
@@ -185,10 +156,7 @@ public class ScheduleStore(IHttpContextAccessor accessor, IDataProtectionProvide
         JsonSerializer.Deserialize<List<Break>>(row.Breaks) ?? [],
         row.Term, row.Campus);
 
-    /// <summary>
-    /// The schedule the builder is editing: the one the open cookie names, if
-    /// it is theirs; otherwise the most recently touched; otherwise none.
-    /// </summary>
+    /// <summary>The schedule being edited: the one the open cookie names, else the most recently touched.</summary>
     private SavedSchedule? OpenRow(UserDbContext db, string userId)
     {
         if (_open is not null) return _open;
@@ -238,17 +206,11 @@ public class ScheduleStore(IHttpContextAccessor accessor, IDataProtectionProvide
 
     private static string TermOf(string key) => key[..key.IndexOf('|')];
 
-    /// <summary>The campus a stored schedule is for: as chosen, or that of its first class, or main.</summary>
+    /// <summary>The campus: as chosen, else that of the first class, else main.</summary>
     private string CampusOf(Stored stored) =>
         stored.C ?? stored.S.Select(k => sections.Find(k)?.Campus).FirstOrDefault(c => c is not null) ?? Web.Pages.Campus.Main;
 
-    /// <summary>
-    /// On sign-in: whatever the guest cookie holds joins the account, and the
-    /// cookie is cleared. Into their most recently touched schedule for the
-    /// same campus, or as a new one if they have none. Takes the id rather
-    /// than reading the request, because the sign-in cookie only takes effect
-    /// on the next request.
-    /// </summary>
+    /// <summary>On sign-in, the guest cookie's classes join the account and the cookie is cleared.</summary>
     public void AdoptCookie(string userId)
     {
         if (Db is not { } db) return;
@@ -259,37 +221,32 @@ public class ScheduleStore(IHttpContextAccessor accessor, IDataProtectionProvide
                   ?? NewRow(db, userId, null, cookie.T, campus);
         var mine = FromRow(row);
         foreach (var key in cookie.S)
-            if (!mine.S.Contains(key) && mine.S.Count < MaxSections) mine.S.Add(key);
+            if (!mine.S.Contains(key) && (IsMarker(key) || SectionCount(mine) < MaxSections)) mine.S.Add(key);
         mine.B.AddRange(cookie.B.Where(b => mine.B.All(x => x.Id != b.Id)).Take(Math.Max(0, MaxBreaks - mine.B.Count)));
-        // Two schedules from different terms: the newer term is the one being planned.
-        var newest = Terms.NewestFirst(mine.S.Select(TermOf).Distinct()).FirstOrDefault();
-        mine.S.RemoveAll(k => TermOf(k) != newest);
+        // Keep only the newest term; a marker survives only if both its ends do.
+        var newest = Terms.NewestFirst(mine.S.Where(k => !IsMarker(k)).Select(TermOf).Distinct()).FirstOrDefault();
+        mine.S.RemoveAll(k => IsMarker(k) ? ParseMarker(k) is not { } m || TermOf(m.Companion) != newest
+                                          : TermOf(k) != newest);
         Save(db, row, mine);
         MarkOpen(row);
         Http.Response.Cookies.Delete(CookieName);
         _written = mine;
     }
 
-    /// <summary>
-    /// A guest choosing their term and campus on the way in. Choosing what
-    /// their schedule already is changes nothing; choosing another campus or
-    /// another term starts a new schedule, since one schedule is one of each.
-    /// Breaks are kept: an hour off is an hour off in any term.
-    /// </summary>
+    /// <summary>A guest's term and campus choice. A different campus or term starts a new schedule; breaks stay.</summary>
     public void StartGuest(string campus, string? term)
     {
         if (SignedIn) return;
         var stored = ReadCookie();
         if (CampusOf(stored) != campus) stored.S.Clear();
-        // Another term starts a new schedule too, as adding a class from one does.
-        if (term is not null && stored.S.Any(k => TermOf(k) != term)) stored.S.Clear();
+        if (term is not null && stored.S.Any(k => !IsMarker(k) && TermOf(k) != term)) stored.S.Clear();
         Write(stored with { C = campus, T = term ?? stored.T });
     }
 
-    /// <summary>The schedule as the pages show it, filled in from the current data.</summary>
+    /// <summary>The schedule, filled in from the current catalogue.</summary>
     public BuiltSchedule Current => Hydrate(Read(), _open);
 
-    /// <summary>Keys to what the pages show: titles, times, rooms and professors as the registrar has them now.</summary>
+    /// <summary>Keys to sections, with today's titles, times, rooms and professors.</summary>
     private BuiltSchedule Hydrate(Stored stored, SavedSchedule? row)
     {
         var picked = new List<PickedSection>(stored.S.Count);
@@ -310,28 +267,98 @@ public class ScheduleStore(IHttpContextAccessor accessor, IDataProtectionProvide
         };
     }
 
+    // A lecture and the companion a student picked for it are one unit: added
+    // together, removed together. The link is a marker "link:<companion>\t<lecture>"
+    // stored alongside the section keys, so it rides in the cookie and the row
+    // with no schema change and is skipped on read (Find returns null for it).
+    // The separator is a tab, which never appears in a key; a space would split
+    // wrongly on subjects that contain one, such as "ME EN".
+    private const string LinkPrefix = "link:";
+    private const char LinkSep = '\t';
+    private static string Marker(string companion, string lecture) => $"{LinkPrefix}{companion}{LinkSep}{lecture}";
+    private static bool IsMarker(string entry) => entry.StartsWith(LinkPrefix, StringComparison.Ordinal);
+    private static (string Companion, string Lecture)? ParseMarker(string entry)
+    {
+        if (!IsMarker(entry)) return null;
+        var rest = entry[LinkPrefix.Length..];
+        var sep = rest.IndexOf(LinkSep);
+        return sep < 0 ? null : (rest[..sep], rest[(sep + 1)..]);
+    }
+
+    /// <summary>How many real sections are in the schedule, markers aside.</summary>
+    private static int SectionCount(Stored s) => s.S.Count(k => !IsMarker(k));
+
     public void Add(string key)
     {
         if (sections.Find(key) is not { } section) return;
         var stored = Read();
         if (stored.S.Contains(key)) return;
-        // One schedule is one campus - a student cannot register across them.
-        // An account schedule's was chosen when it was created and a guest's
-        // is the main campus; a key from another is simply not for it, and
-        // the builder never offers one.
+        // One schedule is one campus; a key from another is ignored.
         if ((_open?.Campus ?? CampusOf(stored)) != section.Campus) return;
         stored = stored with { C = section.Campus };
-        stored.S.RemoveAll(k => TermOf(k) != TermOf(key));   // a new term starts a new schedule
-        if (stored.S.Count >= MaxSections) return;
+        RemoveForNewTerm(stored, TermOf(key));   // a new term starts a new schedule
+        if (SectionCount(stored) >= MaxSections) return;
         stored.S.Add(key);
         Write(stored);
     }
 
+    /// <summary>
+    /// Add a lecture and the companion section chosen for it, as one unit. If the
+    /// lecture is already in the schedule its old companion is replaced, so this
+    /// also serves as "change my lab".
+    /// </summary>
+    public void AddPair(string lectureKey, string companionKey)
+    {
+        if (sections.Find(lectureKey) is not { } lecture || sections.Find(companionKey) is null) return;
+        var stored = Read();
+        if ((_open?.Campus ?? CampusOf(stored)) != lecture.Campus) return;
+        stored = stored with { C = lecture.Campus };
+        RemoveForNewTerm(stored, TermOf(lectureKey));
+
+        // Drop any earlier choice for this lecture, then add the two together.
+        DetachLecture(stored, lectureKey);
+        if (SectionCount(stored) >= MaxSections) return;
+        if (!stored.S.Contains(lectureKey)) stored.S.Add(lectureKey);
+        if (!stored.S.Contains(companionKey)) stored.S.Add(companionKey);
+        stored.S.Add(Marker(companionKey, lectureKey));
+        Write(stored);
+    }
+
+    /// <summary>Remove a section, and the section it is paired with, and their marker.</summary>
     public void RemoveSection(string key)
     {
         var stored = Read();
-        if (stored.S.Remove(key)) Write(stored);
+        var links = stored.S.Select(ParseMarker).OfType<(string Companion, string Lecture)>().ToList();
+
+        var drop = new HashSet<string> { key };
+        // Removing a lecture takes its companion; removing a companion takes its lecture.
+        foreach (var (companion, lecture) in links)
+            if (key == lecture) drop.Add(companion);
+            else if (key == companion) drop.Add(lecture);
+
+        var before = stored.S.Count;
+        stored.S.RemoveAll(e =>
+        {
+            if (drop.Contains(e)) return true;
+            if (ParseMarker(e) is { } m) return drop.Contains(m.Companion) || drop.Contains(m.Lecture);
+            return false;
+        });
+        if (stored.S.Count != before) Write(stored);
     }
+
+    /// <summary>Drop a lecture, its chosen companion, and their marker, in place.</summary>
+    private static void DetachLecture(Stored stored, string lectureKey)
+    {
+        var companions = stored.S.Select(ParseMarker).OfType<(string Companion, string Lecture)>()
+            .Where(m => m.Lecture == lectureKey).Select(m => m.Companion).ToHashSet();
+        stored.S.RemoveAll(e => e == lectureKey || companions.Contains(e)
+            || (ParseMarker(e) is { } m && m.Lecture == lectureKey));
+    }
+
+    /// <summary>Clear the schedule when the added key is in a different term. Markers of dropped sections go too.</summary>
+    private static void RemoveForNewTerm(Stored stored, string term) =>
+        stored.S.RemoveAll(k => IsMarker(k) ? ParseMarker(k) is { } m && (TermOf(m.Companion) != term || TermOf(m.Lecture) != term)
+                                            : TermOf(k) != term);
 
     public void AddBreak(string name, string days, string from, string until)
     {
@@ -351,7 +378,7 @@ public class ScheduleStore(IHttpContextAccessor accessor, IDataProtectionProvide
 
     // ------------------------------------------------------------ the schedule home
 
-    /// <summary>A signed-in student's schedules, most recently touched first. Empty for a guest.</summary>
+    /// <summary>A student's schedules, most recently touched first. Empty for a guest.</summary>
     public IReadOnlyList<ScheduleSummary> Mine()
     {
         if (UserId is not { } userId || Db is not { } db) return [];
@@ -366,7 +393,7 @@ public class ScheduleStore(IHttpContextAccessor accessor, IDataProtectionProvide
             .ToList();
     }
 
-    /// <summary>A new, empty schedule for a term and a campus, opened for the builder.</summary>
+    /// <summary>A new empty schedule, opened for the builder.</summary>
     public void Create(string? name, string? term, string? campus)
     {
         if (UserId is not { } userId || Db is not { } db) return;
@@ -374,7 +401,7 @@ public class ScheduleStore(IHttpContextAccessor accessor, IDataProtectionProvide
         db.SaveChanges();
     }
 
-    /// <summary>Make one of theirs the schedule the builder edits.</summary>
+    /// <summary>Make one of their schedules the one the builder edits.</summary>
     public void Open(string id)
     {
         if (UserId is not { } userId || Db is not { } db) return;
@@ -406,11 +433,7 @@ public record Meeting(string Days, int Start, int End)
     /// <summary>The registrar's two-letter day codes, in week order.</summary>
     public static readonly string[] Week = ["Mo", "Tu", "We", "Th", "Fr", "Sa", "Su"];
 
-    /// <summary>
-    /// The days this meets, as codes in week order. Codes run together -
-    /// "TuTh", "MoWeFr" - and every code starts with a capital, so a substring
-    /// test cannot match across two of them.
-    /// </summary>
+    /// <summary>The days this meets, in week order.</summary>
     public IReadOnlyList<string> DayCodes => Week.Where(d => Days.Contains(d, StringComparison.Ordinal)).ToList();
 
     public bool Overlaps(Meeting other) =>
@@ -423,24 +446,29 @@ public static partial class Meetings
                     RegexOptions.IgnoreCase)]
     private static partial Regex Pattern();
 
-    /// <summary>
-    /// Every meeting in a times string, separated by semicolons when a section
-    /// has several ("Tu/10:45AM-12:05PM; Th/10:45AM-12:05PM").
-    /// </summary>
+    /// <summary>Every meeting in a times string, such as "Tu/10:45AM-12:05PM; Th/10:45AM-12:05PM". Exact duplicates, which the registrar sometimes lists, are dropped.</summary>
     public static IReadOnlyList<Meeting> Parse(string? times)
     {
         if (string.IsNullOrWhiteSpace(times)) return [];
         return Pattern().Matches(times).Select(m => new Meeting(
             Expand(m.Groups[1].Value),
             Clock(m.Groups[2].Value, m.Groups[3].Value, m.Groups[4].Value),
-            Clock(m.Groups[5].Value, m.Groups[6].Value, m.Groups[7].Value))).ToList();
+            Clock(m.Groups[5].Value, m.Groups[6].Value, m.Groups[7].Value))).Distinct().ToList();
     }
 
     /// <summary>
-    /// "Mo-Th" is Monday through Thursday. The registrar writes a range for
-    /// about one meeting in fifteen - language classes most of all - and read
-    /// as written it would land on Thursday alone.
+    /// A times string for display, with the registrar's exact duplicate meetings
+    /// removed. "Th/3:30-5:30; TuWe/6-7; Th/3:30-5:30" becomes the first two.
     /// </summary>
+    public static string Display(string? times)
+    {
+        if (string.IsNullOrWhiteSpace(times)) return "No meeting time";
+        var seen = new HashSet<string>();
+        var parts = times.Split(';').Select(p => p.Trim()).Where(p => p.Length > 0 && seen.Add(p));
+        return string.Join("; ", parts);
+    }
+
+    /// <summary>"Mo-Th" is Monday through Thursday.</summary>
     private static string Expand(string days)
     {
         var dash = days.IndexOf('-');
@@ -450,7 +478,29 @@ public static partial class Meetings
         return from < 0 || to < from ? days : string.Concat(Meeting.Week[from..(to + 1)]);
     }
 
-    /// <summary>A break's 24-hour "HH:MM" pair, on the days it applies to.</summary>
+    /// <summary>
+    /// A break in the same shape as a section's meeting string, so the cart reads
+    /// consistently: "MoWeFr/12:00PM-01:00PM". Days as chosen, or all weekdays
+    /// when none were picked; times from 24-hour to 12-hour with AM/PM.
+    /// </summary>
+    public static string Label(Break window)
+    {
+        var days = string.IsNullOrWhiteSpace(window.Days) ? "MoTuWeThFr" : window.Days;
+        return $"{days}/{Clock12(window.From)}-{Clock12(window.Until)}";
+    }
+
+    /// <summary>"13:00" to "01:00PM", matching the registrar's meeting-time format.</summary>
+    private static string Clock12(string clock)
+    {
+        var parts = (clock ?? "").Split(':');
+        if (parts.Length != 2 || !int.TryParse(parts[0], out var h) || !int.TryParse(parts[1], out var m))
+            return clock ?? "";
+        var meridiem = h < 12 ? "AM" : "PM";
+        var h12 = h % 12 == 0 ? 12 : h % 12;
+        return $"{h12:00}:{m:00}{meridiem}";
+    }
+
+    /// <summary>A break as a meeting.</summary>
     public static Meeting Of(Break window)
     {
         var days = string.IsNullOrWhiteSpace(window.Days) ? "MoTuWeThFr" : window.Days;
@@ -472,11 +522,7 @@ public static partial class Meetings
             ? h * 60 + m : 0;
     }
 
-    /// <summary>
-    /// The keys of every section that overlaps something else in the schedule -
-    /// another section, or a break. Reported rather than prevented: the student
-    /// may have added the clash deliberately, but should be able to see it.
-    /// </summary>
+    /// <summary>The keys of every section that overlaps another section or a break.</summary>
     public static HashSet<string> Conflicting(BuiltSchedule schedule)
     {
         var clashing = new HashSet<string>();
@@ -499,7 +545,7 @@ public static partial class Meetings
         return clashing;
     }
 
-    /// <summary>The ids of the breaks a scheduled class runs into: a break is "wrong" when a class sits in it.</summary>
+    /// <summary>The ids of the breaks a class runs into.</summary>
     public static HashSet<string> ConflictingBreaks(BuiltSchedule schedule)
     {
         var busy = schedule.Sections.SelectMany(s => Parse(s.Times)).ToList();
@@ -510,7 +556,7 @@ public static partial class Meetings
     public static bool Clashes(string? times, BuiltSchedule schedule)
     {
         var mine = Parse(times);
-        if (mine.Count == 0) return false;   // no meeting time cannot clash
+        if (mine.Count == 0) return false;   // no meeting time, no clash
 
         var busy = schedule.Sections.SelectMany(s => Parse(s.Times))
             .Concat(schedule.Breaks.Select(Of)).ToList();

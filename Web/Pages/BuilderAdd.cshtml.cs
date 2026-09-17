@@ -5,45 +5,30 @@ using Microsoft.AspNetCore.Mvc.RazorPages;
 
 namespace Web.Pages;
 
-/// <summary>
-/// Search and results on one page. They used to be two, which meant every
-/// refinement was a round trip and the filters you were adjusting scrolled out
-/// of sight on arrival.
-/// </summary>
+/// <summary>The schedule builder: search, results and the cart on one page.</summary>
 public class BuilderAddModel(CourseQueries db, SiteIndex site, SectionIndex sections, GradeIndex grades, ScheduleStore store, Spotlight spotlight) : PageModel
 {
     private const int PageSize = 24;
 
     [BindProperty(SupportsGet = true)] public string? Term { get; set; }
 
-    /// <summary>
-    /// Which of the registrar's schedules the results come from: the
-    /// schedule's own campus, chosen when it was created. A student cannot
-    /// register across campuses, so there is nothing here to pick.
-    /// </summary>
+    /// <summary>The schedule's campus. Results come from it alone; there is nothing to pick.</summary>
     public string Campus { get; private set; } = Pages.Campus.Main;
 
-    /// <summary>
-    /// Inferred from the search box, not chosen from a list. A student thinks
-    /// "CS 2420" or "calculus", not "select a subject, then enter a number", and
-    /// the two fields could contradict each other besides.
-    /// </summary>
+    /// <summary>Set when the search text is exactly a subject code.</summary>
     public string? Subject { get; private set; }
 
-    /// <summary>Gen-ed designation. Matched with LIKE, because the registrar
-    /// packs several into one field.</summary>
+    /// <summary>Requirement designation filter.</summary>
     [BindProperty(SupportsGet = true)] public string? Req { get; set; }
     [BindProperty(SupportsGet = true)] public string? Q { get; set; }
-    // On by default: a section you cannot register for is not a useful result.
+    /// <summary>Open seats only. On by default.</summary>
     [BindProperty(SupportsGet = true)] public bool Open { get; set; } = true;
 
-    /// <summary>Hide sections that clash with what is already in the schedule.</summary>
+    /// <summary>Hide sections that clash with the schedule.</summary>
     [BindProperty(SupportsGet = true)] public bool NoClash { get; set; } = true;
 
     [BindProperty(SupportsGet = true)] public string Sort { get; set; } = "relevance";
-    // Bound from "pg", not "page". Razor Pages reserves "page" for its own
-    // routing, so a property bound to it silently stays at its default and
-    // every request looks like page 1.
+    // Bound from "pg": Razor Pages reserves "page" for routing.
     [BindProperty(SupportsGet = true, Name = "pg")] public int Page { get; set; } = 1;
 
     public IReadOnlyList<string> Terms { get; private set; } = [];
@@ -56,22 +41,38 @@ public class BuilderAddModel(CourseQueries db, SiteIndex site, SectionIndex sect
     public bool HasPrevious => Page > 1;
     public bool HasNext => Page < LastPage;
 
-    /// <summary>Sections already in the schedule, so the card can say so.</summary>
+    /// <summary>Keys of sections already in the schedule.</summary>
     public HashSet<string> Picked { get; private set; } = [];
 
     /// <summary>What the cart panel shows.</summary>
     public BuiltSchedule Cart { get; private set; } = new();
 
+    /// <summary>
+    /// The companion choices for every "required" lecture on the page, keyed by
+    /// section number, as JSON. The pairing is static, so it is embedded with the
+    /// results and the chooser opens with no round trip. Seats are as of page load,
+    /// the same freshness as the seat counts already on the cards.
+    /// </summary>
+    public string CompanionData { get; private set; } = "{}";
+
     public void OnGet() => Search();
 
-    /// <summary>Put one section in the schedule and stay where you were.</summary>
+    /// <summary>Add one section to the schedule.</summary>
     public IActionResult OnPostAdd(string term, string subject, string number, string section)
     {
-        // Only the key is kept. The store fills in title, time and room on
-        // read, so what the cart shows is always what the registrar says now.
+        // Only the key is kept; details are looked up on read.
         var key = SectionIndex.KeyOf(term, subject, number, section);
         if (sections.Find(key) is not null) store.Add(key);
 
+        return new OkResult();
+    }
+
+    /// <summary>Add a lecture and the companion section chosen for it, together.</summary>
+    public IActionResult OnPostAddPair(string term, string subject, string number, string lecture, string companion)
+    {
+        var lectureKey = SectionIndex.KeyOf(term, subject, number, lecture);
+        var companionKey = SectionIndex.KeyOf(term, subject, number, companion);
+        store.AddPair(lectureKey, companionKey);
         return new OkResult();
     }
 
@@ -81,7 +82,7 @@ public class BuilderAddModel(CourseQueries db, SiteIndex site, SectionIndex sect
         return Partial("_SectionResults", this);
     }
 
-    /// <summary>Take one section back out, from either the card or the cart.</summary>
+    /// <summary>Remove one section from the schedule.</summary>
     public IActionResult OnPostDrop(string key)
     {
         store.RemoveSection(key);
@@ -100,15 +101,14 @@ public class BuilderAddModel(CourseQueries db, SiteIndex site, SectionIndex sect
         return new OkResult();
     }
 
-    /// <summary>The cart on its own, so adding a section can refresh just that.</summary>
+    /// <summary>The cart alone, for refreshing it after a change.</summary>
     public IActionResult OnGetCart() => Partial("_Cart", store.Current);
 
     private void Search()
     {
         if (Page < 1) Page = 1;
         Terms = Pages.Terms.NewestFirst(site.Terms);
-        // The schedule's own term is the default: one created for Spring
-        // browses Spring. A term in the query still wins, for deep links.
+        // The schedule's own term is the default; a term in the query wins.
         var schedule = store.Current;
         if (!Terms.Contains(Term))
             Term = schedule.Term is { } own && Terms.Contains(own) ? own : Terms.FirstOrDefault();
@@ -117,9 +117,7 @@ public class BuilderAddModel(CourseQueries db, SiteIndex site, SectionIndex sect
         Designations = site.Designations;
         if (Term is null) return;
 
-        // A query that is exactly a subject code means the subject. Left as free
-        // text it would match every title containing those letters, so "CS"
-        // would drag in "Physics" and "Forensics".
+        // Text that is exactly a subject code means that subject, not a substring.
         var typed = (Q ?? "").Trim();
         var text = typed;
         if (typed.Length > 0 &&
@@ -130,34 +128,34 @@ public class BuilderAddModel(CourseQueries db, SiteIndex site, SectionIndex sect
             text = null;
         }
 
-        // From the in-memory term, not the database: the whole term was being
-        // read and built on every keystroke to show twenty-four rows.
         var found = sections.Find(Term, subject: Subject, query: text,
                                   requirement: Req, openOnly: Open, campus: Campus);
+
+        // Companions are added through their lecture, not on their own, so a
+        // lab or discussion in a course that has a lecture is kept out of the
+        // results. A lab that is its own course (no lecture) still shows.
+        var withLecture = sections.All(Term)
+            .Where(s => s.Component == "Lecture")
+            .Select(s => (s.Subject, s.CourseNumber)).ToHashSet();
+        found = found.Where(s => !(Companions.IsCompanion(s.Component)
+                                   && withLecture.Contains((s.Subject, s.CourseNumber)))).ToList();
 
         Cart = schedule;
         Picked = schedule.Sections.Select(s => s.Key).ToHashSet();
 
-        // A section already in the schedule clashes with itself, and is dropped
-        // like any other clash - the hour is taken, so it is no longer a
-        // candidate. Taking it back out is done from the cart, which is why the
-        // card does not need to stay on screen to offer it.
+        // Sections already in the schedule are not shown again in the results.
+        found = found.Where(s => !Picked.Contains(SectionIndex.KeyOf(s.Term, s.Subject, s.CourseNumber, s.SectionNumber))).ToList();
+
+        // A section that clashes with the schedule drops out too.
         if (NoClash)
             found = found.Where(s => !Meetings.Clashes(s.Times, schedule)).ToList();
 
-        // The COURSE average, not the section's own. A future term has no
-        // section-level grades at all - Fall 2026 has none of 8,415 - so sorting
-        // on those compared null with null and did nothing at all. This is also
-        // the figure the card actually shows.
+        // The course average, which the card shows; a future term has no section grades.
         var averages = Sort == "gpa" ? site.CourseAverages : null;
         double? Average(Section s) =>
             averages!.TryGetValue($"{s.Subject}|{s.CourseNumber}", out var g) ? g : null;
 
-        // Relevance: how squarely a section answers what was typed. The exact
-        // class first ("CS 2420"), then classes whose code starts that way,
-        // then titles that start with the words, then titles that merely
-        // contain them; ties in course-number order. With nothing typed the
-        // sections come in the server's weighted shuffle instead (Spotlight).
+        // Relevance: exact code, then code prefix, then title start, then title contains.
         var byName = found.OrderBy(s => s.Subject, StringComparer.OrdinalIgnoreCase)
                           .ThenBy(s => int.TryParse(new string(s.CourseNumber.TakeWhile(char.IsDigit).ToArray()), out var n) ? n : int.MaxValue)
                           .ThenBy(s => s.CourseNumber, StringComparer.OrdinalIgnoreCase)
@@ -180,18 +178,16 @@ public class BuilderAddModel(CourseQueries db, SiteIndex site, SectionIndex sect
 
         var ordered = Sort switch
         {
-            // Nothing typed: the server's own shuffle, weighted toward sections
-            // worth a look, its first card always a fully furnished one.
+            // Nothing typed: the fixed spotlight order.
             "relevance" when typed.Length == 0 && Subject is null => spotlight.Order(found),
             "relevance" => byName.OrderBy(Relevance).ToList(),
-            // A missing grade is not a good grade, so those sort last either way.
+            // No grade sorts last.
             "gpa" => found.OrderBy(s => Average(s) is null).ThenByDescending(Average).ToList(),
             "time" => found.OrderBy(s => CourseQueries.EarliestStart(s.Times) ?? int.MaxValue).ToList(),
-            // Sections with no meeting time sort last either way: they answer
-            // neither "what starts first" nor "what starts last".
+            // No meeting time sorts last either way.
             "time_desc" => found.OrderBy(s => s.Times is null)
                                 .ThenByDescending(s => CourseQueries.EarliestStart(s.Times) ?? int.MinValue).ToList(),
-            // Numerically. As text "105" falls between "1030" and "1050".
+            // Numeric order, so "105" does not fall between "1030" and "1050".
             _ => found.OrderBy(s => s.Subject, StringComparer.OrdinalIgnoreCase)
                       .ThenBy(Number)
                       .ThenBy(s => s.CourseNumber, StringComparer.OrdinalIgnoreCase)
@@ -202,5 +198,49 @@ public class BuilderAddModel(CourseQueries db, SiteIndex site, SectionIndex sect
         if ((Page - 1) * PageSize >= Total && Page > 1) Page = LastPage;
         Results = db.Cards(ordered.Skip((Page - 1) * PageSize).Take(PageSize).ToList(),
                            grades.CourseAverage, grades.InstructorCourseAverage);
+
+        CompanionData = BuildCompanionData();
+    }
+
+    /// <summary>
+    /// The companion sections a student may choose for each "required" lecture on
+    /// this page, from the in-memory term index, so the chooser needs no fetch.
+    /// </summary>
+    private string BuildCompanionData()
+    {
+        var lectures = Results.Where(c => c.RequiresCompanion).ToList();
+        if (lectures.Count == 0) return "{}";
+
+        // The whole course's sections, once per course on the page.
+        var byCourse = sections.All(Term!)
+            .GroupBy(s => (s.Subject, s.CourseNumber))
+            .ToDictionary(g => g.Key, g => g.ToList());
+
+        var data = new Dictionary<string, object>();
+        foreach (var lec in lectures)
+        {
+            if (!byCourse.TryGetValue((lec.Subject, lec.CourseNumber), out var course)) continue;
+            var pieces = course.Select(s => new CoursePlanner.Data.CourseSection(s.SectionNumber, s.Component, s.PairsWith)).ToList();
+            var chosen = Companions.ChoicesFor(pieces, lec.SectionNumber).ToHashSet();
+            var published = Companions.Resolve(pieces).Companions.GetValueOrDefault(lec.SectionNumber) is { Count: > 0 };
+            var byNumber = course.ToDictionary(s => s.SectionNumber);
+
+            var key = SectionIndex.KeyOf(Term!, lec.Subject, lec.CourseNumber, lec.SectionNumber);
+            data[key] = chosen.OrderBy(x => x, StringComparer.Ordinal).Select(n =>
+            {
+                var s = byNumber[n];
+                return new
+                {
+                    section = n,
+                    kind = Companions.Kind(new[] { s.Component }),
+                    times = s.Times,
+                    location = s.Location,
+                    seats = s.SeatsAvailable,
+                    professor = Names.Line(s.Instructors.Select(i => Names.Natural(i.Name)).ToList()),
+                    published,
+                };
+            }).ToList();
+        }
+        return System.Text.Json.JsonSerializer.Serialize(data);
     }
 }

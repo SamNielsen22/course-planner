@@ -5,10 +5,9 @@ using Dapper;
 namespace ScraperTests;
 
 /// <summary>
-/// A throwaway database built from the real schema.sql, with a handful of rows
-/// chosen to cover the cases that have actually broken: over-enrolled sections,
-/// sections meeting at more than one time, courses taught by two instructors,
-/// and midday boundaries.
+/// A throwaway database from the real schema.sql, with rows covering the cases
+/// that have broken: over-enrolled sections, several meeting times, co-taught
+/// courses, and midday boundaries.
 /// </summary>
 public class TestDatabase : IDisposable
 {

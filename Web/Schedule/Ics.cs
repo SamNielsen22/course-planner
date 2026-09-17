@@ -5,19 +5,15 @@ using Web.Pages;
 namespace Web.Schedule;
 
 /// <summary>
-/// The schedule as an iCalendar file (RFC 5545): one weekly event per section,
-/// running from the term's first day of classes to its last and skipping the
-/// days off, with the building's name and street address as the location so
-/// a phone's calendar can map it. Written by hand - the format is a few lines
-/// of text, and its one subtlety, that a recurring event's UNTIL must be in
-/// UTC while its start is local time, is handled in one place here.
+/// The schedule as an iCalendar file: weekly events from the first day of
+/// classes to the last, skipping days off, with building addresses.
 /// </summary>
 public static class Ics
 {
-    /// <summary>A time zone: its IANA name, the system's rules for it, and its VTIMEZONE for the file.</summary>
+    /// <summary>A time zone: IANA name, system rules, and the VTIMEZONE block.</summary>
     private sealed record Zone(string Id, TimeZoneInfo Info, string[] Definition);
 
-    /// <summary>Mountain time, with the US daylight-saving rules in force since 2007.</summary>
+    /// <summary>Mountain time with US daylight saving.</summary>
     private static readonly Zone Mountain = new("America/Denver", FindZone("America/Denver", "Mountain Standard Time"),
     [
         "BEGIN:VTIMEZONE", "TZID:America/Denver",
@@ -28,7 +24,7 @@ public static class Ics
         "END:VTIMEZONE",
     ]);
 
-    /// <summary>Korea, for the Asia Campus in Incheon: no daylight saving.</summary>
+    /// <summary>Korea, for the Asia Campus. No daylight saving.</summary>
     private static readonly Zone Korea = new("Asia/Seoul", FindZone("Asia/Seoul", "Korea Standard Time"),
     [
         "BEGIN:VTIMEZONE", "TZID:Asia/Seoul",
@@ -37,10 +33,10 @@ public static class Ics
         "END:VTIMEZONE",
     ]);
 
-    /// <summary>The schedule's meeting times are local to its campus.</summary>
+    /// <summary>Times are local to the campus.</summary>
     private static Zone ZoneOf(string campus) => campus == "uac" ? Korea : Mountain;
 
-    /// <summary>Two-letter registrar day codes, as the schedule writes them.</summary>
+    /// <summary>The registrar's day codes.</summary>
     private static readonly (string Code, string ByDay, DayOfWeek Day)[] Days =
     [
         ("Mo", "MO", DayOfWeek.Monday), ("Tu", "TU", DayOfWeek.Tuesday), ("We", "WE", DayOfWeek.Wednesday),
@@ -48,10 +44,7 @@ public static class Ics
         ("Su", "SU", DayOfWeek.Sunday),
     ];
 
-    /// <summary>
-    /// Every section with a meeting time in a term whose dates are known.
-    /// Breaks are the student's own constraints, not appointments, and stay out.
-    /// </summary>
+    /// <summary>Every section with a meeting time in a term with known dates. Breaks stay out.</summary>
     public static string Build(BuiltSchedule schedule, Buildings buildings, string siteUrl, DateTimeOffset now)
     {
         var text = new StringBuilder();
@@ -79,11 +72,7 @@ public static class Ics
         return text.ToString();
     }
 
-    /// <summary>
-    /// A section with several meetings lists a room for each - "M LI 1715, M LI
-    /// 1160" against "Tu/…; Th/…" - and when the registrar has not, the first
-    /// room stands for all.
-    /// </summary>
+    /// <summary>One room per meeting when the registrar lists several, else the first room for all.</summary>
     private static string?[] Rooms(string? location, int count)
     {
         var parts = (location ?? "").Split(',', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries);
@@ -93,18 +82,13 @@ public static class Ics
     private static void Event(StringBuilder text, PickedSection section, Meeting meeting, string? room, int index,
                               AcademicCalendar.TermDates dates, Zone zone, Buildings buildings, string siteUrl, string stamp)
     {
-        // A meeting that ends before it starts is a registrar typo (fourteen
-        // sections, all "…AM-01:00AM"); a calendar would refuse it.
+        // A meeting that ends before it starts is a registrar typo.
         if (meeting.End <= meeting.Start) return;
 
-        // One event per weekday, each repeating on that day alone, rather than
-        // one event with BYDAY=TU,TH: the iPhone's Calendar took the combined
-        // rule as its first day only, and a Tuesday-Thursday class landed on
-        // Tuesdays. Separate events say the same thing in a form every
-        // calendar reads alike.
+        // One event per weekday: the iPhone reads a combined BYDAY rule as its first day only.
         foreach (var day in Days.Where(d => meeting.DayCodes.Contains(d.Code)))
         {
-            // The first class is the first day of term that falls on this day.
+            // The first class is the first such weekday of the term.
             var first = dates.FirstDay;
             while (first.DayOfWeek != day.Day) first = first.AddDays(1);
             if (first > dates.LastDay) continue;
@@ -125,7 +109,7 @@ public static class Ics
             if (Where(room, place) is { } where) Line(text, "LOCATION:" + Escape(where));
 
             Line(text, $"URL:{siteUrl}/course/{Uri.EscapeDataString(section.Subject)}/{Uri.EscapeDataString(section.CourseNumber)}");
-            // A reminder half an hour before each class, as the calendar apps show it.
+            // A reminder half an hour before each class.
             Line(text, "BEGIN:VALARM");
             Line(text, "ACTION:DISPLAY");
             Line(text, "DESCRIPTION:" + Escape($"{section.Code} in 30 minutes"));
@@ -135,11 +119,7 @@ public static class Ics
         }
     }
 
-    /// <summary>
-    /// The building's name, the room and the street address when the location
-    /// names a building; "Online" for the registrar's CANVAS and Online
-    /// placeholders; otherwise the location as written, or nothing.
-    /// </summary>
+    /// <summary>Building, room and address when known; "Online" for CANVAS; else the location as written.</summary>
     private static string? Where(string? location, Buildings.Place? place)
     {
         if (place is not null)
@@ -159,7 +139,7 @@ public static class Ics
     private static string Local(DateOnly day, int minutes) =>
         day.ToDateTime(new TimeOnly(minutes / 60, minutes % 60)).ToString("yyyyMMdd'T'HHmmss", CultureInfo.InvariantCulture);
 
-    /// <summary>The end of the last day of classes, in UTC as the RRULE requires.</summary>
+    /// <summary>The end of the last day of classes, in UTC as RRULE requires.</summary>
     private static string Until(DateOnly lastDay, Zone zone)
     {
         var midnight = lastDay.AddDays(1).ToDateTime(TimeOnly.MinValue, DateTimeKind.Unspecified);
@@ -167,22 +147,18 @@ public static class Ics
         return utc.ToString("yyyyMMdd'T'HHmmss'Z'", CultureInfo.InvariantCulture);
     }
 
-    /// <summary>By IANA name, or by the name Windows gives the same zone.</summary>
+    /// <summary>By IANA name, or the Windows name for the same zone.</summary>
     private static TimeZoneInfo FindZone(string iana, string windows)
     {
         try { return TimeZoneInfo.FindSystemTimeZoneById(iana); }
         catch (TimeZoneNotFoundException) { return TimeZoneInfo.FindSystemTimeZoneById(windows); }
     }
 
-    /// <summary>Text values: backslash, semicolon, comma and newline are escaped.</summary>
+    /// <summary>Escapes the characters iCalendar text reserves.</summary>
     private static string Escape(string value) =>
         value.Replace("\\", "\\\\").Replace(";", "\\;").Replace(",", "\\,").Replace("\r\n", "\n").Replace("\n", "\\n");
 
-    /// <summary>
-    /// One content line, CRLF-terminated and folded at 75 octets as the format
-    /// requires - counted in bytes, never splitting a character, since a title
-    /// can carry an en dash or an accent.
-    /// </summary>
+    /// <summary>One line, CRLF-ended and folded at 75 bytes without splitting a character.</summary>
     private static void Line(StringBuilder text, string content)
     {
         if (Encoding.UTF8.GetByteCount(content) <= 75) { text.Append(content).Append("\r\n"); return; }
@@ -192,7 +168,7 @@ public static class Ics
         var first = true;
         foreach (var rune in content.EnumerateRunes())
         {
-            var limit = first ? 75 : 74;   // a continuation line begins with a space
+            var limit = first ? 75 : 74;   // continuation lines start with a space
             if (bytes + rune.Utf8SequenceLength > limit)
             {
                 text.Append(first ? "" : " ").Append(chunk).Append("\r\n");

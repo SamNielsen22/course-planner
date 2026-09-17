@@ -5,6 +5,7 @@ using Microsoft.AspNetCore.Mvc.RazorPages;
 
 namespace Web.Pages;
 
+/// <summary>The professor search, by name.</summary>
 [OutputCache(Duration = 60)]
 [ResponseCache(Duration = 60, Location = ResponseCacheLocation.Any)]
 public class InstructorsModel(InstructorIndex people) : PageModel
@@ -12,9 +13,7 @@ public class InstructorsModel(InstructorIndex people) : PageModel
     private const int PageSize = 24;
 
     [BindProperty(SupportsGet = true)] public string? Q { get; set; }
-    // Bound from "pg", not "page". Razor Pages reserves "page" for its own
-    // routing, so a property bound to it silently stays at its default and
-    // every request looks like page 1.
+    // Bound from "pg": Razor Pages reserves "page" for routing.
     [BindProperty(SupportsGet = true, Name = "pg")] public int Page { get; set; } = 1;
 
     public IReadOnlyList<InstructorCard> Results { get; private set; } = [];
@@ -35,11 +34,8 @@ public class InstructorsModel(InstructorIndex people) : PageModel
     private void Search()
     {
         if (Page < 1) Page = 1;
-        // Name only, in the index's weighted-random order: one box, like the
-        // course lookup, and no ranking.
         (Results, Total) = people.Search(Q, Page, PageSize);
-        // A filter change can leave you past the end of a shorter list; step
-        // back rather than showing an empty page.
+        // Past the end of a shorter list: step back to the last page.
         if (Results.Count == 0 && Page > 1)
         {
             Page = LastPage;

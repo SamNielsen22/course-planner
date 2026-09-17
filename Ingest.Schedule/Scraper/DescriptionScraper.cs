@@ -1,12 +1,7 @@
 using System.Text.RegularExpressions;
 using HtmlAgilityPack;
 
-/// <summary>
-/// What a course's description page says about it. Title is the full name from
-/// the page heading - "Manufacturing for Engineering Systems" - where the
-/// class listing carries only the registrar's 30-character short title
-/// ("Manufact for Eng Sys"); empty when the heading was not where expected.
-/// </summary>
+/// <summary>What a course's description page says. Title is the full name from the heading, where the class list has only a short one.</summary>
 public record DetailsRecord(string Title, string Description, string Prerequisites, string RequirementDesignation);
 
 public static partial class DescriptionScraper
@@ -45,9 +40,7 @@ public static partial class DescriptionScraper
 
             if (headerText == "Enrollment Information")
             {
-                // Rows are found by their label, not by scanning every span: the
-                // enrollment requirement only sometimes carries a "Prerequisites:"
-                // prefix, and the designation row sits in the same card.
+                // Found by label: the designation sits in the same card.
                 prerequisites = string.Join(" ", RowValues(bodyNode, "Enrollment Requirement"));
                 if (prerequisites.StartsWith("Prerequisites:"))
                     prerequisites = prerequisites.Substring("Prerequisites:".Length);
@@ -65,12 +58,7 @@ public static partial class DescriptionScraper
         return new DetailsRecord(title, description, prerequisites, requirementDesignation);
     }
 
-    /// <summary>
-    /// The span values of one labelled row inside the Enrollment Information card,
-    /// e.g. "Enrollment Requirement" or "Requirement Designation". A row is absent
-    /// when a course has nothing for it, and may hold several spans - one per
-    /// designation, separated by a line break.
-    /// </summary>
+    /// <summary>The values of one labelled row in the Enrollment Information card. A row may hold several, or be absent.</summary>
     static IEnumerable<string> RowValues(HtmlNode bodyNode, string label)
     {
         var rows = bodyNode.SelectNodes(".//div[contains(@class,'row')]");

@@ -5,16 +5,8 @@ using System.Text.RegularExpressions;
 namespace Ingest.Schedule.Database;
 
 /// <summary>
-/// The registrar's spelling of a person's name, cleaned for display.
-///
-/// Two problems, both measured against the 7,921 names in the catalogue:
-/// 1,914 of them (24%) arrive in BLOCK CAPITALS while the rest are mixed case,
-/// so an alphabetical list and a name search both behave oddly; and a handful
-/// carry a pronoun parenthetical the registrar's form let people type into the
-/// name field.
-///
-/// A preferred name in parentheses - "Feng, Tianli (Andy)" - is NOT a defect and
-/// is left alone. Only pronoun parentheticals are stripped.
+/// A name cleaned for display: about a quarter arrive in block capitals, and a
+/// few carry a pronoun parenthetical. A preferred name in parentheses stays.
 /// </summary>
 public static partial class InstructorNames
 {
@@ -33,11 +25,7 @@ public static partial class InstructorNames
     private static string Collapse(string name) =>
         Regex.Replace(name, @"\s+", " ").Trim();
 
-    /// <summary>
-    /// Title case that respects the shapes real surnames take. A plain
-    /// ToTitleCase turns MCDONALD into "Mcdonald" and O'BRIEN into "O'brien",
-    /// which is a different kind of wrong from leaving them shouting.
-    /// </summary>
+    /// <summary>Title case that keeps McDonald and O'Brien, which ToTitleCase does not.</summary>
     private static string TitleCase(string name)
     {
         var builder = new StringBuilder(name.Length);

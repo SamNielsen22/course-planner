@@ -1,12 +1,7 @@
 using HtmlAgilityPack;
 using System.Reflection.Metadata;
 using System.Text.RegularExpressions;
-/// <summary>
-/// One instructor as the schedule lists them. Unid is the registrar's person id,
-/// taken from the profile link on the name - it is the identity; the name is only
-/// how it was spelled that term. Unid is null only if the link ever stops carrying
-/// one (it never has, across every campus and term checked).
-/// </summary>
+/// <summary>One instructor as the schedule lists them. The uNID, from the profile link, is the identity; the name is only a spelling.</summary>
 record InstructorRef(string? Unid, string Name);
 
 record SectionRecord(
@@ -26,7 +21,11 @@ record SectionRecord(
     int? SeatsAvailable,
     // Whether the section can be waited on at all - the list's "Wait List:
     // Yes/No". How many are waiting is on the sections table, not here.
-    bool? HasWaitlist = null
+    bool? HasWaitlist = null,
+    // For a companion section (lab, discussion, field work), the lecture it
+    // registers you into, when the registrar's note says so. Null on lectures,
+    // and on companions whose lecture never published one.
+    string? PairsWith = null
 );
 class MainSearchScraper{
     // profiles.faculty.utah.edu/u0171400  and  faculty.utah.edu/u0171400/teaching
@@ -51,6 +50,9 @@ class MainSearchScraper{
 
 
         var sections = new HashSet<SectionRecord>();
+        // Lecture cards carry the note that names their companion sections. Kept
+        // aside and resolved after the walk, since those may be listed before or after.
+        var lectureNotes = new Dictionary<(string, string, string), string>();
 
         foreach (var card in sectionCards)
         {
@@ -83,10 +85,45 @@ class MainSearchScraper{
                 $"{semester}{year}", subject, courseNumber,
                    section, title, instructors, component,
                    type, units, location, times, null, null, seats, hasWaitlist)); // Description and prerequisites are in the details page. Records have to be updated later
+
+            if (component == "Lecture")
+                lectureNotes[(subject, courseNumber, section)] = HtmlUtils.CleanText(card.InnerText);
         }
 
-        return sections;
+        return PairCompanions(sections, lectureNotes);
 
+    }
+
+    /// <summary>
+    /// Stamp each companion section with the lecture whose note names it. One named by two
+    /// lectures is left unpaired: the page contradicts itself and no guess is
+    /// better than none.
+    /// </summary>
+    static HashSet<SectionRecord> PairCompanions(HashSet<SectionRecord> sections,
+                                           Dictionary<(string, string, string), string> lectureNotes)
+    {
+        var owner = new Dictionary<(string, string, string), string?>();
+        foreach (var ((subject, course, lecture), note) in lectureNotes)
+            foreach (var companion in CompanionNotes.Owned(note) ?? new List<string>())
+            {
+                var key = (subject, course, companion);
+                owner[key] = owner.TryGetValue(key, out var other) && other != lecture ? null : lecture;
+            }
+
+        if (owner.Count == 0) return sections;
+
+        var paired = new HashSet<SectionRecord>();
+        foreach (var s in sections)
+        {
+            // The four components that ever accompany a lecture inside one course
+            // (every term since 2020). Each registers you into the lecture the same
+            // way, and the notes name them the same way. Anything else is left alone.
+            var isCompanion = s.Component is "Laboratory" or "Lab/ Discussion" or "Discussion" or "Field Work";
+            paired.Add(isCompanion && owner.TryGetValue((s.Subject, s.CourseNumber, s.SectionNumber), out var lecture) && lecture is not null
+                ? s with { PairsWith = lecture }
+                : s);
+        }
+        return paired;
     }
 
     static string GetFirstSpanText(HtmlNode li)
@@ -152,10 +189,7 @@ class MainSearchScraper{
             switch (label)
             {
                 case "Instructor":
-                    // The page repeats each instructor once per responsive
-                    // breakpoint, linking to profiles.faculty.utah.edu/<unid>
-                    // and faculty.utah.edu/<unid>/teaching - same person, two
-                    // anchors - so dedupe on the id rather than the spelling.
+                    // The page repeats each instructor per breakpoint, so dedupe on the uNID.
                     foreach (var a in li.SelectNodes(".//a") ?? Enumerable.Empty<HtmlNode>())
                     {
                         var name = HtmlUtils.CleanText(a.InnerText);
@@ -228,9 +262,7 @@ class MainSearchScraper{
         if (table == null)
             return null;
 
-        // Salt Lake rooms are linked to the campus map; the Asia Campus's
-        // are plain text, since map.utah.edu knows nothing of Incheon. The
-        // cell's own text is the room either way.
+        // Salt Lake rooms are map links, the Asia Campus's plain text; the cell's text is the room either way.
         var cells = table.SelectNodes(".//th[@data-building-code]");
         if (cells == null)
             return null;

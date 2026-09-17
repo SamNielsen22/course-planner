@@ -28,15 +28,12 @@ else
 {
     @if (!Model.Online)
     {
-    @* Clashes are reported, not prevented. The schedule is the student's own and
-       they may have put two things at the same hour deliberately - but they
-       should not have to spot it on the grid themselves. *@
+    @* Clashes are reported, not prevented. *@
     @if (Model.Clashes.Count > 0)
     {
         <div class="notice warn">
             <strong>@Model.Clashes.Count time conflict@(Model.Clashes.Count == 1 ? "" : "s").</strong>
-            @* A course that is in the schedule more than once is named by section,
-               or two lines about different sections read as one repeated. *@
+            @* Named by section when a course appears twice. *@
             @{
                 var repeated = Model.Blocks.Where(x => !x.IsBreak).GroupBy(x => x.Label)
                     .Where(g => g.Select(x => x.Detail).Distinct().Count() > 1).Select(g => g.Key).ToHashSet();
@@ -54,9 +51,7 @@ else
         </div>
     }
 
-    @* minmax(0, 1fr), not 1fr: a plain 1fr column will not shrink below its
-       widest word, so on a phone "WEDNESDAY" forced the grid past the edge
-       and the last columns were clipped away. Narrow screens get "Wed". *@
+    @* Narrow screens get "Wed", or the full day names push the grid off the edge. *@
     <div class="week" style="grid-template-columns: 3.5rem repeat(@Model.Days.Count, minmax(0, 1fr))">
         <div class="head"></div>
         @foreach (var day in Model.Days)
@@ -128,12 +123,8 @@ else
         </tbody>
     </table>
 
-    @* Into the student's own calendar: weekly events for the whole term, days
-       off skipped. The term's dates come from the academic calendar; a term
-       it does not know cannot be exported honestly, so the button stays away.
-       One line under the button says what the file is for. Safari on an
-       iPhone opens the file itself with an "Add All" button, so there the
-       script makes it "Save to calendar" and drops the line. *@
+    @* Weekly events for the term, days off skipped. Only for terms the academic
+       calendar knows. On iOS Safari the script relabels it "Save to calendar". *@
     @if (Model.Online)
     {
     }

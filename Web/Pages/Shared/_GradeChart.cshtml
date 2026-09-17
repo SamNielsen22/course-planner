@@ -34,9 +34,8 @@ else
                 @foreach (var (label, count) in bars)
                 {
                     <div class="chart-bar" title="@label: @count">
-                        @* The height is set as a custom property and the animation
-                           grows into it, so a redraw after a filter change reads as
-                           the same bars moving rather than a new chart appearing. *@
+                        @* The height is a custom property the animation grows into, so a
+                           redraw reads as the same bars moving. *@
                         <div class="chart-fill" style="--h: @(count * 100.0 / ceiling)%">
                             <span class="chart-value">@count</span>
                         </div>

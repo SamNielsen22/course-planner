@@ -2,11 +2,7 @@ using System.Net;
 
 namespace Web.Tests;
 
-/// <summary>
-/// The schedule home, where "Schedule Builder" leads. Accounts are off in
-/// this host, so what is covered is the guest's path: their one schedule,
-/// and the way in. The signed-in list needs Google and Postgres.
-/// </summary>
+/// <summary>The schedule home, on the guest's path. Accounts are off in this host.</summary>
 public class SchedulesTests(Site site) : IClassFixture<Site>
 {
     [Fact]

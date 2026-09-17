@@ -15,12 +15,9 @@ using Web.Accounts;
 namespace Web.Tests;
 
 /// <summary>
-/// The site with accounts ON, against the real user database, and a fake
-/// sign-in: every request arrives as one fixed test user, so the account
-/// paths (many schedules, the open one, the builder writing to Postgres) can
-/// be driven without Google. The test user's rows are removed after each
-/// test. Available only where the UserData connection string is in
-/// user-secrets, which is the developer's own machine; elsewhere the tests skip.
+/// The site with accounts on and a fake sign-in, so the account paths can be
+/// driven without Google. The test user's rows are removed after each test.
+/// Skipped where the UserData connection string is not configured.
 /// </summary>
 public sealed class AccountSite : WebApplicationFactory<Program>
 {

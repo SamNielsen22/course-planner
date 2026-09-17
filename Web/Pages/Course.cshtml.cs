@@ -5,6 +5,7 @@ using Microsoft.AspNetCore.Mvc.RazorPages;
 
 namespace Web.Pages;
 
+/// <summary>One course: its text, and its grades by term and section.</summary>
 [OutputCache(Duration = 60)]
 [ResponseCache(Duration = 60, Location = ResponseCacheLocation.Any)]
 public class CourseModel(CourseQueries db, SectionIndex sections, GradeIndex grades) : PageModel
@@ -12,24 +13,20 @@ public class CourseModel(CourseQueries db, SectionIndex sections, GradeIndex gra
     [BindProperty(SupportsGet = true)] public string Subject { get; set; } = "";
     [BindProperty(SupportsGet = true)] public string Number { get; set; } = "";
 
-    /// <summary>Which term the chart covers. Empty means every term pooled.</summary>
+    /// <summary>The term shown. Empty means every term pooled.</summary>
     [BindProperty(SupportsGet = true)] public string? Term { get; set; }
 
-    /// <summary>Within a term, one section - the room the student sat in. Empty is the whole term.</summary>
+    /// <summary>One section within the term. Empty is the whole term.</summary>
     [BindProperty(SupportsGet = true, Name = "section")] public string? SectionNumber { get; set; }
 
-    /// <summary>
-    /// Where the visitor came from. "builder" hides the section picker: the
-    /// builder is for planning a term that has not been graded yet, so a
-    /// section-level distribution is not a question that page can raise.
-    /// </summary>
+    /// <summary>Where the visitor came from. "builder" hides the section picker.</summary>
     [BindProperty(SupportsGet = true)] public string? From { get; set; }
 
     public bool ShowSections => From != "builder";
 
     public IReadOnlyList<string> Terms { get; private set; } = [];
 
-    /// <summary>Sections of the chosen term with published grades; empty until a term is chosen.</summary>
+    /// <summary>The chosen term's graded sections.</summary>
     public IReadOnlyList<Section> GradedSections { get; private set; } = [];
     public Section? Picked { get; private set; }
 
@@ -38,10 +35,10 @@ public class CourseModel(CourseQueries db, SectionIndex sections, GradeIndex gra
 
     public string? Title => Info?.Title;
 
-    /// <summary>The one address for this course, whatever term or section the page is showing.</summary>
+    /// <summary>The course's one address, whatever is shown.</summary>
     public string Canonical => $"/course/{Uri.EscapeDataString(Subject)}/{Uri.EscapeDataString(Number)}";
 
-    /// <summary>What a search result says about the page: the course, and its figures across every term.</summary>
+    /// <summary>The search-result description.</summary>
     public string Description
     {
         get
@@ -58,8 +55,7 @@ public class CourseModel(CourseQueries db, SectionIndex sections, GradeIndex gra
     {
         Info = db.Course(Subject, Number);
         Terms = Pages.Terms.NewestFirst(db.CourseTerms(Subject, Number));
-        // An unrecognised term falls back to the pooled view rather than an
-        // empty chart, so a stale link still shows something true.
+        // An unknown term falls back to the pooled view.
         if (!Terms.Contains(Term)) Term = null;
 
         if (Term is not null)
