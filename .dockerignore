@@ -1,0 +1,28 @@
+# Docker's build context ignores .gitignore, so everything has to be named here.
+#
+# The important entries are bin/ and obj/: copying a local obj/ into the image
+# overwrites the restore the container just did, and its project.assets.json
+# points at Windows NuGet paths that do not exist in a Linux image. The build
+# then fails with "Package Dapper ... was not found" even though restore worked.
+**/bin/
+**/obj/
+
+# Build output and the crawled catalogue: 100 MB of nothing the image needs.
+# Web/data (buildings, the blank-search order) is NOT excluded - the site reads
+# it at runtime.
+publish/
+/data/
+/logs/
+
+# Not part of the app.
+.git/
+.github/
+deploy/
+node_modules/
+samples/
+*.md
+
+# Never let secrets into an image layer.
+.env
+.env.example
+**/appsettings.Development.json
