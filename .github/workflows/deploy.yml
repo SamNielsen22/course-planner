@@ -47,5 +47,7 @@ jobs:
           tags: |
             ghcr.io/${{ github.repository_owner }}/coursecompass:latest
             ghcr.io/${{ github.repository_owner }}/coursecompass:${{ github.sha }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
+          # No layer cache: the GitHub Actions cache backend fails the build
+          # outright ("buildx failed ... build-cache-backends"), and a cold
+          # .NET build here takes a couple of minutes, which costs nothing on
+          # a push-to-deploy flow.
