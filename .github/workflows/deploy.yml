@@ -37,6 +37,12 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
+      # Docker requires a lowercase repository name, and a GitHub username may
+      # carry capitals - SamNielsen22 here - so github.repository_owner cannot
+      # be used in a tag directly.
+      - name: Lowercase the owner for the image name
+        run: echo "owner=${GITHUB_REPOSITORY_OWNER,,}" >> "$GITHUB_ENV"
+
       # Tagged with the commit as well as latest, so a server can be pinned to
       # a known-good build and rolled back by changing one line in its .env.
       - name: Build and push the image
@@ -45,8 +51,8 @@ jobs:
           context: .
           push: true
           tags: |
-            ghcr.io/${{ github.repository_owner }}/coursecompass:latest
-            ghcr.io/${{ github.repository_owner }}/coursecompass:${{ github.sha }}
+            ghcr.io/${{ env.owner }}/coursecompass:latest
+            ghcr.io/${{ env.owner }}/coursecompass:${{ github.sha }}
           # No layer cache: the GitHub Actions cache backend fails the build
           # outright ("buildx failed ... build-cache-backends"), and a cold
           # .NET build here takes a couple of minutes, which costs nothing on
