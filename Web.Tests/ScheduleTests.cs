@@ -40,6 +40,9 @@ public class ScheduleTests(Site site) : IClassFixture<Site>
         var sections = cart.DocumentNode.SelectNodes("//span[@class='cart-sec']")?.Select(n => n.InnerText.Trim()).ToList() ?? [];
         Assert.Contains(sections, t => t.EndsWith(lecture.Number2));
         Assert.Contains(sections, t => t.EndsWith(companion));
+        // The companion's line is marked as a lab or discussion; the lecture's is not.
+        var marked = cart.DocumentNode.SelectNodes("//li[.//span[@class='cart-kind']]//span[@class='cart-sec']")?.Select(n => n.InnerText.Trim()).ToList() ?? [];
+        Assert.Equal([$"Section {companion}"], marked);
 
         // Dropping the lecture removes the companion with it.
         var lectureKey = $"{lecture.Term}|{lecture.Subject}|{lecture.Number}|{lecture.Number2}";
@@ -69,7 +72,7 @@ public class ScheduleTests(Site site) : IClassFixture<Site>
         // A course can have an online lecture that needs no lab even when its
         // in-person lectures do. Once the pairing is published, that lecture has
         // none paired to it, so it must not show the "required" pill or a chooser.
-        var (subject, number, needs, solo) = site.Catalogue.CourseWithAStandaloneLecture();
+        var (subject, number, needs, solo) = site.Catalogue.CourseWithAStandaloneLecture(Term);
         var doc = await site.Visitor().Page(
             $"/builder?term={Term}&q={Uri.EscapeDataString(subject + " " + number)}&open=false&noClash=false");
 
@@ -429,5 +432,63 @@ public class ScheduleTests(Site site) : IClassFixture<Site>
         var html = await visitor.Get("/BuilderSchedule");
         Assert.Contains("not on file", html);
         Assert.DoesNotContain("handler=Ics", html);
+    }
+
+    /// <summary>Prerequisite links from the builder keep from=builder, so the section picker stays hidden as a reader follows them; the plain course page's links carry nothing.</summary>
+    [Fact]
+    public async Task PrerequisiteLinksStayInTheBuildersView()
+    {
+        static List<string> Refs(HtmlDocument doc) =>
+            doc.DocumentNode.SelectNodes("//a[contains(@class,'course-ref')]")?.Select(a => a.GetAttributeValue("href", "")).ToList() ?? [];
+
+        var card = await site.Visitor().Page($"/builder?term={Term}&open=false&noClash=false");
+        var fromCards = Refs(card);
+        Assert.NotEmpty(fromCards);
+        Assert.All(fromCards, h => Assert.EndsWith("?from=prereq", h));
+        // The card's title lands on the grades.
+        var titles = card.DocumentNode.SelectNodes("//a[contains(@class,'sc-code')]")!.Select(a => a.GetAttributeValue("href", "")).ToList();
+        Assert.NotEmpty(titles);
+        Assert.All(titles, h => Assert.Contains("land=grades", h));
+
+        var coursePage = await site.Visitor().Page("/course/CS/2420?from=builder");
+        var inBuilderView = Refs(coursePage);
+        Assert.NotEmpty(inBuilderView);
+        Assert.All(inBuilderView, h => Assert.EndsWith("?from=prereq", h));
+        // Only a page reached through a prerequisite offers the search back in the builder.
+        Assert.Null(coursePage.DocumentNode.SelectSingleNode("//a[contains(@class,'head-action')]"));
+        var viaPrereq = await site.Visitor().Page("/course/CS/2420?from=prereq");
+        Assert.Contains("Search in schedule builder", viaPrereq.DocumentNode.SelectSingleNode("//a[contains(@class,'head-action')]")?.InnerText);
+        Assert.Null(viaPrereq.DocumentNode.SelectSingleNode("//select[@name='section']"));
+        // And the page has the grades to land on.
+        Assert.NotNull(coursePage.DocumentNode.SelectSingleNode("//*[@id='grades']"));
+
+        var plain = Refs(await site.Visitor().Page("/course/CS/2420"));
+        Assert.NotEmpty(plain);
+        Assert.All(plain, h => Assert.DoesNotContain("?", h));
+    }
+
+    /// <summary>"CS 3" is CS courses numbered 3xxx. The real catalogue has CLCS 3620, whose code contains that text.</summary>
+    [Fact]
+    public async Task ASubjectAndNumberPrefixSearchStaysInThatSubject()
+    {
+        var doc = await site.Visitor().Page($"/builder?term={Term}&q=CS+3&open=false&noClash=false");
+        var subjects = doc.DocumentNode.SelectNodes("//article[contains(@class,'section-card')]//button[@data-subject]")
+            ?.Select(b => b.GetAttributeValue("data-subject", "")).Distinct().ToList() ?? [];
+        Assert.Equal(["CS"], subjects);
+    }
+
+    /// <summary>Each line shows its units beside the section, and the heading carries the total.</summary>
+    [Fact]
+    public async Task TheScheduleShowsUnitsPerClassAndInTotal()
+    {
+        var visitor = site.Visitor();
+        var first = site.Catalogue.One("term = @term AND units > 0 AND times LIKE '%/%'", new { term = Term });
+        await visitor.Add(first);
+        var cart = await visitor.Page("/builder?handler=Cart");
+
+        var units = site.Catalogue.Units(first);
+        var label = $"{units} unit{(units == 1 ? "" : "s")}";
+        Assert.Equal(label, cart.DocumentNode.SelectSingleNode("//span[@class='cart-total']")?.InnerText.Trim());
+        Assert.Equal([label], cart.DocumentNode.SelectNodes("//span[@class='cart-units']")!.Select(n => n.InnerText.Trim()).ToList());
     }
 }

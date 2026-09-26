@@ -565,7 +565,7 @@ main:has(> .hero) {
   font-size: .8rem; color: var(--text); font-variant-numeric: tabular-nums;
 }
 /* "Lab required" on a lecture whose course needs a companion section. */
-.sc-req {
+.sc-req, .cart-kind {
   display: inline-block; padding: .12rem .5rem; border-radius: 999px;
   background: var(--card-soft); color: var(--label);
   font-size: .68rem; font-weight: 700; text-transform: uppercase; letter-spacing: .06em;
@@ -782,7 +782,7 @@ td form { display: inline; }
   padding: .85rem 1rem; background: var(--card);
   border-bottom: 1px solid var(--border); flex: none;
 }
-.cart-title {
+.cart-title, .cart-total {
   font-size: .72rem; font-weight: 700; text-transform: uppercase;
   letter-spacing: .07em; color: var(--label);
 }
@@ -814,7 +814,7 @@ td form { display: inline; }
 .cart-code { font-family: var(--mono); font-weight: 700; font-size: .92rem; color: var(--crimson); }
 /* A class's code is its course page; it looks the same until the mouse is on it. */
 
-.cart-sec { font-size: .68rem; font-weight: 700; text-transform: uppercase;
+.cart-sec, .cart-units { font-size: .68rem; font-weight: 700; text-transform: uppercase;
             letter-spacing: .05em; color: var(--label); }
 .cart-title-line { margin: .1rem 0 0; font-size: .82rem; color: var(--text-h); }
 .cart-when { margin: .15rem 0 0; font-size: .75rem; color: var(--label); }
@@ -844,6 +844,9 @@ td form { display: inline; }
   display: flex; align-items: center; justify-content: space-between;
   gap: .5rem; margin-bottom: .4rem;
 }
+/* Nothing below it when no break is set, so the gap above the courses
+   divider should not grow. */
+.cart-breaks-head:last-child { margin-bottom: 0; }
 .cart-sub {
   font-size: .68rem; font-weight: 700; text-transform: uppercase;
   letter-spacing: .07em; color: var(--label);
@@ -860,7 +863,6 @@ td form { display: inline; }
   background: none; border: none; padding: .1rem .3rem; cursor: pointer;
 }
 .cart-dropbreak:hover { color: var(--crimson); }
-.cart-none.small { font-size: .78rem; }
 
 /* A bar fixed to the foot of the screen, the way a phone app switches views -
    always reachable by thumb, and it does not scroll away with the content. */
@@ -901,13 +903,42 @@ td form { display: inline; }
 }
 
 @media (max-width: 900px) {
+  /* Safari's controls float over the foot of the page and collapse only when
+     the document itself scrolls, so a bar fixed to the bottom of the layout
+     viewport sits under them whenever they expand. So on the builder the
+     document does not scroll at all: the body is the scroller, sized to the
+     space the controls leave, and the bar is the last thing in the search
+     form, stuck to the foot of that scroller. */
+  html:has(.tabs) { height: 100dvh; overflow: hidden; }
+  html:has(.tabs) body {
+    height: 100dvh; overflow-y: auto; overscroll-behavior: contain;
+    display: flex; flex-direction: column;
+  }
+  html:has(.tabs) header { flex: none; }
+  /* Without the footer the bar sits on the foot of the screen in every view.
+     With it, a short view - the schedule before anything is added - fits
+     whole, the footer shows beneath the bar and holds it higher than the
+     results view does. The line is on every other page still. */
+  html:has(.tabs) footer { display: none; }
+  /* Both fill the height, so the bar reaches the foot when results are short.
+     A flex item with auto side margins would shrink to fit, hence the width. */
+  html:has(.tabs) main { flex: 1 0 auto; width: 100%; display: flex; flex-direction: column; padding-bottom: 0; }
+  html:has(.tabs) #search { flex: 1 0 auto; display: flex; flex-direction: column; }
   .tabs {
-    display: flex; position: fixed; left: 0; right: 0; bottom: 0; z-index: 50;
+    display: flex; position: sticky; bottom: 0; order: 99; z-index: 50;
+    /* Last in the form and pushed to its foot; edge to edge, out past the page's side padding. */
+    margin: auto calc(50% - 50vw) 0;
     background: var(--panel); border-top: 1px solid var(--border);
     box-shadow: 0 -2px 12px rgb(0 0 0 / .08);
   }
-  /* Room for the bar, so the last card is not sitting underneath it. */
+  /* Room at the foot of every other page, so the last of it can scroll up
+     clear of the browser's controls. */
   main { padding-bottom: 5rem; }
+  /* A link that lands on the chart puts its foot at the foot of the screen -
+     which on a phone is under the browser's floating controls. This much
+     clear of the bottom keeps the whole chart, axis labels included, above
+     them. */
+  #grades { scroll-margin-bottom: 5.5rem; }
   /* No back-to-top disc on a phone: the tab bar already owns the bottom
      edge, and a flick of the thumb gets to the top. */
   .to-top { display: none; }
@@ -938,6 +969,10 @@ td form { display: inline; }
   color: var(--crimson);
   font-weight: 600;
   cursor: pointer;
+  /* On a phone the first tap opens the tooltip rather than following the link,
+     so the browser's own grey flash over the code is the only other thing
+     that happens, and it reads as a stray box. The tooltip is the feedback. */
+  -webkit-tap-highlight-color: transparent;
 }
 
 .course-ref:hover, .course-ref:focus-visible { text-decoration: underline; }
@@ -1029,6 +1064,10 @@ td form { display: inline; }
 /* A back arrow on the heading's line: quiet until hovered. Every page with a
    way back uses this one, as a link or as a history.back() button. */
 .page-head-back { display: flex; align-items: center; gap: .6rem; }
+/* An action beside the title block, its foot on the subtitle's line: the
+   subtitle carries a 1rem bottom margin, so the button carries the same. */
+.page-head .head-row { display: flex; align-items: flex-end; flex-wrap: wrap; gap: .5rem 1.25rem; flex: 1 1 auto; }
+.page-head .head-action { white-space: nowrap; margin-bottom: 1rem; margin-left: auto; }
 .back-arrow {
   font: inherit; font-size: 1.5rem; line-height: 1; color: var(--label); text-decoration: none;
   background: none; border: none; cursor: pointer;
@@ -1038,7 +1077,6 @@ td form { display: inline; }
 .back-arrow:hover { color: var(--crimson); text-decoration: none; }
 
 /* The opening line of a page of prose - larger than the body, still quiet. */
-.lede { font-size: 1.05rem; line-height: 1.65; max-width: 46rem; }
 
 /* ================================================= course lookup results */
 

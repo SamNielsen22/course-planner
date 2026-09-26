@@ -83,7 +83,7 @@ else
                          style="top: @top.ToString("0.##")%; height: @height.ToString("0.##")%"
                          title="@block.Label &middot; @BuilderScheduleModel.Clock(block.Start)-@BuilderScheduleModel.Clock(block.End)">
                         <span class="block-label">@block.Label</span>
-                        <span class="block-time">@BuilderScheduleModel.Clock(block.Start)</span>
+                        <span class="block-time">@BuilderScheduleModel.Clock(block.Start)&ndash;<wbr>@BuilderScheduleModel.Clock(block.End)</span>
                     </div>
                 }
             </div>

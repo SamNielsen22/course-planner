@@ -5,6 +5,7 @@
 <head>
     <meta charset="utf-8"/>
     <meta name="viewport" content="width=device-width, initial-scale=1"/>
+    <meta name="theme-color" content="#ffffff"/>
     @* Public pages carry their own title; personal ones read the site's name. *@
     <title>@(ViewData["NoIndex"] is null && ViewData["Title"] is string title ? title : "Utah Course Compass")</title>
     @* What a search engine shows: the description, the canonical address, and noindex on personal pages. *@
@@ -19,7 +20,8 @@
     {
         <link rel="canonical" href="@($"{Context.Request.Scheme}://{Context.Request.Host}{canonical}")"/>
     }
-    @if (ViewData["NoIndex"] is true || Unlisted.Yes)
+    @* Unlisted, a page may still opt in by setting Listed: the front page and About do. *@
+    @if (ViewData["NoIndex"] is true || (Unlisted.Yes && ViewData["Listed"] is not true))
     {
         <meta name="robots" content="noindex"/>
     }

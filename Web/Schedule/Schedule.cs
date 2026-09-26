@@ -12,7 +12,8 @@ namespace Web.Schedule;
 /// <summary>A section the student has put in their schedule.</summary>
 public record PickedSection(
     string Term, string Subject, string CourseNumber, string SectionNumber, string Campus,
-    string Title, string? Times, string? Location, IReadOnlyList<SectionInstructor> Instructors, int? Units)
+    string Title, string? Times, string? Location, IReadOnlyList<SectionInstructor> Instructors, int? Units,
+    string? Component = null)
 {
     public string Key => $"{Term}|{Subject}|{CourseNumber}|{SectionNumber}";
     public string Code => $"{Subject} {CourseNumber}";
@@ -255,7 +256,7 @@ public class ScheduleStore(IHttpContextAccessor accessor, IDataProtectionProvide
             if (sections.Find(key) is not { } s) continue;
             picked.Add(new PickedSection(
                 s.Term, s.Subject, s.CourseNumber, s.SectionNumber, s.Campus, s.Title, s.Times, s.Location,
-                s.Instructors, s.Units));
+                s.Instructors, s.Units, s.Component));
         }
         return new BuiltSchedule
         {

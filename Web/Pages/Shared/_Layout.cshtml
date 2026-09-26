@@ -5,6 +5,7 @@
 <head>
     <meta charset="utf-8"/>
     <meta name="viewport" content="width=device-width, initial-scale=1"/>
+    <meta name="theme-color" content="#ffffff"/>
     @* Public pages carry their own title; personal ones read the site's name. *@
     <title>@(ViewData["NoIndex"] is null && ViewData["Title"] is string title ? title : "Utah Course Compass")</title>
     @* What a search engine shows: the description, the canonical address, and noindex on personal pages. *@
@@ -19,7 +20,8 @@
     {
         <link rel="canonical" href="@($"{Context.Request.Scheme}://{Context.Request.Host}{canonical}")"/>
     }
-    @if (ViewData["NoIndex"] is true || Unlisted.Yes)
+    @* Unlisted, a page may still opt in by setting Listed: the front page and About do. *@
+    @if (ViewData["NoIndex"] is true || (Unlisted.Yes && ViewData["Listed"] is not true))
     {
         <meta name="robots" content="noindex"/>
     }
@@ -79,7 +81,8 @@
     const desktop = matchMedia('(hover: hover) and (pointer: fine) and (min-width: 721px)');
     function focusSearch() {
         const box = document.querySelector('input[data-autofocus]');
-        if (!box || !desktop.matches) return;
+        // A page can decline the focus for one arrival: the builder does, opened from a course.
+        if (!box || box.dataset.autofocus === 'off' || !desktop.matches) return;
         box.focus({ preventScroll: true });
         if (!box.value) return;
         const end = box.value.length;
@@ -114,6 +117,22 @@
         document.querySelectorAll('a.course-ref.open').forEach(o => { if (o !== ref) o.classList.remove('open'); });
         if (ref && !ref.classList.contains('open')) { event.preventDefault(); ref.classList.add('open'); keepOnScreen(ref); }
     });
+})();
+</script>
+@* A link can name the part of the page it is about - land=grades from the
+   builder - and on a phone the page opens on it, however that part asks to
+   land: the chart with its foot at the foot of the screen, everything above
+   it in view. A query rather than a fragment, because a fragment makes the
+   browser scroll by itself, on every device, after this has run. Once now
+   and once when everything has loaded, in case a late font moved things. *@
+<script>
+(function () {
+    if (!matchMedia('(max-width: 900px)').matches) return;
+    const part = document.getElementById(new URLSearchParams(location.search).get('land') || '');
+    if (!part) return;
+    const land = () => part.scrollIntoView({ block: part.dataset.land || 'center' });
+    land();
+    window.addEventListener('load', land, { once: true });
 })();
 </script>
 @await RenderSectionAsync("Scripts", required: false)

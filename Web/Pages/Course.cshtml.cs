@@ -19,10 +19,15 @@ public class CourseModel(CourseQueries db, SectionIndex sections, GradeIndex gra
     /// <summary>One section within the term. Empty is the whole term.</summary>
     [BindProperty(SupportsGet = true, Name = "section")] public string? SectionNumber { get; set; }
 
-    /// <summary>Where the visitor came from. "builder" hides the section picker.</summary>
+    /// <summary>
+    /// Where the visitor came from. "builder" is a card's own link and "prereq" a
+    /// prerequisite followed from the builder; both hide the section picker, and
+    /// only the second offers a search for this course back in the builder.
+    /// </summary>
     [BindProperty(SupportsGet = true)] public string? From { get; set; }
 
-    public bool ShowSections => From != "builder";
+    public bool ShowSections => From is not ("builder" or "prereq");
+    public bool FromPrerequisite => From == "prereq";
 
     public IReadOnlyList<string> Terms { get; private set; } = [];
 

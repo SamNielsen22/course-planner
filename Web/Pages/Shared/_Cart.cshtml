@@ -8,6 +8,10 @@
 <aside class="cart" id="cart">
     <header class="cart-head">
         <span class="cart-title">@(Model.Name ?? "Your schedule")</span>
+        @if (Model.Units > 0)
+        {
+            <span class="cart-total">@Model.Units unit@(Model.Units == 1 ? "" : "s")</span>
+        }
     </header>
 
     <div class="cart-body">
@@ -20,11 +24,7 @@
                 <button class="cart-addbreak" type="button" title="Add a break">+ Add</button>
             </div>
 
-            @if (Model.Breaks.Count == 0)
-            {
-                <p class="cart-none small">Hours to keep free.</p>
-            }
-            else
+            @if (Model.Breaks.Count > 0)
             {
                 <ul class="cart-list">
                     @foreach (var b in Model.Breaks)
@@ -58,6 +58,16 @@
                         <div class="cart-what">
                             <a class="cart-code" asp-page="/Course" asp-route-subject="@s.Subject" asp-route-number="@s.CourseNumber">@s.Code</a>
                             <span class="cart-sec">Section @s.SectionNumber</span>
+                            @if (s.Units is { } units)
+                            {
+                                <span class="cart-units">@units unit@(units == 1 ? "" : "s")</span>
+                            }
+                            @* A lab or discussion is marked, the way the card that offered it was. *@
+                            @if (CoursePlanner.Data.Companions.IsCompanion(s.Component)
+                                 && CoursePlanner.Data.Companions.Kind([s.Component]) is { } kind)
+                            {
+                                <span class="cart-kind">@kind</span>
+                            }
                         </div>
                         <p class="cart-title-line">@s.Title</p>
                         @if (Model.Campus != "online")

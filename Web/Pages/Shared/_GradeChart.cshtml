@@ -26,7 +26,9 @@ else
 {
     <div class="chart">
         <div class="chart-plot">
-            @foreach (var tick in ticks)
+            @* The lines sit above their tick to clear the axis band, which would put
+               the ceiling's line above the card; the plot's top edge needs none. *@
+            @foreach (var tick in ticks.Where(t => t < ceiling))
             {
                 <div class="chart-grid" style="bottom: @(tick * 100.0 / ceiling)%"></div>
             }

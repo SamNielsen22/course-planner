@@ -21,6 +21,9 @@ public class BuilderAddModel(CourseQueries db, SiteIndex site, SectionIndex sect
     /// <summary>Requirement designation filter.</summary>
     [BindProperty(SupportsGet = true)] public string? Req { get; set; }
     [BindProperty(SupportsGet = true)] public string? Q { get; set; }
+
+    /// <summary>Where the visitor came from. "course" means the search is already filled in, so the box is not focused.</summary>
+    [BindProperty(SupportsGet = true)] public string? From { get; set; }
     /// <summary>Open seats only. On by default.</summary>
     [BindProperty(SupportsGet = true)] public bool Open { get; set; } = true;
 

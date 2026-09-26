@@ -10,11 +10,18 @@
 @* Back to wherever you came from, rather than a fixed page. *@
 <div class="page-head page-head-back">
     <button type="button" class="back-arrow" onclick="history.back()" aria-label="Back" title="Back">&larr;</button>
-    <div>
-        <h1>@Model.Subject @Model.Number</h1>
-        @if (Model.Title is not null)
+    <div class="head-row">
+        <div>
+            <h1>@Model.Subject @Model.Number</h1>
+            @if (Model.Title is not null)
+            {
+                <p class="subtitle">@Model.Title</p>
+            }
+        </div>
+        @if (Model.FromPrerequisite)
         {
-            <p class="subtitle">@Model.Title</p>
+            @* A prerequisite followed from the builder: the way back is a search for it. *@
+            <a class="btn small-btn head-action" asp-page="/BuilderAdd" asp-route-q="@($"{Model.Subject} {Model.Number}")" asp-route-from="course">Search in schedule builder</a>
         }
     </div>
 </div>
@@ -36,7 +43,7 @@
         <h3>Prerequisites</h3>
         @if (!string.IsNullOrWhiteSpace(Model.Info?.Prerequisites))
         {
-            <p class="prereq-prose">@Prereqs.Annotate(Model.Info!.Prerequisites)</p>
+            <p class="prereq-prose">@Prereqs.Annotate(Model.Info!.Prerequisites, Model.ShowSections ? null : "from=prereq")</p>
         }
         else
         {
@@ -94,7 +101,10 @@
 </form>
 }
 
-<partial name="_GradeChart" model="Model.Grades"/>
+@* The builder's course links land here, the chart's foot at the foot of the screen. *@
+<div id="grades" data-land="end">
+    <partial name="_GradeChart" model="Model.Grades"/>
+</div>
 
 @if (Model.Grades.Any)
 {

@@ -26,7 +26,7 @@
     <div class="filters one-line">
         <label class="grow">
             Search
-            <input name="q" value="@Model.Q" autocomplete="off" data-autofocus
+            <input name="q" value="@Model.Q" autocomplete="off" data-autofocus="@(Model.From == "course" ? "off" : "on")"
                    placeholder="Subject, Course Name or Course Code&hellip;"/>
         </label>
 
@@ -100,7 +100,7 @@
         <h2 tabindex="-1" autofocus>Add a break</h2>
         <label>
             Name
-            <input name="name" placeholder="Lunch, work, practice&hellip;"/>
+            <input name="name" placeholder="Work, practice, skiing&hellip;"/>
         </label>
         @* One toggle per day, none on to start. The script joins them into "MoWeFr". *@
         <fieldset class="days" id="break-days">
@@ -296,7 +296,8 @@
         event.preventDefault();
         page = parseInt(button.value, 10);
         refresh();
-        window.scrollTo({ top: 0, behavior: 'smooth' });
+        // On a phone the body is the scroller, not the window.
+        for (const s of [window, document.body]) s.scrollTo({ top: 0, behavior: 'smooth' });
     });
 
     // ------------------------------------------------------------ companion chooser
@@ -379,7 +380,7 @@
     addEventListener('scroll', placeToTop, { passive: true });
     placeToTop();
     toTop.addEventListener('click', () => {
-        window.scrollTo({ top: 0, behavior: stillness.matches ? 'auto' : 'smooth' });
+        for (const s of [window, document.body]) s.scrollTo({ top: 0, behavior: stillness.matches ? 'auto' : 'smooth' });
     });
 })();
 </script>

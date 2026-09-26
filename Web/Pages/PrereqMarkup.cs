@@ -29,8 +29,13 @@ public class PrereqMarkup
             RegexOptions.IgnoreCase | RegexOptions.Compiled);
     }
 
-    /// <summary>The text with known course codes linked. Everything is HTML-encoded.</summary>
-    public IHtmlContent Annotate(string? text)
+    /// <summary>
+    /// The text with known course codes linked. Everything is HTML-encoded. A
+    /// query, such as from=builder, goes onto every link, so a reader who came
+    /// from the builder stays in its view of the course page as they follow
+    /// prerequisites.
+    /// </summary>
+    public IHtmlContent Annotate(string? text, string? query = null)
     {
         if (string.IsNullOrWhiteSpace(text)) return HtmlString.Empty;
 
@@ -58,6 +63,7 @@ public class PrereqMarkup
             {
                 var split = key.LastIndexOf(' ');
                 var href = $"/course/{Uri.EscapeDataString(key[..split])}/{Uri.EscapeDataString(key[(split + 1)..])}";
+                if (!string.IsNullOrEmpty(query)) href += "?" + query;
 
                 // data-title, not title: the stylesheet draws the tooltip without the native delay.
                 html.Append("<a class=\"course-ref\" href=\"")

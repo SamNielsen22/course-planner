@@ -73,7 +73,7 @@ else
 
                 <div class="sc-row sc-head">
                     @* from=builder hides the course page's section picker. *@
-                    <a class="sc-code link" asp-page="/Course" asp-route-from="builder"
+                    <a class="sc-code link" asp-page="/Course" asp-route-from="builder" asp-route-land="grades"
                        asp-route-subject="@s.Subject" asp-route-number="@s.CourseNumber">@s.Subject @s.CourseNumber</a>
                     <span class="sc-section">Section @s.SectionNumber</span>
                     <span class="sc-title">@s.Title</span>
@@ -99,7 +99,7 @@ else
                                 // The third name's comma belongs only once the fold is open.
                                 var folded = n == shown.Count - 1 && rest.Count > 0 && After(n) == ",";
                                 <span class="sc-one @(folded ? "sc-comma-open" : "")">@Before(n)<a class="link" asp-page="/Instructor" asp-route-unid="@shown[n].Unid" asp-route-slug="@Web.Pages.Names.Slug(shown[n].Name)"
-                                   asp-route-course="@Web.Pages.Names.CourseSlug(s.Subject, s.CourseNumber)" asp-route-planning="@Model.Term">@Web.Pages.Names.Natural(shown[n].Name)</a>@(folded ? "" : After(n))</span>
+                                   asp-route-planning="@Model.Term" asp-fragment="@Web.Pages.Names.CourseSlug(s.Subject, s.CourseNumber)">@Web.Pages.Names.Natural(shown[n].Name)</a>@(folded ? "" : After(n))</span>
                             }
                             if (rest.Count > 0)
                             {
@@ -109,7 +109,7 @@ else
                                     {
                                         var i = shown.Count + k;
                                         <span class="sc-one">@Before(i)<a class="link" asp-page="/Instructor" asp-route-unid="@rest[k].Unid" asp-route-slug="@Web.Pages.Names.Slug(rest[k].Name)"
-                                           asp-route-course="@Web.Pages.Names.CourseSlug(s.Subject, s.CourseNumber)" asp-route-planning="@Model.Term">@Web.Pages.Names.Natural(rest[k].Name)</a>@After(i)</span>
+                                           asp-route-planning="@Model.Term" asp-fragment="@Web.Pages.Names.CourseSlug(s.Subject, s.CourseNumber)">@Web.Pages.Names.Natural(rest[k].Name)</a>@After(i)</span>
                                     }
                                 </details>
                             }
@@ -195,7 +195,8 @@ else
                     }
                     else
                     {
-                        <p>@Prereqs.Annotate(s.Prerequisites)</p>
+                        @* Prerequisite links keep the builder's view of the course page too. *@
+                        <p>@Prereqs.Annotate(s.Prerequisites, "from=prereq")</p>
                     }
                 </div>
 
