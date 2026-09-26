@@ -7,6 +7,8 @@ CREATE TABLE IF NOT EXISTS courses (
   description    TEXT,
   prerequisites  TEXT,
   requirement_designation TEXT,
+  -- When the description page was last read; null sorts first for the rolling refresh.
+  details_updated TEXT,
   PRIMARY KEY (subject, course_number)
 );
 

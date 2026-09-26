@@ -102,7 +102,7 @@ public static class Descriptions
         var changed = 0; var same = 0; var failed = 0;
         foreach (var (subject, number, term, section, campus) in todo)
         {
-            var url = Root + campus + "/" + Titles.TermCode(term) + "/description.html?subj=" + Uri.EscapeDataString(subject)
+            var url = Root + campus + "/" + TermCodes.Parse(term) + "/description.html?subj=" + Uri.EscapeDataString(subject)
                       + "&catno=" + Uri.EscapeDataString(number) + "&section=" + Uri.EscapeDataString(section);
             var page = FetchAsync(url).GetAwaiter().GetResult();
             if (page is null) { failed++; Stamp(database, subject, number); Thread.Sleep(Pause); continue; }

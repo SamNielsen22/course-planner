@@ -12,7 +12,7 @@ class Program
 
     static int Main(string[] args)
     {
-        DbStore.EnsureColumns();
+        DbStore.EnsureSchema();
 
         // Besides the crawl, the database chores that used to be Python scripts:
         //   seats                       refresh enrollment figures for the terms under way
@@ -42,10 +42,6 @@ class Program
                 return Ingest.Schedule.Database.GradeLoader.Run(databasePath, rest);
             case "departments":
                 return Ingest.Schedule.Database.Departments.Run(databasePath);
-            case "titles":
-                var limitAt = rest.IndexOf("--limit");
-                int? limit = limitAt >= 0 && limitAt + 1 < rest.Count && int.TryParse(rest[limitAt + 1], out var n) ? n : null;
-                return Ingest.Schedule.Database.Titles.Run(databasePath, limit);
             case "companions":
                 var fileAt = rest.IndexOf("--file");
                 var file = fileAt >= 0 && fileAt + 1 < rest.Count ? rest[fileAt + 1] : Ingest.Schedule.Database.CompanionOverrides.DefaultFile;
@@ -147,7 +143,7 @@ class Program
 
         while (true)
         {
-            yield return TermCode(year, term);
+            yield return TermCodes.Code(year, term);
             (year, term) = term switch
             {
                 Fall => (year, Summer),
@@ -169,7 +165,4 @@ class Program
         month >= 8 ? Fall :
         month >= 5 ? Summer :
                      Spring;
-
-    /// <summary>1 for the 2000s, the two digit year, then the term. Fall 2026 is 1268.</summary>
-    static string TermCode(int year, int term) => TermCodes.Code(year, term);
 }

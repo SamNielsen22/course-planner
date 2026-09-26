@@ -12,6 +12,17 @@ public class TermCodeTests
     {
         Assert.Equal(code, TermCodes.Code(year, season));
         Assert.Equal(display, TermCodes.Display(code));
+        Assert.Equal(code, TermCodes.Parse(display));
+    }
+
+    [Theory]
+    [InlineData("Winter2026")]   // not a season the registrar uses
+    [InlineData("Fall")]
+    [InlineData("2026")]
+    [InlineData("Fallnope")]
+    public void Parse_RefusesAnythingThatIsNotATerm(string term)
+    {
+        Assert.Throws<ArgumentException>(() => TermCodes.Parse(term));
     }
 
     [Theory]

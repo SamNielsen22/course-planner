@@ -122,15 +122,4 @@ public class MaintenanceTests : IDisposable
         Assert.True(mapping.Count > 200);
         Assert.Equal("School of Accounting", mapping["ACCTG"]);
     }
-
-    [Fact]
-    public void Titles_ReadTheTermCodeAndTheHeading()
-    {
-        Assert.Equal("1268", Titles.TermCode("Fall2026"));
-        Assert.Equal("1274", Titles.TermCode("Spring2027"));
-        Assert.Equal("1246", Titles.TermCode("Summer2024"));
-        var page = File.ReadAllText(Path.Combine(AppContext.BaseDirectory, "samples", "CS2420.html"));
-        Assert.Equal("Introduction to Algorithms & Data Structures", Titles.FullTitle(page));
-        Assert.Equal("", Titles.FullTitle("<html><body><p>no heading</p></body></html>"));
-    }
 }

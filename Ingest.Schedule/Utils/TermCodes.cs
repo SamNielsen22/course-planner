@@ -17,6 +17,22 @@ static class TermCodes
         return $"1{year % 100:00}{season}";
     }
 
+    /// <summary>"Fall2026" to "1268". Refuses anything that is not a term rather than guessing a season.</summary>
+    public static string Parse(string term)
+    {
+        var season = term switch
+        {
+            _ when term.StartsWith("Spring") => Spring,
+            _ when term.StartsWith("Summer") => Summer,
+            _ when term.StartsWith("Fall") => Fall,
+            _ => throw new ArgumentException($"unknown season in '{term}'", nameof(term))
+        };
+        var year = term[^4..];
+        if (!int.TryParse(year, out var yearNumber))
+            throw new ArgumentException($"no year in '{term}'", nameof(term));
+        return Code(yearNumber, season);
+    }
+
     /// <summary>"1268" to "Fall2026". Refuses anything that is not a term code rather than guessing a season.</summary>
     public static string Display(string code)
     {

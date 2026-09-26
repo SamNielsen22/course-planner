@@ -12,78 +12,74 @@ static class DbStore
     static int skippedWithoutUnid;
     public static int SkippedWithoutUnid => skippedWithoutUnid;
 
+    const string upsertCourseSql = """
+        INSERT INTO courses (subject, course_number, title, description, prerequisites, requirement_designation)
+        VALUES (@Subject, @CourseNumber, @Title, @Description, @Prerequisites, @RequirementDesignation)
+        ON CONFLICT(subject, course_number) DO UPDATE SET
+          title = excluded.title,
+          description = excluded.description,
+          prerequisites = excluded.prerequisites,
+          requirement_designation = excluded.requirement_designation;
+    """;
+
+    const string upsertSectionSql = """
+        INSERT INTO sections (term, subject, course_number, section_number, campus, component, type, units, location, times, seats_available, seats_updated, has_waitlist, pairs_with)
+        VALUES (@Term, @Subject, @CourseNumber, @SectionNumber, @Campus, @Component, @Type, @Units, @Location, @Times, @SeatsAvailable, @SeatsUpdated, @HasWaitlist, @PairsWith)
+        ON CONFLICT(term, subject, course_number, section_number) DO UPDATE SET
+          campus = excluded.campus,
+          component = excluded.component,
+          type = excluded.type,
+          units = excluded.units,
+          location = excluded.location,
+          times = excluded.times,
+          seats_available = excluded.seats_available,
+          seats_updated = excluded.seats_updated,
+          -- A list that lost its wait-list line keeps what was known.
+          has_waitlist = COALESCE(excluded.has_waitlist, sections.has_waitlist),
+          -- A published note wins; without one, a hand-entered pairing survives the crawl.
+          pairs_with = COALESCE(excluded.pairs_with, sections.pairs_with);
+    """;
+
+    const string deleteSectionInstructorsSql = """
+        DELETE FROM section_instructors
+        WHERE term = @Term AND subject = @Subject AND course_number = @CourseNumber AND section_number = @SectionNumber;
+    """;
+
+    // The person, keyed on the registrar's id. The display name is refreshed
+    // each crawl so it tracks the most recent spelling.
+    const string upsertInstructorSql = """
+        INSERT INTO instructors (unid, display_name)
+        VALUES (@Unid, @DisplayName)
+        ON CONFLICT(unid) DO UPDATE SET display_name = excluded.display_name;
+    """;
+
+    const string insertSectionInstructorSql = """
+        INSERT OR IGNORE INTO section_instructors
+          (term, subject, course_number, section_number, instructor_unid)
+        VALUES
+          (@Term, @Subject, @CourseNumber, @SectionNumber, @InstructorUnid);
+    """;
+
     public static void StoreSection(SectionRecord section, DetailsRecord details, string campus)
     {
         using IDbConnection database = new SqliteConnection(ConnectionString);
         database.Open();
         database.Execute("PRAGMA foreign_keys = ON;");
-
-        const string upsertCourseSql = """
-            INSERT INTO courses (subject, course_number, title, description, prerequisites, requirement_designation)
-            VALUES (@Subject, @CourseNumber, @Title, @Description, @Prerequisites, @RequirementDesignation)
-            ON CONFLICT(subject, course_number) DO UPDATE SET
-              title = excluded.title,
-              description = excluded.description,
-              prerequisites = excluded.prerequisites,
-              requirement_designation = excluded.requirement_designation;
-        """;
-
-        const string upsertSectionSql = """
-            INSERT INTO sections (term, subject, course_number, section_number, campus, component, type, units, location, times, seats_available, seats_updated, has_waitlist, pairs_with)
-            VALUES (@Term, @Subject, @CourseNumber, @SectionNumber, @Campus, @Component, @Type, @Units, @Location, @Times, @SeatsAvailable, @SeatsUpdated, @HasWaitlist, @PairsWith)
-            ON CONFLICT(term, subject, course_number, section_number) DO UPDATE SET
-              campus = excluded.campus,
-              component = excluded.component,
-              type = excluded.type,
-              units = excluded.units,
-              location = excluded.location,
-              times = excluded.times,
-              seats_available = excluded.seats_available,
-              seats_updated = excluded.seats_updated,
-              -- A list that lost its wait-list line keeps what was known.
-              has_waitlist = COALESCE(excluded.has_waitlist, sections.has_waitlist),
-              -- A published note wins; without one, a hand-entered pairing survives the crawl.
-              pairs_with = COALESCE(excluded.pairs_with, sections.pairs_with);
-        """;
-
-        const string deleteSectionInstructorsSql = """
-            DELETE FROM section_instructors
-            WHERE term = @Term AND subject = @Subject AND course_number = @CourseNumber AND section_number = @SectionNumber;
-        """;
-
-        // The person, keyed on the registrar's id. The display name is refreshed
-        // each crawl so it tracks the most recent spelling.
-        const string upsertInstructorSql = """
-            INSERT INTO instructors (unid, display_name)
-            VALUES (@Unid, @DisplayName)
-            ON CONFLICT(unid) DO UPDATE SET display_name = excluded.display_name;
-        """;
-
-        const string insertSectionInstructorSql = """
-            INSERT OR IGNORE INTO section_instructors
-              (term, subject, course_number, section_number, instructor_unid)
-            VALUES
-              (@Term, @Subject, @CourseNumber, @SectionNumber, @InstructorUnid);
-        """;
-
-        var seenCourses = new HashSet<string>();
-
         using var tx = database.BeginTransaction();
-        var classKey = $"{section.Subject}:{section.CourseNumber}";
-        if (seenCourses.Add(classKey))
+
+        // The full name from the description page when it was read; the
+        // listing's 30-character short title only until then. The course row is
+        // rewritten for every section of it, which is cheap and keeps this
+        // method free of cross-call state.
+        database.Execute(upsertCourseSql, new
         {
-            // The full name from the description page when it was read; the
-            // listing's 30-character short title only until then.
-            database.Execute(upsertCourseSql, new
-            {
-                section.Subject,
-                section.CourseNumber,
-                Title = details.Title.Length > 0 ? details.Title : section.Title,
-                details.Description,
-                details.Prerequisites,
-                details.RequirementDesignation
-            }, tx);
-        }
+            section.Subject,
+            section.CourseNumber,
+            Title = details.Title.Length > 0 ? details.Title : section.Title,
+            details.Description,
+            details.Prerequisites,
+            details.RequirementDesignation
+        }, tx);
 
         database.Execute(upsertSectionSql, new
         {
@@ -142,21 +138,11 @@ static class DbStore
     // Resume support. A subject is recorded only after its sections are stored, so
     // a run that dies mid-subject redoes that subject rather than skipping it.
 
-    const string createProgressSql = """
-        CREATE TABLE IF NOT EXISTS crawl_progress (
-          term_code TEXT NOT NULL,
-          campus    TEXT NOT NULL DEFAULT 'main',
-          subject   TEXT NOT NULL,
-
-          PRIMARY KEY (term_code, campus, subject)
-        );
-    """;
 
     public static HashSet<string> CompletedSubjects(string termCode, string campus)
     {
         using IDbConnection database = new SqliteConnection(ConnectionString);
         database.Open();
-        database.Execute(createProgressSql);
 
         return database.Query<string>(
             "SELECT subject FROM crawl_progress WHERE term_code = @TermCode AND campus = @Campus",
@@ -167,7 +153,6 @@ static class DbStore
     {
         using IDbConnection database = new SqliteConnection(ConnectionString);
         database.Open();
-        database.Execute(createProgressSql);
 
         database.Execute(
             "INSERT OR IGNORE INTO crawl_progress (term_code, campus, subject) VALUES (@TermCode, @Campus, @Subject)",
@@ -183,7 +168,6 @@ static class DbStore
     {
         using IDbConnection database = new SqliteConnection(ConnectionString);
         database.Open();
-        database.Execute(createProgressSql);
 
         return database.Execute(
             "DELETE FROM crawl_progress WHERE term_code = @TermCode", new { TermCode = termCode });
@@ -215,7 +199,7 @@ static class DbStore
     /// </summary>
     public static HashSet<string> SubjectsWithCompanions(string termCode, string campus)
     {
-        var term = DisplayTerm(termCode);
+        var term = TermCodes.Display(termCode);
         using IDbConnection database = new SqliteConnection(ConnectionString);
         database.Open();
         return database.Query<string>("""
@@ -230,9 +214,6 @@ static class DbStore
             """, new { term, campus }).ToHashSet();
     }
 
-    /// <summary>The registrar's code ("1268") as the term the crawl stores ("Fall2026").</summary>
-    public static string DisplayTerm(string termCode) => TermCodes.Display(termCode);
-
     /// <summary>How many sections of a term are stored, to tell "not crawled" from "nothing to pair".</summary>
     public static int SectionCount(string termCode, string campus)
     {
@@ -240,7 +221,7 @@ static class DbStore
         database.Open();
         return database.ExecuteScalar<int>(
             "SELECT COUNT(*) FROM sections WHERE term = @term AND campus = @campus",
-            new { term = DisplayTerm(termCode), campus });
+            new { term = TermCodes.Display(termCode), campus });
     }
 
     /// <summary>
@@ -271,109 +252,15 @@ static class DbStore
         return updated;
     }
 
-    public static void EnsureColumns()
+    /// <summary>
+    /// The schema, from schema.sql at the repository root: every statement is
+    /// IF NOT EXISTS, so this is safe on an empty file and a no-op on a full one.
+    /// </summary>
+    public static void EnsureSchema()
     {
         using IDbConnection database = new SqliteConnection(ConnectionString);
         database.Open();
-
-        var sectionColumns = database.Query<string>("SELECT name FROM pragma_table_info('sections')").ToHashSet();
-        if (!sectionColumns.Contains("seats_available"))
-            database.Execute("ALTER TABLE sections ADD COLUMN seats_available INTEGER");
-        if (!sectionColumns.Contains("seats_updated"))
-            database.Execute("ALTER TABLE sections ADD COLUMN seats_updated TEXT");
-
-        // The enrollment side, from the registrar's sections table (refreshed
-        // with the seats) and the class list's yes/no on the wait list.
-        foreach (var (column, type) in new[] { ("class_number", "TEXT"), ("enrollment_cap", "INTEGER"), ("enrolled", "INTEGER"), ("waitlist", "INTEGER"), ("has_waitlist", "INTEGER") })
-            if (!sectionColumns.Contains(column))
-                database.Execute($"ALTER TABLE sections ADD COLUMN {column} {type}");
-
-        // On a lab, discussion or field-work section, the lecture it registers you
-        // into. From the registrar's note, or data/companion-pairs.tsv where none was published.
-        if (!sectionColumns.Contains("pairs_with"))
-            database.Execute("ALTER TABLE sections ADD COLUMN pairs_with TEXT");
-
-        // Which schedule listed the section. Rows from before the column are main's.
-        if (!sectionColumns.Contains("campus"))
-            database.Execute("ALTER TABLE sections ADD COLUMN campus TEXT NOT NULL DEFAULT 'main'");
-
-        // Progress is per schedule too, so the table is rebuilt around the wider key.
-        var progressColumns = database.Query<string>("SELECT name FROM pragma_table_info('crawl_progress')").ToHashSet();
-        if (progressColumns.Count > 0 && !progressColumns.Contains("campus"))
-        {
-            database.Execute("ALTER TABLE crawl_progress RENAME TO crawl_progress_old");
-            database.Execute(createProgressSql);
-            database.Execute("INSERT INTO crawl_progress (term_code, campus, subject) SELECT term_code, 'main', subject FROM crawl_progress_old");
-            database.Execute("DROP TABLE crawl_progress_old");
-        }
-
-        var courseColumns = database.Query<string>("SELECT name FROM pragma_table_info('courses')").ToHashSet();
-        if (!courseColumns.Contains("requirement_designation"))
-            database.Execute("ALTER TABLE courses ADD COLUMN requirement_designation TEXT");
-        // When this course's description page was last read. A course carries one
-        // description, prerequisite list and designation for every term, and the
-        // registrar edits them between terms, so they have to be re-read rather
-        // than fetched once and trusted forever. Null means never re-read since
-        // the column arrived, which sorts oldest-first and so gets picked up.
-        if (!courseColumns.Contains("details_updated"))
-            database.Execute("ALTER TABLE courses ADD COLUMN details_updated TEXT");
-
-        // Instructor identity, keyed on the registrar's uNID rather than the name.
-        database.Execute("""
-            CREATE TABLE IF NOT EXISTS instructors (
-              unid          TEXT PRIMARY KEY,
-              display_name  TEXT NOT NULL
-            );
-        """);
-
-        // Rebuild section_instructors around the uNID, discarding rows keyed by
-        // name - they cannot be migrated, only re-crawled, so progress is cleared too.
-        var instructorColumns = database.Query<string>(
-            "SELECT name FROM pragma_table_info('section_instructors')").ToHashSet();
-        var needsRebuild = instructorColumns.Count > 0
-                           && (instructorColumns.Contains("instructor")
-                               || !instructorColumns.Contains("instructor_unid"));
-        if (needsRebuild)
-        {
-            database.Execute("DROP TABLE IF EXISTS section_instructors");
-            database.Execute("DELETE FROM crawl_progress");
-        }
-
-        database.Execute("""
-            CREATE TABLE IF NOT EXISTS section_instructors (
-              term            TEXT NOT NULL,
-              subject         TEXT NOT NULL,
-              course_number   TEXT NOT NULL,
-              section_number  TEXT NOT NULL,
-              instructor_unid TEXT NOT NULL REFERENCES instructors(unid),
-
-              PRIMARY KEY (term, subject, course_number, section_number, instructor_unid),
-              FOREIGN KEY (term, subject, course_number, section_number)
-                REFERENCES sections(term, subject, course_number, section_number)
-            );
-        """);
-
-        database.Execute("""
-            CREATE INDEX IF NOT EXISTS idx_section_instructors_unid
-              ON section_instructors(instructor_unid);
-        """);
-
-        // Grades now live in their own tables, one per grain. Older shapes are
-        // dropped rather than migrated: the csv is the source of truth and the
-        // `grades` command reloads every row.
-        database.Execute("DROP TABLE IF EXISTS grades");
-
-        var oldCourseGrades = database.Query<string>(
-            "SELECT name FROM pragma_table_info('course_grades')").ToHashSet();
-        if (oldCourseGrades.Contains("term"))
-            database.Execute("DROP TABLE IF EXISTS course_grades");
-
-        var gradeColumns = database.Query<string>(
-            "SELECT name FROM pragma_table_info('sections')")
-            .Where(c => c.StartsWith("gpa_") || c.StartsWith("grade_"))
-            .ToList();
-        foreach (var column in gradeColumns)
-            database.Execute($"ALTER TABLE sections DROP COLUMN {column}");
+        database.Execute(File.ReadAllText("schema.sql"));
     }
 
     /// <summary>What a refresh did: rows updated, rows only the registrar has, rows removed.</summary>

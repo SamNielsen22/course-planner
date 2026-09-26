@@ -38,7 +38,7 @@ public class Crawler
         Console.WriteLine($"Found {queries.Count} subjects");
 
         var skipped = 0;
-        var seenCourses = new HashSet<string>();
+        var unidsAtStart = DbStore.SkippedWithoutUnid;
         foreach (var query in queries)
         {
             var subjectLabel = query.Split('&')[0].Split('=')[1];
@@ -107,6 +107,14 @@ public class Crawler
         if (skipped > 0)
             Console.WriteLine($"Term {termCode}: {skipped} subject(s) skipped and "
                               + "left unmarked - rerun to pick them up");
+
+        // An instructor anchor with no uNID cannot be stored, and there is no
+        // sound way to guess who it is. Expected to be zero, so say so when it
+        // is not: it means the schedule site's markup moved.
+        var withoutUnid = DbStore.SkippedWithoutUnid - unidsAtStart;
+        if (withoutUnid > 0)
+            Console.WriteLine($"Term {termCode}: {withoutUnid} instructor(s) had no uNID "
+                              + "and were not stored - check the schedule page's markup");
     }
     /// <summary>
     /// Refresh one term's enrollment figures: seats, cap, enrolled, waiting,

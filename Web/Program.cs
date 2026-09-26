@@ -38,9 +38,6 @@ builder.Services.AddSingleton<InstructorIndex>();
 // findable.
 builder.Services.AddSingleton(new Web.Unlisted(builder.Configuration.GetValue("Site:Unlisted", true)));
 
-// Terms named in Terms:Hidden stay stored but off every picker.
-builder.Services.AddSingleton(new HiddenTerms(
-    (builder.Configuration.GetSection("Terms:Hidden").Get<string[]>() ?? []).ToHashSet()));
 builder.Services.AddSingleton<SiteIndex>();
 builder.Services.AddSingleton<SectionIndex>();
 

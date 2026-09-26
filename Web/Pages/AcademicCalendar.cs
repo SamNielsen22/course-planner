@@ -14,14 +14,6 @@ public static class AcademicCalendar
         /// <summary>Every day off, one by one.</summary>
         public IEnumerable<DateOnly> DaysOff =>
             Holidays.SelectMany(h => Enumerable.Range(0, h.To.DayNumber - h.From.DayNumber + 1).Select(h.From.AddDays));
-
-        /// <summary>"Labor Day, fall break and Thanksgiving".</summary>
-        public string HolidayNames => Holidays.Count switch
-        {
-            0 => "",
-            1 => Holidays[0].Name,
-            _ => string.Join(", ", Holidays.Take(Holidays.Count - 1).Select(h => h.Name)) + " and " + Holidays[^1].Name,
-        };
     }
 
     private static readonly Dictionary<(string Campus, string Term), TermDates> Known = new()

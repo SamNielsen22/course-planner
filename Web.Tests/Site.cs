@@ -170,7 +170,7 @@ public sealed class Catalogue(string path)
     /// (one with no companion paired to it, typically online). Returns the course
     /// and both a lecture that needs a companion and one that does not.
     /// </summary>
-    public (string Subject, string Number, string NeedsCompanion, string SelfContained) CourseWithAStandaloneLecture()
+    public (string Subject, string Number, string NeedsCompanion, string SelfContained) CourseWithAStandaloneLecture(string term)
     {
         using var db = Open();
         var row = db.QueryFirstOrDefault<(string Sub, string Num, string Need, string Solo)>(@"
@@ -181,13 +181,13 @@ public sealed class Catalogue(string path)
                         AND p.subject=c.subject AND p.course_number=c.course_number AND p.pairs_with=c.section_number)
                         THEN c.section_number END) AS Solo
             FROM sections c
-            WHERE c.term='Fall2026' AND c.campus='main' AND c.component='Lecture'
+            WHERE c.term=@term AND c.campus='main' AND c.component='Lecture'
               AND EXISTS (SELECT 1 FROM sections k WHERE k.term=c.term AND k.campus=c.campus
                    AND k.subject=c.subject AND k.course_number=c.course_number AND k.pairs_with IS NOT NULL)
             GROUP BY c.subject, c.course_number
             HAVING Need IS NOT NULL AND Solo IS NOT NULL
-            ORDER BY c.subject, c.course_number LIMIT 1");
-        if (row.Sub is null) throw new InvalidOperationException("no published course with a standalone lecture in Fall2026");
+            ORDER BY c.subject, c.course_number LIMIT 1", new { term });
+        if (row.Sub is null) throw new InvalidOperationException($"no published course with a standalone lecture in {term}");
         return (row.Sub, row.Num, row.Need, row.Solo);
     }
 
@@ -216,28 +216,29 @@ public sealed class Catalogue(string path)
     }
 
     /// <summary>The term the builder browses: the newest one with sections.</summary>
-    /// <summary>Terms the site keeps off its pickers (Terms:Hidden in the site's appsettings.json) - a schedule crawled ahead of registration.</summary>
-    private static readonly HashSet<string> Hidden =
-        System.Text.Json.JsonDocument.Parse(File.ReadAllText(Path.Combine(Site.RepoRoot, "Web", "appsettings.json"))).RootElement
-            .TryGetProperty("Terms", out var terms) && terms.TryGetProperty("Hidden", out var hidden)
-            ? hidden.EnumerateArray().Select(e => e.GetString()!).ToHashSet()
-            : [];
 
-    /// <summary>The newest term the site offers: the newest with sections, hidden ones aside.</summary>
+    /// <summary>The newest term the site offers: the newest with sections.</summary>
     public string NewestTerm()
     {
         using var db = Open();
-        return Pages.Terms.NewestFirst(db.Query<string>("SELECT DISTINCT term FROM sections").Where(t => !Hidden.Contains(t))).First();
+        return Pages.Terms.NewestFirst(db.Query<string>("SELECT DISTINCT term FROM sections")).First();
     }
 
     /// <summary>The newest offered term with sections on a campus: the registrar publishes the Asia Campus list for a new term later than the main one.</summary>
     public string NewestTermOn(string campus)
     {
         using var db = Open();
-        return Pages.Terms.NewestFirst(db.Query<string>("SELECT DISTINCT term FROM sections WHERE campus = @campus", new { campus }).Where(t => !Hidden.Contains(t))).First();
+        return Pages.Terms.NewestFirst(db.Query<string>("SELECT DISTINCT term FROM sections WHERE campus = @campus", new { campus })).First();
     }
 
     public Section Timed(string term) => One("term = @term AND times LIKE '%/%'", new { term });
+
+    /// <summary>A section's units, as the catalogue has them.</summary>
+    public int? Units(Section s)
+    {
+        using var db = Open();
+        return db.ExecuteScalar<int?>("SELECT units FROM sections WHERE term = @Term AND subject = @Subject AND course_number = @Number AND section_number = @Number2", s);
+    }
     public Section OnAsiaCampus(string term) => One("term = @term AND campus = 'uac' AND times LIKE '%/%'", new { term });
     public Section OnUOnline(string term) => One("term = @term AND campus = 'online'", new { term });
     public Section OnSaturday(string term) => One("term = @term AND times LIKE 'Sa/%'", new { term });

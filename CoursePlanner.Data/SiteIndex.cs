@@ -1,16 +1,10 @@
 namespace CoursePlanner.Data;
 
-/// <summary>Terms kept off every picker, from the Terms:Hidden setting. Their data stays stored.</summary>
-public sealed record HiddenTerms(IReadOnlySet<string> Names)
-{
-    public static readonly HiddenTerms None = new(new HashSet<string>());
-}
-
 /// <summary>
 /// Lists that change only when the crawler runs, read once at startup.
 /// Call <see cref="Rebuild"/> after a crawl or a grade load.
 /// </summary>
-public class SiteIndex(CourseQueries db, GradeIndex grades, HiddenTerms hidden)
+public class SiteIndex(CourseQueries db, GradeIndex grades)
 {
     private sealed record Snapshot(
         IReadOnlyList<string> Terms,
@@ -21,10 +15,10 @@ public class SiteIndex(CourseQueries db, GradeIndex grades, HiddenTerms hidden)
         IReadOnlyDictionary<string, double> CourseAverages,
         IReadOnlyList<(string Subject, string Number)> Courses);
 
-    private volatile Snapshot _now = Build(db, grades, hidden);
+    private volatile Snapshot _now = Build(db, grades);
 
-    private static Snapshot Build(CourseQueries db, GradeIndex grades, HiddenTerms hidden) => new(
-        db.GetTerms().Where(t => !hidden.Names.Contains(t)).ToList(),
+    private static Snapshot Build(CourseQueries db, GradeIndex grades) => new(
+        db.GetTerms(),
         db.GradeTerms(),
         db.Departments(),
         db.Designations(),
@@ -54,5 +48,5 @@ public class SiteIndex(CourseQueries db, GradeIndex grades, HiddenTerms hidden)
     public IReadOnlyList<(string Subject, string Number)> Courses => _now.Courses;
 
     /// <summary>Re-reads everything, for after a crawl or a grade load.</summary>
-    public void Rebuild() => _now = Build(db, grades, hidden);
+    public void Rebuild() => _now = Build(db, grades);
 }
