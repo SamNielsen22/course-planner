@@ -57,6 +57,8 @@ public class SectionIndex(CourseQueries db)
         var roman = CourseQueries.RomanTitle(q);   // "calculus 1" also as "calculus I"
 
         const StringComparison Like = StringComparison.OrdinalIgnoreCase;
+        // A head that is a subject means that subject alone: "cs 3" is CS, not CSD.
+        var headIsSubject = head.Length > 0 && entry.Sections.Any(s => s.Subject.Equals(head, Like));
 
         return entry.Sections.Where(s =>
             (string.IsNullOrEmpty(campus) || s.Campus == campus)
@@ -65,10 +67,14 @@ public class SectionIndex(CourseQueries db)
             && (q.Length == 0
                 || s.Subject.Contains(q, Like)
                 || s.CourseNumber.Contains(q, Like)
-                || (s.Title?.Contains(q, Like) ?? false)
-                || (roman is not null && (s.Title?.Contains(roman, Like) ?? false))
-                || (s.Subject + " " + s.CourseNumber).Contains(q, Like)
-                || (head.Length > 0 && s.Subject.StartsWith(head, Like)
+                // Titles match at the start of a word: "cs 3" is neither "PharmaceutiCS 3"
+                // nor, as "CS III", "PhysiCS III".
+                || (" " + s.Title).Contains(" " + q, Like)
+                || (roman is not null && (" " + s.Title).Contains(" " + roman, Like))
+                // The code from its start, or "CLCS 3620" would answer "cs 3".
+                || (s.Subject + " " + s.CourseNumber).StartsWith(q, Like)
+                || (head.Length > 0
+                    && (headIsSubject ? s.Subject.Equals(head, Like) : s.Subject.StartsWith(head, Like))
                     && s.CourseNumber.StartsWith(tail, Like)))
             && (req.Length == 0
                 || (entry.Requirements.GetValueOrDefault(s.Subject + "|" + s.CourseNumber)

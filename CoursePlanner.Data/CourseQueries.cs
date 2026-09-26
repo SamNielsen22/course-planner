@@ -65,6 +65,18 @@ public class CourseQueries(string connectionString)
         return query[..at] + " " + roman[n - 1];
     }
 
+    /// <summary>
+    /// The LIKE pattern for the head of a "subject number" query. A head that is
+    /// a subject means that subject alone - "cs 3" is CS, not CSD - and any
+    /// other head is a prefix, so "bio 1" still reaches BIOL and BIOEN. LIKE
+    /// without a wildcard is equality that ignores case, which is what the
+    /// subject column needs for typed text.
+    /// </summary>
+    private static string HeadPattern(SqliteConnection database, string head) =>
+        head.Length > 0 && database.ExecuteScalar<int>(
+            "SELECT EXISTS (SELECT 1 FROM courses WHERE subject LIKE @head)", new { head }) == 1
+            ? head : $"{head}%";
+
     /// <summary>Courses matching text, across every term, with the average pooled over all their grades.</summary>
     public IReadOnlyList<Course> SearchAllCourses(string? query)
     {
@@ -92,9 +104,9 @@ public class CourseQueries(string connectionString)
                        THEN c.subject = @Upper
                        ELSE c.subject LIKE @Like
                          OR c.course_number LIKE @Like
-                         OR c.title LIKE @Like
-                         OR c.title LIKE @RomanLike
-                         OR (c.subject || ' ' || c.course_number) LIKE @Like
+                         OR (' ' || c.title) LIKE @TitleLike
+                         OR (' ' || c.title) LIKE @RomanLike
+                         OR (c.subject || ' ' || c.course_number) LIKE @StartsLike
                          OR (@Head <> '' AND c.subject LIKE @HeadLike AND c.course_number LIKE @TailLike)
                   END
               -- Three-digit courses that never carried credit are non-credit shadows; skip them,
@@ -109,8 +121,9 @@ public class CourseQueries(string connectionString)
                           WHEN c.course_number LIKE @StartsLike THEN 2
                           ELSE 3 END,
                      c.subject, c.course_number;",
-            new { Upper = query.ToUpperInvariant(), Like = $"%{query}%", RomanLike = $"%{RomanTitle(query) ?? query}%",
-                  StartsLike = $"{query}%", Head = head, HeadLike = $"{head}%", TailLike = $"{tail}%",
+            // Titles match at the start of a word: "cs 3" is neither "PharmaceutiCS 3" nor, as "CS III", "PhysiCS III".
+            new { Upper = query.ToUpperInvariant(), Like = $"%{query}%", TitleLike = $"% {query}%", RomanLike = $"% {RomanTitle(query) ?? query}%",
+                  StartsLike = $"{query}%", Head = head, HeadLike = HeadPattern(database, head), TailLike = $"{tail}%",
                   Prereqs = PrereqCourses })
             .Select(r => new Course((string)r.Subject, (string)r.CourseNumber, (string)r.Title,
                                     (string?)r.RequirementDesignation,
@@ -219,9 +232,9 @@ public class CourseQueries(string connectionString)
               AND (@Query = ''
                    OR s.subject LIKE @Like
                    OR s.course_number LIKE @Like
-                   OR c.title LIKE @Like
-                   OR c.title LIKE @RomanLike
-                   OR (s.subject || ' ' || s.course_number) LIKE @Like
+                   OR (' ' || c.title) LIKE @TitleLike
+                   OR (' ' || c.title) LIKE @RomanLike
+                   OR (s.subject || ' ' || s.course_number) LIKE @StartsLike
                    OR (@Head <> '' AND s.subject LIKE @HeadLike
                        AND s.course_number LIKE @TailLike))
               AND (@Requirement = '' OR c.requirement_designation LIKE @RequirementLike)
@@ -248,9 +261,11 @@ public class CourseQueries(string connectionString)
             CourseNumber = courseNumber,
             Query = query,
             Like = $"%{query}%",
-            RomanLike = $"%{RomanTitle(query) ?? query}%",
+            StartsLike = $"{query}%",
+            TitleLike = $"% {query}%",
+            RomanLike = $"% {RomanTitle(query) ?? query}%",
             Head = head,
-            HeadLike = $"{head}%",
+            HeadLike = HeadPattern(database, head),
             TailLike = $"{tail}%",
             Requirement = requirement,
             RequirementLike = $"%{requirement}%",

@@ -27,7 +27,10 @@ public class TestDatabase : IDisposable
             INSERT INTO courses (subject, course_number, title, description, prerequisites, requirement_designation) VALUES
               ('CS',   '2420', 'Intro Alg & Data Struct', 'algorithms', 'C- in CS 1410', NULL),
               ('CS',   '3100', 'Models Of Computation',   'models',     'C- in CS 2100', 'Methods Requirement: Quantitative Intensive'),
-              ('ANTH', '1010', 'Culture & Human Exper',   'culture',    '',              'Social/Behavioral Science Exploration');
+              ('ANTH', '1010', 'Culture & Human Exper',   'culture',    '',              'Social/Behavioral Science Exploration'),
+              ('CLCS', '3620', 'Intro Religious Studies', 'religion',   '',              NULL),
+              ('PHYS', '3210', 'Physics III',             'physics',    '',              NULL),
+              ('PHARM','3050', 'Pharmaceutics 3',         'pharmacy',   '',              NULL);
         """);
 
         db.Execute("""
@@ -38,6 +41,9 @@ public class TestDatabase : IDisposable
               ('Fall2026','CS','3100','001','Lecture','In Person',3,'WEB 1230','Mo/09:00AM-10:00AM; We/01:00PM-02:00PM', 5),
               ('Fall2026','ANTH','1010','001','Lecture','In Person',3,'GC 1900','MoWe/12:00PM-01:00PM',  7),
               ('Fall2026','ANTH','1010','090','Lecture','Online',   3, NULL,     NULL,                    9),
+              ('Fall2026','CLCS','3620','001','Lecture','In Person',3,'BU C 211','TuTh/09:10AM-10:30AM',   3),
+              ('Fall2026','PHYS','3210','001','Lecture','In Person',3,'JFB 102', 'MoWeFr/10:45AM-11:35AM', 8),
+              ('Fall2026','PHARM','3050','001','Lecture','In Person',3,'SKAGGS 2', 'TuTh/01:00PM-02:20PM', 6),
               ('Spring2026','CS','2420','001','Lecture','In Person',4,'WEB L103','TuTh/02:00PM-03:20PM', 30);
         """);
 
@@ -121,6 +127,22 @@ public class QueryTests : IClassFixture<TestDatabase>
         var terms = queries.GetTerms();
 
         Assert.Equal(new[] { "Fall2026", "Spring2026" }, terms);
+    }
+
+    [Fact]
+    public void SubjectThenNumberPrefix_MeansThatSubjectAlone()
+    {
+        // "CLCS 3620" and "Pharmaceutics 3" contain the text "cs 3", and "Physics III" contains "cs III"; none is what "cs 3" asks for.
+        var sections = queries.FindSections("Fall2026", query: "cs 3");
+        Assert.NotEmpty(sections);
+        Assert.All(sections, s => Assert.Equal("CS", s.Subject));
+        Assert.Contains(sections, s => s.CourseNumber == "3100");
+
+        var courses = queries.SearchAllCourses("cs 3");
+        Assert.Equal(["CS"], courses.Select(c => c.Subject).Distinct().ToList());
+
+        // The full code still finds the course it names, whichever subject.
+        Assert.Contains(queries.SearchAllCourses("clcs 3620"), c => c.Subject == "CLCS");
     }
 
     [Fact]
