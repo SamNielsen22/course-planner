@@ -1,8 +1,9 @@
+using System.Net;
 using HtmlAgilityPack;
 
 namespace Web.Tests;
 
-/// <summary>The professor page's dropdowns: term, class, and the section picker.</summary>
+/// <summary>The professor page's dropdowns - term, class, and the section picker - and the sections behind them, all in the page.</summary>
 public class ProfessorTests(Site site) : IClassFixture<Site>
 {
     private static string Chosen(HtmlDocument doc, string select) =>
@@ -31,6 +32,23 @@ public class ProfessorTests(Site site) : IClassFixture<Site>
     }
 
     [Fact]
+    public async Task EverySectionIsInThePageAndOnlyTheChosenOneShows()
+    {
+        var p = site.Catalogue.ProfessorWithMultiSectionClasses();
+        var doc = await site.Visitor().Page(Url(p.Unid, p.Term, p.ClassA));
+        var blocks = doc.DocumentNode.SelectNodes("//div[@class='prof-section']")?.ToList() ?? [];
+        // At least both classes' sections in this term; every other term's too.
+        Assert.True(blocks.Count >= p.SectionsA + p.SectionsB, $"only {blocks.Count} blocks");
+        var showing = blocks.Where(b => !b.Attributes.Contains("hidden")).ToList();
+        Assert.Single(showing);
+        Assert.Equal(Chosen(doc, "section"), showing[0].GetAttributeValue("data-key", ""));
+        // Each block carries its own chart and the six published figures.
+        Assert.Equal(blocks.Count, doc.DocumentNode.SelectNodes("//div[@class='prof-section']//div[@class='stat-strip']")?.Count);
+        // And the pickers' data is in the page for the scripts.
+        Assert.Contains(p.ClassA, doc.DocumentNode.SelectSingleNode("//script[@id='prof-data']")?.InnerText);
+    }
+
+    [Fact]
     public async Task SwitchingClassRebuildsThePickerAndIgnoresTheStaleSection()
     {
         var p = site.Catalogue.ProfessorWithMultiSectionClasses();
@@ -56,14 +74,16 @@ public class ProfessorTests(Site site) : IClassFixture<Site>
     }
 
     [Fact]
-    public async Task FromAClassAddressThePickersStillSwitchClasses()
+    public async Task AClassInThePathIsSentToThePersonsPageOnThatClass()
     {
         var p = site.Catalogue.ProfessorWithMultiSectionClasses();
         var slug = Pages.Names.CourseSlug(p.ClassA);
-        var page = await site.Visitor().Page($"/professor/{p.Unid}/anyone/{slug}?term={Uri.EscapeDataString(p.Term)}");
-        Assert.Equal(p.ClassA, Chosen(page, "course"));
-        // The dropdowns rebuild the address from the form's action, which must be
-        // the person's own: with the class left in the path, no choice could win.
+        // Each class once had an address of its own; it now names the class on the person's page.
+        var response = await site.Visitor().Client.GetAsync($"/professor/{p.Unid}/anyone/{slug}?term={Uri.EscapeDataString(p.Term)}");
+        Assert.Equal(HttpStatusCode.MovedPermanently, response.StatusCode);
+        Assert.Matches(new System.Text.RegularExpressions.Regex($"^/professor/{p.Unid}/[a-z0-9-]+#{slug}$"), response.Headers.Location?.ToString());
+        // The pickers rebuild the address from the form's action, which is the person's own.
+        var page = await site.Visitor().Page(Url(p.Unid, p.Term, p.ClassA));
         var action = page.DocumentNode.SelectSingleNode("//form[contains(@class,'inline-form')]")?.GetAttributeValue("action", "");
         Assert.Matches(new System.Text.RegularExpressions.Regex($"^/professor/{p.Unid}/[a-z0-9-]+$"), action);
         var switched = await site.Visitor().Page($"{action}?term={Uri.EscapeDataString(p.Term)}&course={Uri.EscapeDataString(p.ClassB)}");
@@ -78,7 +98,7 @@ public class ProfessorTests(Site site) : IClassFixture<Site>
         var doc = await site.Visitor().Page(Url(unid, term, cls));
         Assert.Equal(cls, Chosen(doc, "course"));
         Assert.Null(doc.DocumentNode.SelectSingleNode("//select[@name='section']"));
-        Assert.NotNull(doc.DocumentNode.SelectSingleNode("//div[@class='stat-strip']"));
+        Assert.NotNull(doc.DocumentNode.SelectSingleNode("//div[@class='prof-section' and not(@hidden)]//div[@class='stat-strip']"));
     }
 
     [Fact]
@@ -92,11 +112,12 @@ public class ProfessorTests(Site site) : IClassFixture<Site>
         Assert.Equal(p.SummerTerm, Chosen(await site.Visitor().Page(Url(p.Unid) + "?planning=Summer2026"), "term"));
         // Asked for outright, the summer term shows like any other.
         Assert.Equal(p.SummerTerm, Chosen(await site.Visitor().Page(Url(p.Unid, p.SummerTerm)), "term"));
-        // The builder's cards say which term is being planned.
+        // The builder's cards say which term is being planned, and name the class.
         var term = site.Catalogue.NewestTerm();
         var cards = await site.Visitor().Page($"/builder?term={term}&open=false&noClash=false");
         var link = cards.DocumentNode.SelectSingleNode("//a[contains(@href,'/professor/')]")?.GetAttributeValue("href", "");
         Assert.Contains("planning=" + term, link);
+        Assert.Matches(@"#[a-z0-9-]+$", link);
     }
 
     [Fact]

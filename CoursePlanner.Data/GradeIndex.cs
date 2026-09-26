@@ -120,9 +120,6 @@ public class GradeIndex(CourseQueries db)
     public double? InstructorAverage(string unid) =>
         _now.InstructorAverages.TryGetValue(unid, out var a) ? a : null;
 
-    /// <summary>Every professor-and-course pair with grades, for the sitemap.</summary>
-    public IEnumerable<(string Unid, string Subject, string CourseNumber)> GradedClasses =>
-        _now.SectionsOfInstructor.SelectMany(kv => kv.Value.Select(r => (kv.Key, r.Subject, r.CourseNumber))).Distinct();
 
     /// <summary>This professor's average in this course.</summary>
     public double? InstructorCourseAverage(string unid, string subject, string courseNumber) =>

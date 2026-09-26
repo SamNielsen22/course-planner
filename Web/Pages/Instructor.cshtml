@@ -26,16 +26,16 @@
 else
 {
     @* Always one section. Term and class are always chosen; the section picker
-       appears when that pair has more than one. *@
-    @* The pickers post to the person's own address, not the class one. *@
+       appears when that pair has more than one. The pickers swap sections in
+       place; without scripts they submit, and the server chooses. *@
     <form method="get" class="inline-form" action="@Model.Base">
-        <select name="term" onchange="location.replace(this.form.action + '?' + new URLSearchParams(new FormData(this.form)))" aria-label="Term">
+        <select name="term" aria-label="Term">
             @foreach (var t in Model.Terms)
             {
                 <option value="@t" selected="@(t == Model.Term)">@Terms.Display(t)</option>
             }
         </select>
-        <select name="course" onchange="location.replace(this.form.action + '?' + new URLSearchParams(new FormData(this.form)))" aria-label="Class">
+        <select name="course" aria-label="Class">
             @foreach (var code in Model.Classes)
             {
                 <option value="@code" selected="@(code == Model.Course)">@code</option>
@@ -43,7 +43,7 @@ else
         </select>
         @if (Model.Sections.Count > 1)
         {
-            <select name="section" onchange="location.replace(this.form.action + '?' + new URLSearchParams(new FormData(this.form)))" aria-label="Section">
+            <select name="section" aria-label="Section">
                 @foreach (var s in Model.Sections)
                 {
                     <option value="@s.Key" selected="@(s.Key == Model.SectionKey)">@s.Label</option>
@@ -53,25 +53,31 @@ else
         <noscript><button type="submit">Go</button></noscript>
     </form>
 
-    <partial name="_GradeChart" model="Model.Grades"/>
-
-    @if (Model.Grades.Any)
+    @* Every graded section, each with its six published figures; only the chosen one shows. *@
+    @foreach (var block in Model.Blocks)
     {
-        @* One section, so all six figures are the published ones. *@
-        <partial name="_GradeStats" model="Model.Grades"/>
+        <div class="prof-section" data-key="@block.Key" hidden="@(block.Key != Model.SectionKey)">
+            <partial name="_GradeChart" model="block.Grades"/>
+            @if (block.Grades.Any)
+            {
+                <partial name="_GradeStats" model="block.Grades"/>
 
-        @* The average counts every student, the bars only groups of five or more.
-           Far apart means the chart is missing grades, so say so. *@
-        @if (Model.Grades.HasHiddenGrades)
-        {
-            <p class="note">
-                The bars total fewer students than the average is computed over. The
-                University withholds any grade group with fewer than five students,
-                so small groups of lower grades are missing from the chart while
-                still counting toward the average.
-            </p>
-        }
+                @* The average counts every student, the bars only groups of five or more.
+                   Far apart means the chart is missing grades, so say so. *@
+                @if (block.Grades.HasHiddenGrades)
+                {
+                    <p class="note">
+                        The bars total fewer students than the average is computed over. The
+                        University withholds any grade group with fewer than five students,
+                        so small groups of lower grades are missing from the chart while
+                        still counting toward the average.
+                    </p>
+                }
+            }
+        </div>
     }
+
+    <script type="application/json" id="prof-data">@Html.Raw(Model.DataJson)</script>
 }
 
 <div class="center stack-tight">
@@ -80,3 +86,75 @@ else
     </a>
     <p class="muted">Professor reviews coming soon!</p>
 </div>
+
+@section Scripts {
+@* The pickers work on what is already in the page: a term narrows the classes,
+   a class narrows the sections, and the chosen section is the one shown. A
+   link may name a class by its slug in the fragment; it opens in the newest
+   term that has it, with the same preference against summer as the server's. *@
+<script>
+(function () {
+    const source = document.getElementById('prof-data');
+    const form = document.querySelector('form.inline-form');
+    if (!source || !form) return;
+    const data = JSON.parse(source.textContent);
+    const termPick = form.querySelector('[name=term]');
+    const coursePick = form.querySelector('[name=course]');
+    let sectionPick = form.querySelector('[name=section]');
+    const sub = document.querySelector('.page-sub');
+
+    function fill(select, items, chosen) {
+        select.innerHTML = '';
+        for (const item of items) {
+            const option = document.createElement('option');
+            option.value = item.value; option.textContent = item.text; option.selected = item.value === chosen;
+            select.appendChild(option);
+        }
+    }
+    function show(key) {
+        document.querySelectorAll('.prof-section').forEach(block => { block.hidden = block.dataset.key !== key; });
+    }
+    function pick(term, course, key) {
+        const classes = Object.keys(data.tree[term]);
+        if (!classes.includes(course)) course = classes[0];
+        fill(coursePick, classes.map(c => ({ value: c, text: c })), course);
+        const sections = data.tree[term][course];
+        if (!sections.some(s => s.key === key)) key = sections[0].key;
+        // The section picker appears only when there are several.
+        if (sections.length > 1) {
+            if (!sectionPick) {
+                sectionPick = document.createElement('select');
+                sectionPick.name = 'section'; sectionPick.setAttribute('aria-label', 'Section');
+                coursePick.after(sectionPick);
+                sectionPick.addEventListener('change', () => show(sectionPick.value));
+            }
+            fill(sectionPick, sections.map(s => ({ value: s.key, text: s.label })), key);
+        } else if (sectionPick) {
+            sectionPick.remove(); sectionPick = null;
+        }
+        show(key);
+        if (sub) {
+            sub.textContent = course;
+            const title = data.titles[course];
+            if (title) {
+                sub.append(':');
+                const span = document.createElement('span'); span.className = 'ps-title'; span.textContent = title;
+                sub.append(span);
+            }
+        }
+    }
+
+    termPick.addEventListener('change', () => pick(termPick.value, coursePick.value, null));
+    coursePick.addEventListener('change', () => pick(termPick.value, coursePick.value, null));
+    if (sectionPick) sectionPick.addEventListener('change', () => show(sectionPick.value));
+
+    const named = data.slugs[location.hash.slice(1)];
+    if (named) {
+        const has = t => data.tree[t] && data.tree[t][named];
+        const term = (data.preferNonSummer && data.terms.find(t => has(t) && !t.startsWith('Summer')))
+                     || data.terms.find(has);
+        if (term) { termPick.value = term; pick(term, named, null); }
+    }
+})();
+</script>
+}

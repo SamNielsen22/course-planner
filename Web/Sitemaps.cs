@@ -10,8 +10,7 @@ namespace Web;
 public sealed record Unlisted(bool Yes);
 
 /// <summary>
-/// robots.txt and the sitemaps: fixed pages, courses, professors, and
-/// professor-and-class pages. Unlisted, robots refuses everything and the
+/// robots.txt and the sitemaps: fixed pages, courses and professors. Unlisted, robots refuses everything and the
 /// sitemaps are not served at all.
 /// </summary>
 public static class Sitemaps
@@ -21,10 +20,11 @@ public static class Sitemaps
     public static void Map(WebApplication app)
     {
         // Written here rather than as a static file so the unlisted switch can
-        // change it. Unlisted, it is a flat refusal with no sitemap named.
+        // change it. Unlisted, only the front page and About may be read - enough for
+        // a search on the site's name to find it - and no sitemap is named.
         app.MapGet("/robots.txt", (HttpContext http, Unlisted unlisted) => Results.Text(
             unlisted.Yes
-                ? "User-agent: *\nDisallow: /\n"
+                ? "User-agent: *\nAllow: /$\nAllow: /About\nDisallow: /\n"
                 : "User-agent: *\nAllow: /\nDisallow: /builder\nDisallow: /schedules\n"
                   + "Disallow: /BuilderSchedule\nDisallow: /account\n\n"
                   + $"Sitemap: {Base(http)}/sitemap.xml\n",
@@ -32,7 +32,7 @@ public static class Sitemaps
 
         app.MapGet("/sitemap.xml", (HttpContext http, Unlisted unlisted) => Hidden(unlisted) ?? Xml(
             "sitemapindex",
-            new[] { "/sitemap-pages.xml", "/sitemap-courses.xml", "/sitemap-professors.xml", "/sitemap-classes.xml" }
+            new[] { "/sitemap-pages.xml", "/sitemap-courses.xml", "/sitemap-professors.xml" }
                 .Select(path => $"<sitemap><loc>{Escape(Base(http) + path)}</loc></sitemap>")))
             .CacheOutput(p => p.Expire(Fresh));
 
@@ -51,15 +51,6 @@ public static class Sitemaps
             people.All.Select(p => Url($"{Base(http)}/professor/{p.Unid}/{Names.Slug(p.Name)}"))))
             .CacheOutput(p => p.Expire(Fresh));
 
-        // One page per professor-and-class pair with grades.
-        app.MapGet("/sitemap-classes.xml", (HttpContext http, GradeIndex grades, InstructorIndex people, Unlisted unlisted) =>
-        {
-            if (Hidden(unlisted) is { } hidden) return hidden;
-            var names = people.All.ToDictionary(p => p.Unid, p => p.Name);
-            return Xml("urlset", grades.GradedClasses
-                .Where(c => names.ContainsKey(c.Unid))
-                .Select(c => Url($"{Base(http)}/professor/{c.Unid}/{Names.Slug(names[c.Unid])}/{Names.CourseSlug(c.Subject, c.CourseNumber)}")));
-        }).CacheOutput(p => p.Expire(Fresh));
     }
 
     /// <summary>404 while unlisted, so a crawler is given no list of pages to follow.</summary>

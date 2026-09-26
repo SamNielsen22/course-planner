@@ -10,13 +10,13 @@ public class SeoTests(Site site) : IClassFixture<Site>
     private static int Locs(string xml) => Regex.Matches(xml, "<loc>").Count;
 
     [Fact]
-    public async Task TheSitemapIndexNamesFourSitemapsOnTheRequestsOwnHost()
+    public async Task TheSitemapIndexNamesThreeSitemapsOnTheRequestsOwnHost()
     {
         var response = await site.Visitor().Send("/sitemap.xml");
         Assert.Equal("application/xml", response.Content.Headers.ContentType?.MediaType);
         var xml = await response.Content.ReadAsStringAsync();
         Assert.Contains("<sitemapindex", xml);
-        Assert.Equal(4, Locs(xml));
+        Assert.Equal(3, Locs(xml));
         Assert.Contains("<loc>http://localhost/sitemap-courses.xml</loc>", xml);
     }
 
@@ -32,31 +32,32 @@ public class SeoTests(Site site) : IClassFixture<Site>
         var professors = await visitor.Get("/sitemap-professors.xml");
         Assert.Equal(site.Catalogue.InstructorCount(), Locs(professors));
         Assert.Matches(new Regex(@"<loc>http://localhost/professor/u\d+/[a-z0-9-]+</loc>"), professors);
-
-        // And a page for every professor-and-class pair with grades.
-        var classes = await visitor.Get("/sitemap-classes.xml");
-        Assert.Equal(site.Catalogue.GradedClassCount(), Locs(classes));
-        Assert.Matches(new Regex(@"<loc>http://localhost/professor/u\d+/[a-z0-9-]+/[a-z][a-z-]*-\d{3,4}[a-z]?</loc>"), classes);
+        // A professor's classes live on their page, not at addresses of their own.
+        Assert.Equal(HttpStatusCode.NotFound, (await visitor.Send("/sitemap-classes.xml")).StatusCode);
     }
 
     [Fact]
-    public async Task AProfessorsClassHasItsOwnAddressTitleAndDescription()
+    public async Task AProfessorsPageNamesTheirClassesAndHasOneAddress()
     {
         var p = site.Catalogue.ProfessorWithMultiSectionClasses();
-        var slug = Pages.Names.CourseSlug(p.ClassA);
-        var doc = await site.Visitor().Page($"/professor/{p.Unid}/anyone/{slug}");
-        Assert.Contains(p.ClassA, doc.DocumentNode.SelectSingleNode("//meta[@property='og:title']")?.GetAttributeValue("content", ""));
-        Assert.Contains(p.ClassA, doc.DocumentNode.SelectSingleNode("//p[@class='page-sub']")?.InnerText);
-        Assert.Contains(p.ClassA, doc.DocumentNode.SelectSingleNode("//meta[@name='description']")?.GetAttributeValue("content", ""));
-        // The tab and the search headline are the plain name and class; a personal page reads the site's name.
-        Assert.Contains(p.ClassA, doc.DocumentNode.SelectSingleNode("//title")?.InnerText);
-        Assert.DoesNotContain("Utah Course Compass", doc.DocumentNode.SelectSingleNode("//title")?.InnerText);
+        var doc = await site.Visitor().Page($"/professor/{p.Unid}");
+
+        // The title and description name the classes, so a search for the person or
+        // for a class finds the one page. The most-taught class leads and is always named.
+        var title = doc.DocumentNode.SelectSingleNode("//title")?.InnerText ?? "";
+        Assert.EndsWith("grades", title);
+        var lead = Regex.Match(title, @"[A-Z][A-Z ]*? \d{3,4}[A-Z]?").Value;
+        Assert.False(string.IsNullOrEmpty(lead), $"no class named in the title: {title}");
+        Assert.Contains(lead!, doc.DocumentNode.SelectSingleNode("//meta[@property='og:title']")?.GetAttributeValue("content", ""));
+        Assert.Contains(lead!, doc.DocumentNode.SelectSingleNode("//meta[@name='description']")?.GetAttributeValue("content", ""));
+
+        // A personal page's tab reads the plain name; the site's name is for the site's own pages.
+        Assert.DoesNotContain("Utah Course Compass", title);
         Assert.Equal("Utah Course Compass", (await site.Visitor().Page("/builder")).DocumentNode.SelectSingleNode("//title")?.InnerText.Trim());
-        Assert.EndsWith("/" + slug, doc.DocumentNode.SelectSingleNode("//link[@rel='canonical']")?.GetAttributeValue("href", ""));
-        Assert.Equal(p.ClassA, doc.DocumentNode.SelectSingleNode("//select[@name='course']/option[@selected]")?.GetAttributeValue("value", ""));
-        // Picked from the dropdown instead, the same class still claims the same address.
-        var viaQuery = await site.Visitor().Page($"/professor/{p.Unid}?course=" + Uri.EscapeDataString(p.ClassA));
-        Assert.EndsWith("/" + slug, viaQuery.DocumentNode.SelectSingleNode("//link[@rel='canonical']")?.GetAttributeValue("href", ""));
+
+        // One canonical address for the person, whatever the visitor typed to get here.
+        var canonical = doc.DocumentNode.SelectSingleNode("//link[@rel='canonical']")?.GetAttributeValue("href", "") ?? "";
+        Assert.Matches(new Regex($"^http://localhost/professor/{p.Unid}/[a-z0-9-]+$"), canonical);
     }
 
     [Fact]
@@ -84,17 +85,18 @@ public class SeoTests(Site site) : IClassFixture<Site>
         using var hidden = new Site { Unlisted = true };
         var visitor = hidden.Visitor();
 
+        // Only the front page and About may be read, so a search on the name finds the site.
         var robots = await visitor.Get("/robots.txt");
-        Assert.Contains("Disallow: /", robots);
-        Assert.DoesNotContain("Sitemap:", robots);
-        Assert.DoesNotContain("Allow:", robots);
+        Assert.Equal("User-agent: *\nAllow: /$\nAllow: /About\nDisallow: /\n", robots);
 
         foreach (var path in new[] { "/sitemap.xml", "/sitemap-pages.xml", "/sitemap-courses.xml", "/sitemap-professors.xml", "/sitemap-classes.xml" })
             Assert.Equal(HttpStatusCode.NotFound, (await visitor.Send(path)).StatusCode);
 
-        // Every page asks not to be indexed, the public ones included.
-        foreach (var path in new[] { "/", "/courses", "/Instructors" })
+        // Every other page asks not to be indexed, the public ones included.
+        foreach (var path in new[] { "/courses", "/Instructors", "/course/CS/2420" })
             Assert.NotNull((await visitor.Page(path)).DocumentNode.SelectSingleNode("//meta[@name='robots'][@content='noindex']"));
+        foreach (var path in new[] { "/", "/About" })
+            Assert.Null((await visitor.Page(path)).DocumentNode.SelectSingleNode("//meta[@name='robots']"));
     }
 
     [Fact]
