@@ -93,7 +93,7 @@ public class PagesTests(Site site) : IClassFixture<Site>
         var html = await site.Visitor().Get("/About");
         // The prose is the user's to write; the page is the heading and the coverage figures.
         Assert.Contains("<h1>About</h1>", html);
-        Assert.Contains("Graded sections", html);
+        Assert.Contains("Where I got the data", html);
     }
 
     [Fact]

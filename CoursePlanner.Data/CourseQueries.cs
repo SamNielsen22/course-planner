@@ -512,37 +512,6 @@ public class CourseQueries(string connectionString)
                      .Select(p => p.Key).ToList();
     }
 
-    /// <summary>Row counts and the first and last terms. Terms are ordered by date, not alphabetically.</summary>
-    public CoverageCounts Coverage()
-    {
-        using var db = Open();
-        var terms = db.Query<string>(
-            "SELECT DISTINCT term FROM section_grades;").ToList();
-        terms.Sort((a, b) => TermKey(a).CompareTo(TermKey(b)));
-
-        var schedule = db.Query<string>(
-            "SELECT DISTINCT term FROM sections;").ToList();
-        schedule.Sort((a, b) => TermKey(a).CompareTo(TermKey(b)));
-
-        return new CoverageCounts(
-            db.ExecuteScalar<int>("SELECT COUNT(*) FROM courses;"),
-            db.ExecuteScalar<int>("SELECT COUNT(*) FROM sections;"),
-            db.ExecuteScalar<int>("SELECT COUNT(*) FROM instructors;"),
-            db.ExecuteScalar<int>("SELECT COUNT(*) FROM section_grades;"),
-            terms.FirstOrDefault(), terms.LastOrDefault(),
-            schedule.LastOrDefault());
-    }
-
-    /// <summary>"Fall2026" as (2026, 2), for date order.</summary>
-    private static (int Year, int Season) TermKey(string term)
-    {
-        var year = term.Length >= 4 && int.TryParse(term[^4..], out var y) ? y : 0;
-        var season = term.Length > 4
-            ? Array.IndexOf(new[] { "Spring", "Summer", "Fall" }, term[..^4])
-            : -1;
-        return (year, season < 0 ? 3 : season);
-    }
-
     /// <summary>"SUBJ|NUMBER" to the course's requirement designation.</summary>
     public Dictionary<string, string?> RequirementDesignations()
     {
@@ -763,7 +732,3 @@ public record CourseInfo(
     string Subject, string CourseNumber, string? Title,
     string? Description, string? Prerequisites, string? RequirementDesignation);
 
-/// <summary>How much data there is.</summary>
-public record CoverageCounts(
-    int Courses, int Sections, int Instructors, int GradedSections,
-    string? FirstGradeTerm, string? LastGradeTerm, string? LastScheduleTerm);

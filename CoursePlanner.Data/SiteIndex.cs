@@ -11,7 +11,6 @@ public class SiteIndex(CourseQueries db, GradeIndex grades)
         IReadOnlyList<string> GradeTerms,
         IReadOnlyList<string> Departments,
         IReadOnlyList<string> Designations,
-        CoverageCounts Coverage,
         IReadOnlyDictionary<string, double> CourseAverages,
         IReadOnlyList<(string Subject, string Number)> Courses);
 
@@ -22,7 +21,6 @@ public class SiteIndex(CourseQueries db, GradeIndex grades)
         db.GradeTerms(),
         db.Departments(),
         db.Designations(),
-        db.Coverage(),
         grades.CourseAverages,
         db.AllCourses());
 
@@ -37,9 +35,6 @@ public class SiteIndex(CourseQueries db, GradeIndex grades)
 
     /// <summary>Requirement designations, for the filter.</summary>
     public IReadOnlyList<string> Designations => _now.Designations;
-
-    /// <summary>How much data there is.</summary>
-    public CoverageCounts Coverage => _now.Coverage;
 
     /// <summary>"SUBJ|NUMBER" to the course's average across every term.</summary>
     public IReadOnlyDictionary<string, double> CourseAverages => _now.CourseAverages;
