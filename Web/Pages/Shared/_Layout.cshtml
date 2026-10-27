@@ -1,5 +1,4 @@
 @inject Web.Unlisted Unlisted
-@inject Web.Accounts.AccountsFeature Accounts
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -42,21 +41,9 @@
             Utah Course Compass
         </a>
         <span class="links">
-            <a asp-page="/Schedules">Schedule Builder</a>
+            <a asp-page="/BuilderAdd">Schedule Builder</a>
             <a asp-page="/Index">Courses</a>
             <a asp-page="/Instructors">Professors</a>
-            @if (Accounts.Enabled)
-            {
-                @if (User.Identity?.IsAuthenticated == true)
-                {
-                    <a class="account-link" asp-page="/Account/Index">Account</a>
-                }
-                else if (Accounts.Google)
-                {
-                    <a class="account-link" asp-page="/Account/External" asp-page-handler="Start" asp-route-provider="Google"
-                       asp-route-returnUrl="@(Context.Request.Path + Context.Request.QueryString)">Sign in</a>
-                }
-            }
         </span>
     </nav>
 </header>

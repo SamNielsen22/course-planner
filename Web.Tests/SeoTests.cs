@@ -74,7 +74,7 @@ public class SeoTests(Site site) : IClassFixture<Site>
         var text = await robots.Content.ReadAsStringAsync();
         Assert.Contains("Sitemap: https://utahcoursecompass.com/sitemap.xml", text);
         Assert.Contains("Disallow: /builder", text);
-        Assert.Contains("Disallow: /account", text);
+        Assert.Contains("Disallow: /BuilderSchedule", text);
     }
 
     [Fact]
@@ -145,7 +145,7 @@ public class SeoTests(Site site) : IClassFixture<Site>
     [Fact]
     public async Task ThePersonalPagesAreKeptOutOfTheIndex()
     {
-        foreach (var url in new[] { "/builder", "/BuilderSchedule", "/schedules" })
+        foreach (var url in new[] { "/builder", "/BuilderSchedule" })
         {
             var doc = await site.Visitor().Page(url);
             Assert.Equal("noindex", doc.DocumentNode.SelectSingleNode("//meta[@name='robots']")?.GetAttributeValue("content", ""));

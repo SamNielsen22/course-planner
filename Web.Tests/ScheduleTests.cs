@@ -246,11 +246,10 @@ public class ScheduleTests(Site site) : IClassFixture<Site>
         var visitor = site.Visitor();
         var search = $"/builder?term={term}&q={Uri.EscapeDataString(asia.Code)}&open=false&noClash=false";
 
-        // A guest's schedule is a main-campus one: no campus to pick, and the Incheon section is not offered.
+        // A new schedule is a main-campus one: the subtitle says so, and the Incheon section is not offered.
         var page = await visitor.Page(search);
-        Assert.Null(page.DocumentNode.SelectSingleNode("//select[@name='campus']"));
+        Assert.Equal("main", page.DocumentNode.SelectSingleNode("//form[@id='browse']//select[@name='campus']/option[@selected]")?.GetAttributeValue("value", ""));
         Assert.DoesNotContain(asia.Number2, Offered(page, asia));
-        Assert.DoesNotContain("Asia Campus", page.DocumentNode.SelectSingleNode("//p[@class='page-sub']")?.InnerText);
         // Asking for it in the address changes nothing.
         Assert.DoesNotContain(asia.Number2, Offered(await visitor.Page(search + "&campus=uac"), asia));
 
@@ -490,5 +489,91 @@ public class ScheduleTests(Site site) : IClassFixture<Site>
         var label = $"{units} unit{(units == 1 ? "" : "s")}";
         Assert.Equal(label, cart.DocumentNode.SelectSingleNode("//span[@class='cart-total']")?.InnerText.Trim());
         Assert.Equal([label], cart.DocumentNode.SelectNodes("//span[@class='cart-units']")!.Select(n => n.InnerText.Trim()).ToList());
+    }
+
+    // ------------------------------------------------- the way in: term and campus
+
+    [Fact]
+    public async Task TheNavigationLeadsStraightToTheBuilder()
+    {
+        var home = await site.Visitor().Page("/");
+        Assert.Equal("/builder", home.DocumentNode.SelectSingleNode("//a[@class='btn' and contains(., 'Schedule Builder')]")?.GetAttributeValue("href", ""));
+        var nav = (await site.Visitor().Page("/courses")).DocumentNode.SelectSingleNode("//nav//a[contains(., 'Schedule Builder')]");
+        Assert.Equal("/builder", nav?.GetAttributeValue("href", ""));
+        Assert.Null(nav?.ParentNode.SelectSingleNode(".//a[contains(., 'Sign in')]"));
+    }
+
+    /// <summary>The subtitle's term and campus, posted as the page posts them when one changes.</summary>
+    private static async Task Browse(Browser visitor, string campus, string? term = null)
+    {
+        var form = new List<(string, string)> { ("campus", campus) };
+        if (term is not null) form.Add(("term", term));
+        Assert.Equal(HttpStatusCode.Redirect, await visitor.Post("Start", form.ToArray()));
+    }
+
+    /// <summary>The value the subtitle's select shows.</summary>
+    private static string? Selected(HtmlDocument doc, string name) =>
+        doc.DocumentNode.SelectSingleNode($"//form[@id='browse']//select[@name='{name}']/option[@selected]")?.GetAttributeValue("value", null);
+
+    [Fact]
+    public async Task TheTermIsPickedInTheSubtitleAndAnotherTermStartsAfresh()
+    {
+        var newest = Term;
+        var older = site.Catalogue.One("term <> @term AND times LIKE '%/%'", new { term = newest }).Term;
+        var visitor = site.Visitor();
+        // Every term is offered, newest first and so by default.
+        var page = await visitor.Page("/builder");
+        Assert.Equal(newest, page.DocumentNode.SelectSingleNode("//form[@id='browse']//select[@name='term']/option[1]")?.GetAttributeValue("value", ""));
+        Assert.Equal(newest, Selected(page, "term"));
+        await Browse(visitor, "main", older);
+        Assert.Equal(older, Selected(await visitor.Page("/builder"), "term"));
+        // A class added stays with it; the same choice again keeps the schedule.
+        await visitor.Add(site.Catalogue.Timed(older));
+        await Browse(visitor, "main", older);
+        Assert.Single(await visitor.Cart());
+        // Another term starts afresh: one schedule is one term.
+        await Browse(visitor, "main", newest);
+        Assert.Empty(await visitor.Cart());
+        Assert.Equal(newest, Selected(await visitor.Page("/builder"), "term"));
+    }
+
+    [Fact]
+    public async Task PickingTheAsiaCampusBuildsThereUntilAnotherIsPicked()
+    {
+        var visitor = site.Visitor();
+        // The newest term the Asia Campus list is published for; the main list goes up first.
+        var term = site.Catalogue.NewestTermOn("uac");
+        await Browse(visitor, "uac", term);
+        Assert.Equal("uac", Selected(await visitor.Page("/builder"), "campus"));
+        var asia = site.Catalogue.OnAsiaCampus(term);
+        await visitor.Add(asia);
+        Assert.Equal([asia.Code], await visitor.Cart());
+        // The same campus keeps the schedule; another starts afresh: one schedule is one campus.
+        await Browse(visitor, "uac");
+        Assert.Equal([asia.Code], await visitor.Cart());
+        await Browse(visitor, "main");
+        Assert.Empty(await visitor.Cart());
+        Assert.Equal("main", Selected(await visitor.Page("/builder"), "campus"));
+    }
+
+    [Fact]
+    public async Task AnOnlineScheduleHasNoHoursGridOrCalendar()
+    {
+        var visitor = site.Visitor();
+        await Browse(visitor, "online");
+        var online = site.Catalogue.OnUOnline(Term);
+        // The card names no meeting time: there never is one.
+        var cards = await visitor.Page($"/builder?term={Term}&q={Uri.EscapeDataString(online.Code)}&open=false");
+        Assert.NotNull(cards.DocumentNode.SelectSingleNode("//button[contains(@class,'add-section')]"));
+        Assert.Null(cards.DocumentNode.SelectSingleNode("//p[@class='sc-when']"));
+        Assert.Null(cards.DocumentNode.SelectSingleNode("//div[contains(@class,'cart-breaks')]"));   // nor breaks to keep free
+        await visitor.Add(online);
+        // The schedule page is the list alone: no week, no conflicts, no hours, no calendar file.
+        var page = await visitor.Page("/BuilderSchedule");
+        Assert.Contains(online.Code, page.DocumentNode.InnerText);
+        Assert.Null(page.DocumentNode.SelectSingleNode("//div[@class='week']"));
+        Assert.Null(page.DocumentNode.SelectSingleNode("//th[contains(., 'time')]"));
+        Assert.Null(page.DocumentNode.SelectSingleNode("//a[@id='ics-button']"));
+        Assert.DoesNotContain("Calendar export", page.DocumentNode.InnerText);
     }
 }

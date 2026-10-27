@@ -12,7 +12,7 @@ public class BuilderAddModel(CourseQueries db, SiteIndex site, SectionIndex sect
 
     [BindProperty(SupportsGet = true)] public string? Term { get; set; }
 
-    /// <summary>The schedule's campus. Results come from it alone; there is nothing to pick.</summary>
+    /// <summary>The schedule's campus. Results come from it alone.</summary>
     public string Campus { get; private set; } = Pages.Campus.Main;
 
     /// <summary>Set when the search text is exactly a subject code.</summary>
@@ -59,6 +59,13 @@ public class BuilderAddModel(CourseQueries db, SiteIndex site, SectionIndex sect
     public string CompanionData { get; private set; } = "{}";
 
     public void OnGet() => Search();
+
+    /// <summary>The term and campus to browse, from the subtitle. A different one starts a fresh schedule.</summary>
+    public IActionResult OnPostStart(string? term, string? campus)
+    {
+        store.Start(Pages.Campus.Known(campus), term is not null && site.Terms.Contains(term) ? term : null);
+        return RedirectToPage();
+    }
 
     /// <summary>Add one section to the schedule.</summary>
     public IActionResult OnPostAdd(string term, string subject, string number, string section)

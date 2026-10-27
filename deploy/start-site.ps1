@@ -1,13 +1,7 @@
 # Start the published site with the configuration the app expects.
 #
-# The account settings live as USER environment variables (set once, by hand).
-# A shell that does not inherit them makes the app run with accounts disabled
-# and no sign-in button, which is silent - nothing logs a missing connection
-# string. So they are read from the user environment explicitly here.
-#
 # Run at startup by the "CourseCompass site" task (install-startup.ps1), or by
-# hand. Does nothing if the site is already up. Values are never printed: only
-# whether each one was found.
+# hand. Does nothing if the site is already up.
 $ErrorActionPreference = 'Stop'
 
 $root = Split-Path -Parent $PSScriptRoot
@@ -17,28 +11,20 @@ if (Get-NetTCPConnection -LocalPort 5215 -State Listen -ErrorAction SilentlyCont
     "  already listening on 5215"; exit 0
 }
 
-$names = 'ConnectionStrings__UserData',
-         'ConnectionStrings__UserDataDirect',
-         'Authentication__Google__ClientId',
-         'Authentication__Google__ClientSecret'
-
-foreach ($n in $names) {
-    $v = [Environment]::GetEnvironmentVariable($n, 'User')
-    if ([string]::IsNullOrEmpty($v)) {
-        "  {0,-42} MISSING - accounts will be off" -f $n
-    } else {
-        Set-Item -Path ("env:" + $n) -Value $v
-        "  {0,-42} loaded ({1} chars)" -f $n, $v.Length
-    }
-}
-
 # appsettings.json holds a path relative to the repo root, which does not
 # resolve from the app's own folder; the content root has to stay there so the
 # rest of appsettings still loads.
 $db = Join-Path $root 'data\courseplanner.db'
 if (-not (Test-Path $db)) { throw "no catalogue at $db" }
 $env:ConnectionStrings__CoursePlanner = "Data Source=$db"
-"  {0,-42} {1}" -f 'ConnectionStrings__CoursePlanner', $db
+"  {0,-34} {1}" -f 'ConnectionStrings__CoursePlanner', $db
+
+# The keys that sign every visitor's schedule cookie. They must live outside
+# the process, or a restart would empty every schedule; data\ is not in git.
+$keys = Join-Path $root 'data\keys'
+New-Item -ItemType Directory -Force $keys | Out-Null
+$env:DataProtection__KeysPath = $keys
+"  {0,-34} {1} ({2} key file(s))" -f 'DataProtection__KeysPath', $keys, (Get-ChildItem $keys -Filter 'key-*.xml' | Measure-Object).Count
 
 Start-Process -FilePath 'dotnet' -ArgumentList $app, '--urls', 'http://127.0.0.1:5215' -WorkingDirectory (Join-Path $root 'publish\web') -WindowStyle Hidden
 Start-Sleep -Seconds 12

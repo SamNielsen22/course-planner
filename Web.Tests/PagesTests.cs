@@ -97,14 +97,6 @@ public class PagesTests(Site site) : IClassFixture<Site>
     }
 
     [Fact]
-    public async Task AccountPagesAnswer404WhenAccountsAreOff()
-    {
-        var visitor = site.Visitor();
-        Assert.Equal(HttpStatusCode.NotFound, (await visitor.Send("/account")).StatusCode);
-        Assert.Equal(HttpStatusCode.NotFound, (await visitor.Send("/account/login")).StatusCode);
-    }
-
-    [Fact]
     public async Task PublicPagesCacheAndPersonalPagesDoNot()
     {
         var (subject, number, _) = site.Catalogue.GradedCourse();

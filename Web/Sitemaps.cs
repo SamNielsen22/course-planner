@@ -25,8 +25,7 @@ public static class Sitemaps
         app.MapGet("/robots.txt", (HttpContext http, Unlisted unlisted) => Results.Text(
             unlisted.Yes
                 ? "User-agent: *\nAllow: /$\nAllow: /About\nDisallow: /\n"
-                : "User-agent: *\nAllow: /\nDisallow: /builder\nDisallow: /schedules\n"
-                  + "Disallow: /BuilderSchedule\nDisallow: /account\n\n"
+                : "User-agent: *\nAllow: /\nDisallow: /builder\nDisallow: /BuilderSchedule\n\n"
                   + $"Sitemap: {Base(http)}/sitemap.xml\n",
             "text/plain; charset=utf-8"));
 

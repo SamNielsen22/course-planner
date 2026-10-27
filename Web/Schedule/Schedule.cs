@@ -1,11 +1,8 @@
-using System.Security.Claims;
 using System.Text.Json;
 using System.Text.RegularExpressions;
-using Web.Accounts;
 using Web.Pages;
 using CoursePlanner.Data;
 using Microsoft.AspNetCore.DataProtection;
-using Npgsql;
 
 namespace Web.Schedule;
 
@@ -31,10 +28,7 @@ public record Break(string Id, string Name, string Days, string From, string Unt
 /// <summary>Everything the builder is holding for one visitor.</summary>
 public record BuiltSchedule
 {
-    /// <summary>The schedule's name. Null for a guest.</summary>
-    public string? Name { get; init; }
-
-    /// <summary>The term, chosen at creation or taken from the first class.</summary>
+    /// <summary>The term, as chosen or taken from the first class.</summary>
     public string? Term { get; init; }
 
     /// <summary>The campus: main, uac or online. One schedule is one campus.</summary>
@@ -49,29 +43,21 @@ public record BuiltSchedule
     public int Conflicts => Meetings.Conflicting(this).Count;
 }
 
-/// <summary>One saved schedule, as the schedule home lists it.</summary>
-public record ScheduleSummary(string Id, string Name, string? Term, string Campus, int Classes, int Units, int Conflicts,
-                              DateTime UpdatedAt, bool IsOpen);
-
 /// <summary>
-/// Where a schedule lives. A guest's is a signed cookie holding section keys
-/// and breaks for one term; the details are looked up fresh on every read.
-/// A signed-in student's schedules are rows in Postgres, with a second cookie
-/// naming the one the builder is editing. The guest cookie joins the account
-/// at sign-in. If Postgres is down the cookie is used instead.
+/// Where a schedule lives: a signed cookie holding section keys and breaks for
+/// one term and campus. The details are looked up fresh on every read, so a
+/// re-crawl changes what the cart shows and never what it holds.
 /// </summary>
-public class ScheduleStore(IHttpContextAccessor accessor, IDataProtectionProvider protection,
-                           SectionIndex sections, IServiceProvider services)
+public class ScheduleStore(IHttpContextAccessor accessor, IDataProtectionProvider protection, SectionIndex sections)
 {
-    private const string CookieName = "schedule";        // a guest's schedule, signed
-    private const string OpenCookieName = "schedule-open"; // which saved schedule the builder edits
+    private const string CookieName = "schedule";
 
     // Caps keep the cookie under the browser's 4KB limit.
     private const int MaxSections = 40;
     private const int MaxBreaks = 12;
     private const int MaxBreakName = 40;
-    private const int MaxName = 40;
 
+    // Rewritten on every change, so the clock restarts each time the schedule is touched.
     private static readonly TimeSpan Lifetime = TimeSpan.FromDays(180);
 
     // Bumping "v1" retires every old cookie at once.
@@ -83,33 +69,12 @@ public class ScheduleStore(IHttpContextAccessor accessor, IDataProtectionProvide
     // A write earlier in this request, since Request.Cookies still holds what the browser sent.
     private Stored? _written;
 
-    // The saved schedule this request is editing, once looked up.
-    private SavedSchedule? _open;
-
     private HttpContext Http =>
         accessor.HttpContext ?? throw new InvalidOperationException("no request in progress");
-
-    private string? UserId =>
-        Http.User.Identity?.IsAuthenticated == true ? Http.User.FindFirstValue(ClaimTypes.NameIdentifier) : null;
-
-    public bool SignedIn => UserId is not null;
-
-    // Null when accounts are off.
-    private UserDbContext? Db => services.GetService<UserDbContext>();
 
     private Stored Read()
     {
         if (_written is not null) return _written;
-        if (UserId is { } userId && Db is { } db)
-        {
-            try { return FromRow(OpenRow(db, userId)); }
-            catch (NpgsqlException) { /* Postgres down: use the cookie */ }
-        }
-        return ReadCookie();
-    }
-
-    private Stored ReadCookie()
-    {
         var raw = Http.Request.Cookies[CookieName];
         if (string.IsNullOrEmpty(raw)) return new([], []);
         // An unreadable cookie is an empty schedule, not an error.
@@ -126,83 +91,15 @@ public class ScheduleStore(IHttpContextAccessor accessor, IDataProtectionProvide
     private void Write(Stored stored)
     {
         _written = stored;
-        if (UserId is { } userId && Db is { } db)
+        Http.Response.Cookies.Append(CookieName, _protector.Protect(JsonSerializer.Serialize(stored)), new CookieOptions
         {
-            try
-            {
-                // A first write starts a schedule.
-                Save(db, OpenRow(db, userId) ?? NewRow(db, userId, null, stored.T, stored.C), stored);
-                return;
-            }
-            catch (NpgsqlException) { /* Postgres down: keep it in the cookie */ }
-        }
-        WriteCookie(stored);
-    }
-
-    private void WriteCookie(Stored stored) =>
-        Http.Response.Cookies.Append(CookieName, _protector.Protect(JsonSerializer.Serialize(stored)), Options());
-
-    private CookieOptions Options() => new()
-    {
-        HttpOnly = true,
-        SameSite = SameSiteMode.Lax,
-        Secure = Http.Request.IsHttps,
-        MaxAge = Lifetime,
-        Path = "/",
-        IsEssential = true,
-    };
-
-    private static Stored FromRow(SavedSchedule? row) => row is null ? new([], []) : new(
-        JsonSerializer.Deserialize<List<string>>(row.Sections) ?? [],
-        JsonSerializer.Deserialize<List<Break>>(row.Breaks) ?? [],
-        row.Term, row.Campus);
-
-    /// <summary>The schedule being edited: the one the open cookie names, else the most recently touched.</summary>
-    private SavedSchedule? OpenRow(UserDbContext db, string userId)
-    {
-        if (_open is not null) return _open;
-        var wanted = Http.Request.Cookies[OpenCookieName];
-        _open = (wanted is null ? null : db.Schedules.FirstOrDefault(s => s.Id == wanted && s.UserId == userId))
-                ?? db.Schedules.Where(s => s.UserId == userId).OrderByDescending(s => s.UpdatedAt).FirstOrDefault();
-        return _open;
-    }
-
-    private SavedSchedule NewRow(UserDbContext db, string userId, string? name, string? term, string? campus)
-    {
-        var count = db.Schedules.Count(s => s.UserId == userId);
-        var row = new SavedSchedule
-        {
-            Id = Guid.NewGuid().ToString("N")[..12],
-            UserId = userId,
-            Name = Clean(name) ?? $"Schedule {count + 1}",
-            Term = term,
-            Campus = Web.Pages.Campus.Known(campus),
-            CreatedAt = DateTime.UtcNow,
-            UpdatedAt = DateTime.UtcNow,
-        };
-        db.Schedules.Add(row);
-        MarkOpen(row);
-        return row;
-    }
-
-    private static string? Clean(string? name)
-    {
-        var trimmed = (name ?? "").Trim();
-        return trimmed.Length == 0 ? null : trimmed[..Math.Min(MaxName, trimmed.Length)];
-    }
-
-    private void MarkOpen(SavedSchedule row)
-    {
-        _open = row;
-        Http.Response.Cookies.Append(OpenCookieName, row.Id, Options());
-    }
-
-    private static void Save(UserDbContext db, SavedSchedule row, Stored stored)
-    {
-        row.Sections = JsonSerializer.Serialize(stored.S);
-        row.Breaks = JsonSerializer.Serialize(stored.B);
-        row.UpdatedAt = DateTime.UtcNow;
-        db.SaveChanges();
+            HttpOnly = true,
+            SameSite = SameSiteMode.Lax,
+            Secure = Http.Request.IsHttps,
+            MaxAge = Lifetime,
+            Path = "/",
+            IsEssential = true,
+        });
     }
 
     private static string TermOf(string key) => key[..key.IndexOf('|')];
@@ -211,44 +108,20 @@ public class ScheduleStore(IHttpContextAccessor accessor, IDataProtectionProvide
     private string CampusOf(Stored stored) =>
         stored.C ?? stored.S.Select(k => sections.Find(k)?.Campus).FirstOrDefault(c => c is not null) ?? Web.Pages.Campus.Main;
 
-    /// <summary>On sign-in, the guest cookie's classes join the account and the cookie is cleared.</summary>
-    public void AdoptCookie(string userId)
+    /// <summary>The term and campus to build for. A different campus or term starts a new schedule; breaks stay.</summary>
+    public void Start(string campus, string? term)
     {
-        if (Db is not { } db) return;
-        var cookie = ReadCookie();
-        if (cookie.S.Count == 0 && cookie.B.Count == 0) return;
-        var campus = CampusOf(cookie);
-        var row = db.Schedules.Where(s => s.UserId == userId && s.Campus == campus).OrderByDescending(s => s.UpdatedAt).FirstOrDefault()
-                  ?? NewRow(db, userId, null, cookie.T, campus);
-        var mine = FromRow(row);
-        foreach (var key in cookie.S)
-            if (!mine.S.Contains(key) && (IsMarker(key) || SectionCount(mine) < MaxSections)) mine.S.Add(key);
-        mine.B.AddRange(cookie.B.Where(b => mine.B.All(x => x.Id != b.Id)).Take(Math.Max(0, MaxBreaks - mine.B.Count)));
-        // Keep only the newest term; a marker survives only if both its ends do.
-        var newest = Terms.NewestFirst(mine.S.Where(k => !IsMarker(k)).Select(TermOf).Distinct()).FirstOrDefault();
-        mine.S.RemoveAll(k => IsMarker(k) ? ParseMarker(k) is not { } m || TermOf(m.Companion) != newest
-                                          : TermOf(k) != newest);
-        Save(db, row, mine);
-        MarkOpen(row);
-        Http.Response.Cookies.Delete(CookieName);
-        _written = mine;
-    }
-
-    /// <summary>A guest's term and campus choice. A different campus or term starts a new schedule; breaks stay.</summary>
-    public void StartGuest(string campus, string? term)
-    {
-        if (SignedIn) return;
-        var stored = ReadCookie();
+        var stored = Read();
         if (CampusOf(stored) != campus) stored.S.Clear();
         if (term is not null && stored.S.Any(k => !IsMarker(k) && TermOf(k) != term)) stored.S.Clear();
         Write(stored with { C = campus, T = term ?? stored.T });
     }
 
     /// <summary>The schedule, filled in from the current catalogue.</summary>
-    public BuiltSchedule Current => Hydrate(Read(), _open);
+    public BuiltSchedule Current => Hydrate(Read());
 
     /// <summary>Keys to sections, with today's titles, times, rooms and professors.</summary>
-    private BuiltSchedule Hydrate(Stored stored, SavedSchedule? row)
+    private BuiltSchedule Hydrate(Stored stored)
     {
         var picked = new List<PickedSection>(stored.S.Count);
         foreach (var key in stored.S)
@@ -260,9 +133,8 @@ public class ScheduleStore(IHttpContextAccessor accessor, IDataProtectionProvide
         }
         return new BuiltSchedule
         {
-            Name = row?.Name,
-            Term = row?.Term ?? stored.T ?? picked.FirstOrDefault()?.Term,
-            Campus = row?.Campus ?? CampusOf(stored),
+            Term = stored.T ?? picked.FirstOrDefault()?.Term,
+            Campus = CampusOf(stored),
             Sections = picked,
             Breaks = stored.B,
         };
@@ -270,8 +142,8 @@ public class ScheduleStore(IHttpContextAccessor accessor, IDataProtectionProvide
 
     // A lecture and the companion a student picked for it are one unit: added
     // together, removed together. The link is a marker "link:<companion>\t<lecture>"
-    // stored alongside the section keys, so it rides in the cookie and the row
-    // with no schema change and is skipped on read (Find returns null for it).
+    // stored alongside the section keys, so it rides in the cookie with no
+    // schema change and is skipped on read (Find returns null for it).
     // The separator is a tab, which never appears in a key; a space would split
     // wrongly on subjects that contain one, such as "ME EN".
     private const string LinkPrefix = "link:";
@@ -295,7 +167,7 @@ public class ScheduleStore(IHttpContextAccessor accessor, IDataProtectionProvide
         var stored = Read();
         if (stored.S.Contains(key)) return;
         // One schedule is one campus; a key from another is ignored.
-        if ((_open?.Campus ?? CampusOf(stored)) != section.Campus) return;
+        if (CampusOf(stored) != section.Campus) return;
         stored = stored with { C = section.Campus };
         RemoveForNewTerm(stored, TermOf(key));   // a new term starts a new schedule
         if (SectionCount(stored) >= MaxSections) return;
@@ -312,7 +184,7 @@ public class ScheduleStore(IHttpContextAccessor accessor, IDataProtectionProvide
     {
         if (sections.Find(lectureKey) is not { } lecture || sections.Find(companionKey) is null) return;
         var stored = Read();
-        if ((_open?.Campus ?? CampusOf(stored)) != lecture.Campus) return;
+        if (CampusOf(stored) != lecture.Campus) return;
         stored = stored with { C = lecture.Campus };
         RemoveForNewTerm(stored, TermOf(lectureKey));
 
@@ -375,56 +247,6 @@ public class ScheduleStore(IHttpContextAccessor accessor, IDataProtectionProvide
     {
         var stored = Read();
         if (stored.B.RemoveAll(b => b.Id == id) > 0) Write(stored);
-    }
-
-    // ------------------------------------------------------------ the schedule home
-
-    /// <summary>A student's schedules, most recently touched first. Empty for a guest.</summary>
-    public IReadOnlyList<ScheduleSummary> Mine()
-    {
-        if (UserId is not { } userId || Db is not { } db) return [];
-        var open = OpenRow(db, userId)?.Id;
-        return db.Schedules.Where(s => s.UserId == userId).OrderByDescending(s => s.UpdatedAt).AsEnumerable()
-            .Select(s =>
-            {
-                var built = Hydrate(FromRow(s), s);
-                return new ScheduleSummary(s.Id, s.Name, built.Term, s.Campus, built.Sections.Count, built.Units, built.Conflicts,
-                                           s.UpdatedAt, s.Id == open);
-            })
-            .ToList();
-    }
-
-    /// <summary>A new empty schedule, opened for the builder.</summary>
-    public void Create(string? name, string? term, string? campus)
-    {
-        if (UserId is not { } userId || Db is not { } db) return;
-        NewRow(db, userId, name, term, campus);
-        db.SaveChanges();
-    }
-
-    /// <summary>Make one of their schedules the one the builder edits.</summary>
-    public void Open(string id)
-    {
-        if (UserId is not { } userId || Db is not { } db) return;
-        if (db.Schedules.FirstOrDefault(s => s.Id == id && s.UserId == userId) is { } row) MarkOpen(row);
-    }
-
-    public void Rename(string id, string? name)
-    {
-        if (UserId is not { } userId || Db is not { } db || Clean(name) is not { } clean) return;
-        if (db.Schedules.FirstOrDefault(s => s.Id == id && s.UserId == userId) is not { } row) return;
-        row.Name = clean;
-        db.SaveChanges();
-    }
-
-    public void Delete(string id)
-    {
-        if (UserId is not { } userId || Db is not { } db) return;
-        if (db.Schedules.FirstOrDefault(s => s.Id == id && s.UserId == userId) is not { } row) return;
-        db.Schedules.Remove(row);
-        db.SaveChanges();
-        if (Http.Request.Cookies[OpenCookieName] == id) Http.Response.Cookies.Delete(OpenCookieName);
-        if (_open?.Id == id) _open = null;
     }
 }
 

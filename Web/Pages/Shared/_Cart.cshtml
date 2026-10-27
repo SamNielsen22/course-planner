@@ -6,7 +6,7 @@
 
 <aside class="cart" id="cart">
     <header class="cart-head">
-        <span class="cart-title">@(Model.Name ?? "Your schedule")</span>
+        <span class="cart-title">Your schedule</span>
         @if (Model.Units > 0)
         {
             <span class="cart-total">@Model.Units unit@(Model.Units == 1 ? "" : "s")</span>

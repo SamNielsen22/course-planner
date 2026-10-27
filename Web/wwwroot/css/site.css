@@ -741,8 +741,8 @@ td form { display: inline; }
     display: flex; flex-direction: column;
   }
   html:has(.tabs) header { flex: none; }
-  html:has(.tabs) footer { display: none; }
   /* Both fill the height so the bar reaches the foot when results are short. */
+  html:has(.tabs) footer { display: none; }
   html:has(.tabs) main { flex: 1 0 auto; width: 100%; display: flex; flex-direction: column; padding-bottom: 0; }
   html:has(.tabs) #search { flex: 1 0 auto; display: flex; flex-direction: column; }
   .tabs {
@@ -846,6 +846,18 @@ td form { display: inline; }
 }
 .page-sub { margin: .3rem 0 0; font-size: .9rem; color: var(--label); }
 .page-sub .ps-title { margin-left: .4em; }
+.browse { display: flex; align-items: center; gap: .5rem; flex-wrap: wrap; }
+.browse select {
+  font: inherit; font-size: .9rem; color: inherit; cursor: pointer;
+  appearance: none; -webkit-appearance: none;
+  border: none; border-radius: 6px;
+  padding: .15rem 1.05rem .15rem .3rem;
+  field-sizing: content;   /* as wide as the chosen term, so the chevron sits by the word */
+  background: transparent url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 10 6'%3E%3Cpath d='M1 1l4 4 4-4' fill='none' stroke='%238a8a95' stroke-width='1.5'/%3E%3C/svg%3E") no-repeat right .3rem center / .55rem;
+  transition: background-color .13s ease, color .13s ease;
+}
+.browse select:first-child { margin-left: -.3rem; }   
+.browse select:hover, .browse select:focus-visible { background-color: var(--card); color: var(--text-h); outline: none; }
 /* A round first letter looks indented; a pixel left fixes it. */
 .page-head h1.round-start { margin-left: -1px; }
 
@@ -880,45 +892,10 @@ td form { display: inline; }
   .course-title { font-size: .92rem; white-space: normal; overflow: visible; text-overflow: clip; line-height: 1.3; }
 }
 
-.account { max-width: 24rem; }
-.account label {
-  display: block; font-size: .7rem; font-weight: 700; text-transform: uppercase;
-  letter-spacing: .07em; color: var(--label); margin: .9rem 0 .3rem;
-}
-.account label .muted { text-transform: none; letter-spacing: 0; font-weight: 400; }
-.account input:not([type=checkbox]) {
-  width: 100%; font: inherit; padding: .65rem .85rem; border-radius: 8px;
-  border: 1px solid var(--border); background: var(--card); color: var(--text-h);
-}
-.account input:focus { background: var(--panel); outline: 2px solid var(--crimson); outline-offset: 1px; }
 label.check {
   display: flex; gap: .5rem; align-items: center; text-transform: none;
   letter-spacing: 0; font-weight: 400; font-size: .92rem; color: var(--text);
 }
-.account .btn { margin-top: 1rem; }
-.account form + section, .account section + form { margin-top: 1rem; }
-.errors ul { margin: .6rem 0 0; padding-left: 1.1rem; color: var(--crimson); font-size: .9rem; }
-.btn.danger { color: var(--crimson); border-color: var(--crimson); background: transparent; }
-
-.providers { margin: .25rem 0 0; }
-.providers form { margin: .5rem 0; }
-.btn.provider { display: block; width: 100%; text-align: center; }
-.small { font-size: .85rem; }
-.providers + .small { text-align: center; margin-top: .75rem; }
-
-.account-page { max-width: 32rem; margin: 0 auto; text-align: center; }
-.account-row { margin: 1.25rem 0 2.25rem; }
-.account-danger { border-top: 1px solid var(--border); padding-top: 1.1rem; }
-.account-danger summary {
-  cursor: pointer; list-style: none; display: inline-flex; gap: .4rem; align-items: center;
-  font-size: .72rem; font-weight: 700; text-transform: uppercase; letter-spacing: .07em; color: var(--label);
-}
-.account-danger summary::-webkit-details-marker { display: none; }
-.account-danger summary::before { content: "▸"; font-size: .8rem; }
-.account-danger[open] summary::before { content: "▾"; }
-.account-danger[open] summary { margin-bottom: .6rem; }
-.account-danger p { margin: .25rem 0 .75rem; }
-.account-danger .btn { margin-top: .9rem; }
 
 /* Six columns on a phone: the label must be small enough that "CHIN" fits. */
 @media (max-width: 480px) {
@@ -927,65 +904,6 @@ label.check {
   .block-time { font-size: .56rem; }
 }
 
-.schedules { max-width: 46rem; margin: 0 auto; }
-.sched-empty { text-align: center; color: var(--label); margin: 2rem 0; }
-.sched-none {
-  text-align: center; padding: 2.4rem 1.5rem;
-  border: 1.5px dashed var(--border); border-radius: 12px;
-}
-.sched-none-title { margin: 0 0 .3rem; font-weight: 700; color: var(--text-h); }
-.sched-none-sub { margin: 0 0 1.1rem; font-size: .9rem; color: var(--label); }
-
-.sched-bar { margin: 0 0 .7rem; }
-
-.sched-list {
-  list-style: none; margin: 0; padding: 0;
-  background: var(--card); border: 1px solid var(--border); border-radius: 12px;
-}
-.sched-row {
-  display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center;
-  transition: background .12s ease;
-}
-.sched-row:first-child { border-radius: 11px 11px 0 0; }
-.sched-row:last-child { border-radius: 0 0 11px 11px; }
-.sched-row + .sched-row { border-top: 1px solid var(--border); }
-.sched-row:hover { background: #d6d6de; }
-.sched-row form { margin: 0; min-width: 0; }
-.sched-hit {
-  display: grid; grid-template-columns: auto minmax(0, 1fr); gap: .9rem; align-items: center;
-  width: 100%; padding: .95rem 1.1rem; text-align: left;
-  font: inherit; color: inherit; background: none; border: none; cursor: pointer; text-decoration: none;
-}
-.sched-hit:hover, .sched-hit:focus { text-decoration: none; }   
-.sched-hit:focus-visible { outline: 2px solid var(--crimson); outline-offset: -2px; border-radius: inherit; }
-.sched-dot {
-  width: .55rem; height: .55rem; border-radius: 50%;
-  border: 1px solid var(--border); background: transparent;
-}
-.sched-open .sched-dot { background: var(--crimson); border-color: var(--crimson); }
-.sched-what { display: flex; align-items: baseline; gap: .9rem; flex-wrap: wrap; min-width: 0; }
-.sched-name { font-weight: 700; color: var(--text-h); }
-.sched-meta { font-size: .85rem; color: var(--label); }
-.sched-warn { color: #9a3412; font-weight: 600; }
-.sched-actions { display: flex; align-items: center; padding-right: .6rem; }
-.sched-actions form { margin: 0; }
-
-.row-menu { position: relative; }
-.row-menu summary {
-  list-style: none; cursor: pointer; width: 2rem; height: 2rem; border-radius: 999px;
-  display: inline-flex; align-items: center; justify-content: center;
-  font-size: 1.1rem; color: var(--label);
-}
-.row-menu summary::-webkit-details-marker { display: none; }
-.row-menu summary:hover, .row-menu[open] summary { background: var(--panel); color: var(--text-h); }
-.row-menu-panel {
-  position: absolute; right: 0; top: calc(100% + .35rem); z-index: 25; min-width: 15rem;
-  background: var(--panel); border: 1px solid var(--border); border-radius: 10px;
-  padding: .75rem .8rem; box-shadow: 0 6px 24px rgb(0 0 0 / .1);
-}
-.row-menu-when { margin: 0 0 .6rem; font-size: .78rem; color: var(--label); }
-.row-menu-rename { display: flex; gap: .4rem; margin-bottom: .6rem; }
-.row-menu-rename input { flex: 1; min-width: 0; }
 .link-btn {
   font: inherit; font-size: .85rem; font-weight: 600; color: var(--label);
   background: none; border: none; padding: 0; cursor: pointer;

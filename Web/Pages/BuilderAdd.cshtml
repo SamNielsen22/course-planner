@@ -5,12 +5,23 @@
     ViewData["NoIndex"] = true;
 }
 
-<div class="page-head page-head-back">
-    <a class="back-arrow" asp-page="/Schedules" aria-label="Your schedules" title="Your schedules">&larr;</a>
-    <div>
-        <h1 class="round-start">Schedule Builder</h1>
-        <p class="page-sub">Browsing @Terms.Display(Model.Term ?? "")@(Campus.Label(Model.Campus) is { } campus ? " · " + campus : "") sections</p>
-    </div>
+<div class="page-head">
+    <h1 class="round-start">Schedule Builder</h1>
+    <form method="post" asp-page-handler="Start" class="page-sub browse" id="browse">
+        <select name="term" aria-label="Term">
+            @foreach (var t in Model.Terms)
+            {
+                <option value="@t" selected="@(t == Model.Term)">@Terms.Display(t)</option>
+            }
+        </select>
+        <select name="campus" aria-label="Campus">
+            @foreach (var (code, name) in Campus.All)
+            {
+                <option value="@code" selected="@(code == Model.Campus)">@name</option>
+            }
+        </select>
+        <noscript><button class="btn small-btn" type="submit">Go</button></noscript>
+    </form>
 </div>
 
 @Html.AntiForgeryToken()
@@ -186,6 +197,7 @@
 
     document.getElementById('break-cancel').addEventListener('click', () => dialog.close());
     document.getElementById('break-days').addEventListener('change', function () { this.classList.remove('days-missing'); });
+    document.getElementById('browse').addEventListener('change', function () { this.submit(); });
     breakForm.addEventListener('submit', async function (event) {
         event.preventDefault();
         const fields = new FormData(breakForm);

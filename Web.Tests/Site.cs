@@ -13,9 +13,9 @@ using Microsoft.Extensions.DependencyInjection;
 namespace Web.Tests;
 
 /// <summary>
-/// The real site, hosted in-process against the real catalogue with accounts
-/// off, driven over HTTP the way a browser would. The catalogue is read-only,
-/// and fixtures are discovered from it so the suite survives a re-crawl.
+/// The real site, hosted in-process against the real catalogue, driven over
+/// HTTP the way a browser would. The catalogue is read-only, and fixtures are
+/// discovered from it so the suite survives a re-crawl.
 /// </summary>
 public sealed class Site : WebApplicationFactory<Program>
 {
@@ -29,12 +29,10 @@ public sealed class Site : WebApplicationFactory<Program>
 
     protected override void ConfigureWebHost(IWebHostBuilder builder)
     {
-        // Not Development: user-secrets stay out, so accounts are off and no
-        // test can reach Postgres; and the production pipeline (output cache,
-        // forwarded headers) is the one under test.
+        // Not Development, so the production pipeline (output cache, forwarded
+        // headers) is the one under test.
         builder.UseEnvironment("Testing");
         builder.UseSetting("ConnectionStrings:CoursePlanner", $"Data Source={DatabasePath};Mode=ReadOnly");
-        builder.UseSetting("ConnectionStrings:UserData", "");
         // Listed by default here, so the sitemap and robots tests see the
         // public behaviour; <see cref="Unlisted"/> flips it for the tests that
         // check the shipped default.

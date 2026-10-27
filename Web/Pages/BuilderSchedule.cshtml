@@ -8,7 +8,7 @@
 <div class="page-head page-head-back">
     <a class="back-arrow" asp-page="/BuilderAdd" aria-label="Schedule builder" title="Schedule builder">&larr;</a>
     <div>
-        <h1>@(Model.Schedule.Name ?? "Your Schedule")</h1>
+        <h1>Your Schedule</h1>
         @if (Model.Schedule.Sections.Count > 0)
         {
             <p class="page-sub">@Terms.Display(Model.Schedule.Sections[0].Term)@(Campus.Label(Model.Schedule.Campus) is { } campus ? " · " + campus : "")</p>
