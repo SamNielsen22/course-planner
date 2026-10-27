@@ -17,7 +17,6 @@
         <noscript><button type="submit">Search</button></noscript>
     </div>
 
-
     <div id="results">
         <partial name="_InstructorResults" model="Model"/>
     </div>
@@ -32,21 +31,18 @@
 
     async function refresh() {
         const params = new URLSearchParams(new FormData(form));
-        // Page is tracked here rather than in a hidden input: the pager buttons
-        // are also named "page", so form.elements['page'] returns a list of
-        // three and assigning to it does nothing at all.
+        // Page is tracked here: the pager buttons are also named "page", so a hidden input can't be set.
         params.set('pg', page);
         const mine = ++latest;
         const response = await fetch('?handler=Rows&' + params, {
             headers: { 'X-Requested-With': 'fetch' }
         });
-        // Responses can land out of order; only the newest may paint.
+        // Responses can land out of order; only the newest paints.
         if (!response.ok || mine !== latest) return;
         results.innerHTML = await response.text();
         history.replaceState(null, '', '?' + params);
     }
 
-    // Any change to the search itself starts again from the first page.
     form.addEventListener('input', function () {
         page = 1;
         clearTimeout(timer);

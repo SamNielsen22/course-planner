@@ -4,7 +4,6 @@
     var brokenBreaks = Web.Schedule.Meetings.ConflictingBreaks(Model);
 }
 
-@* The schedule so far, sticky beside the results. Anything here can be removed. *@
 <aside class="cart" id="cart">
     <header class="cart-head">
         <span class="cart-title">@(Model.Name ?? "Your schedule")</span>
@@ -15,7 +14,6 @@
     </header>
 
     <div class="cart-body">
-        @* Hours to keep free. Not on a UOnline schedule, which has no meeting times. *@
         @if (Model.Campus != "online")
         {
         <div class="cart-breaks cart-first">
@@ -62,7 +60,6 @@
                             {
                                 <span class="cart-units">@units unit@(units == 1 ? "" : "s")</span>
                             }
-                            @* A lab or discussion is marked, the way the card that offered it was. *@
                             @if (CoursePlanner.Data.Companions.IsCompanion(s.Component)
                                  && CoursePlanner.Data.Companions.Kind([s.Component]) is { } kind)
                             {

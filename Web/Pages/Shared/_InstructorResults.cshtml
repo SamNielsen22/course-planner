@@ -42,7 +42,6 @@ else
                     <div class="class-grid">
                         @foreach (var course in person.Courses)
                         {
-                            @* Their page, open on this class. *@
                             <a class="class-card" asp-page="/Instructor"
                                asp-route-unid="@person.Unid" asp-route-slug="@Web.Pages.Names.Slug(person.Name)"
                                asp-fragment="@Web.Pages.Names.CourseSlug(course.Subject, course.CourseNumber)">
@@ -68,7 +67,6 @@ else
 
     @if (Model.LastPage > 1)
     {
-        @* The same chevrons as the builder's lists, either side of the page. *@
         <nav class="pager" aria-label="Pages">
             <button type="submit" name="pg" value="@(Model.Page - 1)" class="step"
                     disabled="@(!Model.HasPrevious)" aria-label="Previous page">

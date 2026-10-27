@@ -5,7 +5,6 @@
     ViewData["NoIndex"] = true;
 }
 
-@* The same arrow the builder wears, back to it. *@
 <div class="page-head page-head-back">
     <a class="back-arrow" asp-page="/BuilderAdd" aria-label="Schedule builder" title="Schedule builder">&larr;</a>
     <div>
@@ -28,12 +27,10 @@ else
 {
     @if (!Model.Online)
     {
-    @* Clashes are reported, not prevented. *@
     @if (Model.Clashes.Count > 0)
     {
         <div class="notice warn">
             <strong>@Model.Clashes.Count time conflict@(Model.Clashes.Count == 1 ? "" : "s").</strong>
-            @* Named by section when a course appears twice. *@
             @{
                 var repeated = Model.Blocks.Where(x => !x.IsBreak).GroupBy(x => x.Label)
                     .Where(g => g.Select(x => x.Detail).Distinct().Count() > 1).Select(g => g.Key).ToHashSet();
@@ -51,7 +48,7 @@ else
         </div>
     }
 
-    @* Narrow screens get "Wed", or the full day names push the grid off the edge. *@
+    @* Narrow screens get "Wed" or the grid runs off the edge. *@
     <div class="week" style="grid-template-columns: 3.5rem repeat(@Model.Days.Count, minmax(0, 1fr))">
         <div class="head"></div>
         @foreach (var day in Model.Days)
@@ -123,8 +120,6 @@ else
         </tbody>
     </table>
 
-    @* Weekly events for the term, days off skipped. Only for terms the academic
-       calendar knows. On iOS Safari the script relabels it "Save to calendar". *@
     @if (Model.Online)
     {
     }
@@ -150,8 +145,7 @@ else
 @section Scripts {
 <script>
 (function () {
-    // Safari on an iPhone or iPad opens the file itself, with an "Add All"
-    // button: nothing is exported or explained, it is simply saved.
+    // Safari on iPhone/iPad opens the file itself with an "Add All" button.
     const button = document.getElementById('ics-button');
     const note = document.getElementById('ics-note');
     const ua = navigator.userAgent;

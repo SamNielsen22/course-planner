@@ -6,7 +6,6 @@
     ViewData["Canonical"] = Model.Canonical;
 }
 
-@* Back to wherever you came from, rather than a fixed page. *@
 <div class="page-head page-head-back">
     <button type="button" class="back-arrow" onclick="history.back()" aria-label="Back" title="Back">&larr;</button>
     <div>
@@ -18,16 +17,12 @@
     </div>
 </div>
 
-@* Nothing published: one line says so, and the pickers stay away. *@
 @if (Model.Terms.Count == 0)
 {
     <p class="note">No published grades for this professor.</p>
 }
 else
 {
-    @* Always one section. Term and class are always chosen; the section picker
-       appears when that pair has more than one. The pickers swap sections in
-       place; without scripts they submit, and the server chooses. *@
     <form method="get" class="inline-form" action="@Model.Base">
         <select name="term" aria-label="Term">
             @foreach (var t in Model.Terms)
@@ -53,7 +48,6 @@ else
         <noscript><button type="submit">Go</button></noscript>
     </form>
 
-    @* Every graded section, each with its six published figures; only the chosen one shows. *@
     @foreach (var block in Model.Blocks)
     {
         <div class="prof-section" data-key="@block.Key" hidden="@(block.Key != Model.SectionKey)">
@@ -62,8 +56,7 @@ else
             {
                 <partial name="_GradeStats" model="block.Grades"/>
 
-                @* The average counts every student, the bars only groups of five or more.
-                   Far apart means the chart is missing grades, so say so. *@
+                @* The average counts every student, the bars only groups of five or more. If they're far apart, say so. *@
                 @if (block.Grades.HasHiddenGrades)
                 {
                     <p class="note">
@@ -88,10 +81,7 @@ else
 </div>
 
 @section Scripts {
-@* The pickers work on what is already in the page: a term narrows the classes,
-   a class narrows the sections, and the chosen section is the one shown. A
-   link may name a class by its slug in the fragment; it opens in the newest
-   term that has it, with the same preference against summer as the server's. *@
+@* The pickers work on what's already in the page: term narrows classes, class narrows sections. A fragment can name a class; it opens in the newest term that has it, summer last like the server. *@
 <script>
 (function () {
     const source = document.getElementById('prof-data');
@@ -120,7 +110,6 @@ else
         fill(coursePick, classes.map(c => ({ value: c, text: c })), course);
         const sections = data.tree[term][course];
         if (!sections.some(s => s.key === key)) key = sections[0].key;
-        // The section picker appears only when there are several.
         if (sections.length > 1) {
             if (!sectionPick) {
                 sectionPick = document.createElement('select');

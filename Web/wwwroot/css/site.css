@@ -1,6 +1,6 @@
 @charset "UTF-8";
 :root {
-  --crimson: #be0000;    /* Utah Red, the University's brand red */
+  --crimson: #be0000;    
   --crimson-d: #8f0000;
   --crimson-l: #fbe6e6;
 
@@ -8,15 +8,12 @@
   --text-h: #1c1b20;
   --label: #8a8a95;
 
-  --bg: #fff;         /* the page itself is white */
-  --card: #f6f6f8;    /* content sits on it in grey cards - chosen by eye 2026-09-12 */
+  --bg: #fff;         
+  --card: #f6f6f8;    
   --card-soft: #f8f8f9;
-  --panel: #fff;      /* panels nested inside a card go back to white */
+  --panel: #fff;      
   --border: #ebebef;
 
-  /* One face for everything - body, headings, wordmark, course codes - so
-     the three names below are the same stack. Falls back to the system
-     sans if the font never loads. */
   --sans: "Plus Jakarta Sans", system-ui, "Segoe UI", Roboto, sans-serif;
   --mono: var(--sans);
   --display: var(--sans);
@@ -40,9 +37,6 @@ h2 .muted { font-weight: 400; font-size: .9rem; }
 a { color: var(--crimson); text-decoration: none; }
 a:hover { text-decoration: underline; }
 
-/* ------------------------------------------------------------- chrome */
-
-/* No coloured bar. The wordmark carries the brand, as in the reference. */
 header { background: var(--bg); }
 nav {
   max-width: 72rem; margin: 0 auto; padding: 1.35rem 1.5rem;
@@ -53,7 +47,6 @@ nav .brand {
   font-family: var(--display); font-weight: 800; letter-spacing: -.03em;
   display: inline-flex; align-items: center; gap: .4rem;
 }
-/* The compass mark, sized to the text beside it so both scale together. */
 .brand-mark { height: 1.35em; width: auto; }
 nav .brand:hover { text-decoration: none; }
 nav a:not(.brand) {
@@ -69,18 +62,12 @@ footer {
   font-size: .8rem; color: var(--label);
 }
 
-/* -------------------------------------------------------------- cards */
-
 .card {
   background: var(--card); border: 1px solid var(--border); border-radius: 9px;
   padding: 1.5rem 1.6rem; margin-bottom: 1.25rem;
 }
 .card > :first-child { margin-top: 0; }
 .card > :last-child { margin-bottom: 0; }
-
-/* A panel nested inside a card, like the professor rows in the reference. */
-
-/* ------------------------------------------------------------ buttons */
 
 .btn {
   display: inline-block; font: inherit; font-size: .82rem; font-weight: 700;
@@ -97,9 +84,6 @@ span.btn { cursor: default; }
 span.btn:hover { background: var(--crimson); border-color: var(--crimson); }
 :focus-visible { outline: 2px solid var(--crimson); outline-offset: 2px; }
 
-/* ------------------------------------------------------------ helpers */
-
-/* Small grey capitals, the section markers used in the reference. */
 th {
   font-size: .7rem; font-weight: 700; text-transform: uppercase;
   letter-spacing: .07em; color: var(--label);
@@ -110,19 +94,12 @@ th {
 .empty { padding: 2rem 0; color: var(--label); }
 .muted { color: var(--text); opacity: .8; }
 .small { font-size: .8rem; }
-/* Seats available read as ordinary text; only a full section is coloured. */
 .open { font-weight: 600; }
 .code { font-family: var(--mono); white-space: nowrap; }
 
 .row { display: flex; gap: 1rem; align-items: center; flex-wrap: wrap; }
 .row.between { justify-content: space-between; }
 .row.center { justify-content: center; }
-
-/* The course-code badge. */
-
-/* The score block, right-aligned in the reference. */
-
-/* -------------------------------------------------------------- forms */
 
 .filters {
   display: flex; flex-wrap: wrap; gap: .9rem 1.1rem; align-items: flex-end;
@@ -152,10 +129,6 @@ th {
 
 textarea { width: 100%; font: .85rem/1.5 var(--mono); resize: vertical; }
 
-/* ------------------------------------------------------------- tables */
-
-/* Tables keep their shape, because comparison needs aligned columns, but
-   they sit on a white card like everything else. */
 table {
   width: 100%; border-collapse: collapse;
   background: var(--card); border: 1px solid var(--border); border-radius: 9px;
@@ -170,8 +143,6 @@ tbody tr:last-child td { border-bottom: none; }
 td a + a::before { content: ", "; color: var(--text); }
 td.empty { padding: 2.5rem 1rem; text-align: center; }
 
-/* ------------------------------------------------------------ notices */
-
 .notice {
   background: var(--crimson-l); border-left: 3px solid var(--crimson);
   padding: .9rem 1.1rem; border-radius: 0 7px 7px 0;
@@ -179,10 +150,6 @@ td.empty { padding: 2.5rem 1rem; text-align: center; }
 }
 .notice.warn { background: #fdf5e7; border-left-color: #b45309; color: #7c4a06; }
 .notice.warn strong { color: #7c4a06; }
-
-/* ------------------------------------------------------------ sidebar */
-
-/* ----------------------------------------------------------- calendar */
 
 .week {
   display: grid; grid-template-columns: 3.5rem repeat(5, 1fr);
@@ -207,24 +174,19 @@ td.empty { padding: 2.5rem 1rem; text-align: center; }
   border-radius: 5px; padding: .3rem .4rem; overflow: hidden; line-height: 1.25;
 }
 
-/* Base rule first: the phone rule below overrides it, and a rule that came
-   later in the file would silently win on the phone too. */
+/* Base rule first; the phone rule below overrides it. */
 nav .links { display: flex; gap: 2rem; align-items: center; }
 
 @media (max-width: 720px) {
-  /* The page line and its chevrons, read at arm's length. */
   .results-head .count { font-size: .92rem; }
   .pager-top .step, .pager .step { width: 1.75rem; height: 2.4rem; }
-  .pager-top .step + .step { margin-left: .6rem; }   /* thumbs need more room between the two than a mouse does */
+  .pager-top .step + .step { margin-left: .6rem; }   
   .pager-top .step svg, .pager .step svg { width: 19px; height: 19px; }
   .pager { gap: 1rem; }
-  .pager-top { margin: -.5rem 0 -.5rem .5rem; }   /* a clear space between the number and the first chevron */
+  .pager-top { margin: -.5rem 0 -.5rem .5rem; }   
   table { display: block; overflow-x: auto; }
   .filters input { min-width: 0; width: 100%; }
 
-  /* On a phone the banner is a slim strip: the wordmark at the left, which
-     is the way home, and Sign in / Account at the right. The page links go;
-     the home page's doors and the back arrows cover them. */
   nav { padding: 1rem 1rem .6rem; gap: .5rem; justify-content: space-between; }
   nav .brand { font-size: 1.3rem; margin-right: auto; }
   .brand-mark { height: 1.35em; }
@@ -232,10 +194,6 @@ nav .links { display: flex; gap: 2rem; align-items: center; }
   nav .links { gap: 0; }
   nav a.account-link { font-size: .8rem; letter-spacing: .05em; }
 }
-
-/* ============================================================== home */
-
-/* ============================================================ layout */
 
 .page-head { margin-bottom: 1.5rem; }
 .page-head.center, .center { text-align: center; }
@@ -268,8 +226,6 @@ nav .links { display: flex; gap: 2rem; align-items: center; }
   font-weight: 600; color: var(--text-h);
 }
 
-/* ============================================================= chart */
-
 .chart {
   height: 17rem; margin-bottom: 1.5rem;
   background: var(--card); border: 1px solid var(--border);
@@ -284,17 +240,13 @@ nav .links { display: flex; gap: 2rem; align-items: center; }
   position: absolute; inset: 0 0 1.5rem 0;
   display: flex; align-items: flex-end; justify-content: center; gap: 1.5rem;
 }
-/* Bars shrink rather than overflow: at 4rem fixed with a 1.5rem gap, seven
-   grade buckets needed 434px and ran off a 390px phone. The basis is still
-   4rem, so a wide screen looks exactly as it did. */
+/* Bars shrink instead of overflowing on a 390px phone. Basis stays 4rem so desktop is unchanged. */
 .chart-bar {
   flex: 0 1 4rem; min-width: 0; height: 100%; display: flex; flex-direction: column;
   justify-content: flex-end; position: relative;
 }
 @media (max-width: 520px) {
   .chart { padding-left: .5rem; padding-right: .5rem; }
-  /* Term and section stack instead of running off the edge: the section
-     option carries a professor's name, so it is far wider than the term. */
   .inline-form { display: flex; flex-wrap: wrap; width: 100%; }
   .inline-form select { flex: 1 1 100%; max-width: 100%; }
   .chart-bars { gap: .5rem; }
@@ -308,7 +260,6 @@ nav .links { display: flex; gap: 2rem; align-items: center; }
   animation: grow .45s cubic-bezier(.22, 1, .36, 1) both;
 }
 @keyframes grow { from { height: 0; } to { height: var(--h); } }
-/* Anyone who has asked the system to stop moving things gets the end state. */
 @media (prefers-reduced-motion: reduce) {
   .chart-fill { animation: none; }
 }
@@ -321,7 +272,6 @@ nav .links { display: flex; gap: 2rem; align-items: center; }
   text-align: center; font-size: .82rem; color: var(--text);
 }
 
-/* The three figures under a chart. */
 .stat-row {
   display: grid; gap: 1rem; margin-bottom: 1.75rem;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -331,11 +281,7 @@ nav .links { display: flex; gap: 2rem; align-items: center; }
   background: var(--card); border: 1px solid var(--border);
   border-radius: 9px; padding: 1rem 1.2rem; text-align: center;
 }
-/* Four coverage figures, which want the full width rather than the 30rem a
-   pair of chart figures sits in. */
 .stat-row.four { max-width: none; grid-template-columns: repeat(4, minmax(0, 1fr)); }
-/* The six grade figures as one continuous box: a strip on a desktop, two
-   rows of three on a phone, where only the labels wrap. */
 .stat-strip {
   display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: .5rem;
   background: var(--card); border: 1px solid var(--border); border-radius: 9px;
@@ -355,10 +301,6 @@ nav .links { display: flex; gap: 2rem; align-items: center; }
   letter-spacing: .07em; color: var(--label); margin-top: .2rem;
 }
 
-/* =================================================== professor search */
-
-/* The search box and its filters. A block that fills its width, so the
-   controls stay aligned however they wrap. */
 .search-bar {
   display: flex; justify-content: center; gap: .6rem;
   margin: 0 auto 1.5rem; flex-wrap: wrap;
@@ -390,7 +332,7 @@ nav .links { display: flex; gap: 2rem; align-items: center; }
 .class-grid {
   display: grid; gap: .7rem;
   grid-template-columns: repeat(auto-fill, 15.5rem);
-  grid-auto-rows: minmax(6rem, auto);   /* a fixed 6rem clipped any card with a gen-ed tag */
+  grid-auto-rows: minmax(6rem, auto);   /* a fixed 6rem clipped cards with a gen-ed tag */
 }
 .class-card {
   display: flex; flex-direction: column; gap: .3rem; overflow: hidden;
@@ -404,41 +346,25 @@ nav .links { display: flex; gap: 2rem; align-items: center; }
   font-size: .68rem; font-weight: 700; letter-spacing: .02em;
   background: var(--crimson); color: #fff; border-radius: 4px; padding: .16rem .45rem;
 }
-/* Clamped, so a long title cannot push one tile out of line with its
-   neighbours now that they share a fixed height. */
 .class-title {
   font-size: .92rem; font-weight: 600; color: var(--crimson); line-height: 1.3;
   display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;
   overflow: hidden;
-  /* overflow:hidden makes this a shrinkable flex item, and in a card that is
-     also overflow:hidden the title was the thing squeezed to nothing whenever
-     a gen-ed tag added a line below it. The clamp bounds it; flex must not. */
+  /* overflow:hidden makes this shrinkable and flex squeezed it to nothing; the clamp bounds it instead. */
   flex-shrink: 0;
 }
 .class-gpa { margin-top: auto; font-size: .78rem; color: var(--label); }
 .class-gpa strong { color: var(--text-h); }
 
-/* ==================================================== search bar + refine */
-
 .search-bar select {
   font: inherit; font-size: .92rem; font-weight: 600;
   padding: .8rem 1.1rem; border-radius: 999px;
   border: 1px solid var(--border); background: var(--card); color: var(--text-h);
-  /* Grows to share a row, but never stretches across the page when it is the
-     only thing that wrapped. */
   flex: 1 1 9rem; min-width: 0; max-width: 15rem;
 }
 
-/* Secondary controls: present, but visibly not the main event. */
-
-/* ========================================================= builder layout */
-
 .small-btn { font-size: .72rem; padding: .5rem 1.1rem; }
 
-/* Inside a grey panel the tables go white, so the rows stay legible. */
-
-/* The landing page is the wordmark and four doors, nothing else - so it sits in
-   the middle of the viewport rather than floating in the top quarter. */
 main:has(> .hero) {
   min-height: calc(100vh - 7rem);
   display: flex; flex-direction: column; justify-content: center;
@@ -456,31 +382,21 @@ main:has(> .hero) {
   .builder { grid-template-columns: 1fr; }
 }
 
-/* ============================================================ home page */
-
-/* Equal-width buttons: four destinations of equal standing should not be sized
-   by how long their names happen to be. */
 .home-buttons {
   display: grid; gap: 1rem; justify-content: center;
   grid-template-columns: repeat(auto-fit, minmax(14rem, 14rem));
 }
 .home-buttons .btn { padding: .95rem 1rem; font-family: var(--display); }
 
-
-/* ================================================== one-line filter row */
-
 .filters.one-line { gap: .75rem; align-items: flex-end; flex-wrap: nowrap; }
 .filters.one-line > * { min-width: 0; }
 .filters.one-line input, .filters.one-line select { min-width: 0; width: 100%; }
 
-/* Dropdowns are capped, or the longest designation takes a third of the row.
-   The text box is the one field that grows. */
 .filters.one-line label { flex: 0 1 9rem; }
 .filters.one-line select { text-overflow: ellipsis; }
 .filters.one-line .grow { flex: 3 1 16rem; }
 .filters input[type="checkbox"] { accent-color: var(--crimson); width: 1rem; height: 1rem; }
-/* The checkbox is a control, not a field, so it does not carry a label above
-   it - and without this it sat a whole label-height away from its neighbours. */
+/* The checkbox has no label above it, so without this it sat a label-height too low. */
 .filters input[type="checkbox"] { accent-color: var(--crimson); width: 1rem; height: 1rem; }
 .filters.one-line .check {
   flex: 0 0 auto; flex-direction: row; align-items: center; gap: .4rem;
@@ -493,15 +409,11 @@ main:has(> .hero) {
   .filters.one-line label { flex: 1 1 9rem; }
 }
 
-/* ==================================================== add-a-course cards */
-
 .section-cards {
   display: grid; gap: 1rem; margin-bottom: 1.5rem;
   grid-template-columns: 1fr;
 }
-/* overflow stays visible: a tooltip on a course code near the card's edge
-   must be free to hang past it. The rounded corners are kept by rounding the
-   first and last rows themselves instead. */
+/* overflow stays visible so tooltips can hang past the edge; rows round their own corners. */
 .section-card {
   position: relative;
   border: 1px solid var(--border); border-radius: 11px;
@@ -514,14 +426,11 @@ main:has(> .hero) {
 }
 .section-card > :last-child { border-bottom: none; }
 
-/* ---- the heading: what this is ---- */
 .sc-head {
   background: var(--card-soft); text-align: center;
   padding-right: 2.6rem; padding-left: 2.6rem;
   border-radius: 10px 10px 0 0;
 }
-/* Inline, so the link is the code itself and not the whole width of the
-   card's top row: hovering beside it should not offer the course. */
 .sc-code {
   display: inline-block; font-family: var(--mono);
   font-size: 1.25rem; font-weight: 700; color: var(--crimson);
@@ -537,13 +446,9 @@ main:has(> .hero) {
   color: var(--text-h); margin-top: .35rem; line-height: 1.3;
 }
 
-/* ---- when and where ---- */
 .sc-prof { margin: 0; text-align: center; font-size: 1rem; font-weight: 600; line-height: 1.7; }
 .sc-one { white-space: nowrap; }
-/* The third name's comma appears only once the fold after it is open. */
 .sc-comma-open:has(+ .sc-more[open])::after { content: ","; }
-/* Team-taught: three names, then a fold. Opened, it stays open - the fold is a
-   way in, not a toggle - and the summary reads as the last item in the row. */
 .sc-more { display: inline; }
 .sc-more summary { display: inline; cursor: pointer; color: var(--label); font-weight: 600; }
 .sc-more summary::-webkit-details-marker { display: none; }
@@ -559,19 +464,16 @@ main:has(> .hero) {
   font-size: .75rem; font-weight: 700;
   text-transform: uppercase; letter-spacing: .05em;
 }
-/* Which lecture a lab registers you into, or which labs a lecture takes. */
 .sc-pair {
   margin: .3rem 0 0; text-align: center;
   font-size: .8rem; color: var(--text); font-variant-numeric: tabular-nums;
 }
-/* "Lab required" on a lecture whose course needs a companion section. */
 .sc-req, .cart-kind {
   display: inline-block; padding: .12rem .5rem; border-radius: 999px;
   background: var(--card-soft); color: var(--label);
   font-size: .68rem; font-weight: 700; text-transform: uppercase; letter-spacing: .06em;
 }
 
-/* ---- the companion chooser ---- */
 .companion-note {
   margin: 0 0 .6rem; padding: .5rem .7rem; border-radius: 8px;
   background: var(--card-soft); color: var(--text);
@@ -593,12 +495,8 @@ main:has(> .hero) {
 .companion-seats { grid-column: 2; grid-row: 1 / span 3; align-self: center; font-size: .72rem; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; }
 .companion-seats.open { color: var(--ok, #2e7d32); }
 .companion-seats.full { color: var(--label); }
-/* White: the meeting details are the plain facts of the section, and tinting
-   them made a third band competing with the header and the prerequisites. */
 .sc-meet { background: var(--panel); }
 
-/* Mirrors the add control across the header. Reserved padding on both sides of
-   .sc-head already keeps the title clear of them. */
 .sc-units {
   position: absolute; top: .7rem; left: .8rem; z-index: 1;
   font-size: .68rem; font-weight: 700;
@@ -606,11 +504,8 @@ main:has(> .hero) {
   color: var(--label);
 }
 
-/* ---- prerequisites: registrar prose, so it needs room to breathe and a cap
-        so one long string cannot dwarf the rest of the card ---- */
 .sc-prereq { background: var(--card-soft); border-radius: 0 0 10px 10px; }
-/* No overflow cap here: it would clip the tooltip a course code raises. Cards
-   sit one per row, so a long prerequisite string costs height, not layout. */
+/* No overflow cap: it would clip the tooltip. */
 .sc-prereq p { margin: .3rem 0 0; font-size: .84rem; line-height: 1.45; }
 
 .sc-label {
@@ -618,11 +513,6 @@ main:has(> .hero) {
   letter-spacing: .07em; color: var(--label);
 }
 
-/* ---- the two figures, side by side so the comparison is immediate ---- */
-/* No rule above the figures: they belong with the section they describe, and a
-   line there split one thought into two. */
-/* Centred and narrow: the two numbers are read against each other, and a full
-   card width between them made that a saccade rather than a glance. */
 .sc-grades {
   display: flex; flex-wrap: wrap; gap: .6rem 2.5rem;
   justify-content: center; margin-top: .6rem;
@@ -634,37 +524,19 @@ main:has(> .hero) {
   font-variant-numeric: tabular-nums; line-height: 1.1;
 }
 
-/* ================================================ cards of equal height */
-
-/* auto-rows: 1fr makes every card in a row the same height whatever it holds,
-   so a professor with one class does not sit in a card half the size of one
-   with four. */
-
-/* ============================================================== paging */
-
-/* The foot of the list: a chevron either side of "12 / 311", the same
-   bare chevrons as at the head, so the two ends read as one control. */
 .pager { display: flex; justify-content: center; align-items: center; gap: .5rem; margin: 1.5rem 0 2rem; }
 .pager-at { font-size: .85rem; color: var(--label); font-variant-numeric: tabular-nums; }
-/* The head of the list: the count on the left, two chevron steps on the
-   right - the compact form of the pager at the foot, quiet enough to sit
-   beside a line of grey text and narrow enough to share a phone's width. */
 .results-head { display: flex; align-items: center; justify-content: flex-start; gap: 0; margin: 0 0 .75rem; }
 .results-head .count { margin: 0; font-variant-numeric: tabular-nums; display: inline-grid; white-space: nowrap; }
 .results-head .count > span { grid-area: 1 / 1; }
 .count-widest { visibility: hidden; }
-/* The site-wide nav rule caps a nav's width and centres it; this one is a pair of buttons at the row's end. */
 .pager-top { display: flex; gap: 0; flex-shrink: 0; max-width: none; padding: 0; }
-/* The row is as wide as the cards, and the chevrons sit in the column the
-   cards' own corner buttons (+) occupy, the same distance in from the edge. */
 .with-cart .results-head { max-width: 98%; }
 
-/* Bare chevrons. The buttons keep a 2rem tap target, but the negative
-   margin stops that height from opening the row: the cards start exactly
-   where they did when the row held only the count. */
-.pager-top { margin: -.5rem 0 -.5rem -.25rem; }   /* vertical: keeps the 2rem buttons from opening the row; left: eats most of the first button's inner inset so the chevron sits a word-space from the number */
+/* Bare chevrons with a 2rem tap target; the negative margin keeps the row from growing. */
+.pager-top { margin: -.5rem 0 -.5rem -.25rem; }   
 .pager-top .step, .pager .step {
-  width: 1.5rem; height: 2rem; padding: 0; display: grid; place-items: center;   /* narrow, so the pair reads as one control */
+  width: 1.5rem; height: 2rem; padding: 0; display: grid; place-items: center;   
   background: none; border: 0; border-radius: 7px; color: var(--crimson); cursor: pointer;
   transition: opacity .13s ease;
 }
@@ -672,11 +544,7 @@ main:has(> .hero) {
 .pager-top .step:focus-visible, .pager .step:focus-visible { outline: 2px solid var(--crimson); outline-offset: 0; }
 .pager-top .step:disabled, .pager .step:disabled { opacity: .3; color: var(--label); cursor: default; }
 
-/* A full section is a different answer from a nearly empty one, so it does not
-   share the neutral grey used for merely quiet fields. */
 .full { color: var(--crimson); font-weight: 700; }
-
-/* ============================================================== dialog */
 
 .modal {
   border: 1px solid var(--border); border-radius: 12px;
@@ -686,7 +554,7 @@ main:has(> .hero) {
 .modal::backdrop { background: rgb(0 0 0 / .35); }
 .modal-form { display: flex; flex-direction: column; gap: .9rem; padding: 1.5rem 1.6rem; }
 .modal-form h2 { margin: 0; font-size: 1.15rem; }
-.modal-form h2:focus { outline: none; }   /* it takes the focus when the dialog opens, so no field springs a keyboard or a picker */
+.modal-form h2:focus { outline: none; }   /* takes focus on open so no field springs a keyboard */
 .modal-form label {
   display: flex; flex-direction: column; gap: .35rem;
   font-size: .7rem; font-weight: 700; text-transform: uppercase;
@@ -700,8 +568,7 @@ main:has(> .hero) {
 }
 .modal-times { display: grid; grid-template-columns: 1fr 1fr; gap: .8rem; }
 
-/* The days a break applies to: a row of toggles, one per day, the box itself
-   kept for the keyboard and screen readers and the letter drawn as the switch. */
+/* Day toggles: the box is for keyboard and screen readers, the letter is the switch. */
 .days { border: none; margin: 0; padding: 0; min-width: 0; }
 .days legend {
   padding: 0; margin-bottom: .35rem;
@@ -725,13 +592,9 @@ main:has(> .hero) {
 .modal-actions { display: flex; justify-content: flex-end; gap: .6rem; margin-top: .3rem; }
 .modal-actions .btn { font-size: .75rem; padding: .6rem 1.3rem; }
 
-/* A remove control inside a table row: an action, not a destination. */
 td form { display: inline; }
 
-/* Floated over the heading's top-right corner. The heading text is centred, so
-   the button needs padding reserved for it or a long title runs underneath. */
-/* A bare glyph rather than a button-shaped thing: one character, in the card's
-   corner, that flips between adding and removing. */
+/* Floats over the heading's corner; the heading reserves padding for it. */
 .sc-corner {
   position: absolute; top: .3rem; right: .7rem; z-index: 1;
   font: inherit; font-size: 1.9rem; font-weight: 400; line-height: 1;
@@ -742,10 +605,6 @@ td form { display: inline; }
 .sc-corner:hover { color: var(--crimson-d); transform: scale(1.15); }
 .sc-corner:disabled { opacity: .4; cursor: default; transform: none; }
 
-/* ============================================================== links */
-
-/* Underlined at rest so it reads as a link, clean on hover so the pointer and
-   the darkening carry the affordance instead. */
 .link {
   color: var(--crimson); text-decoration: underline;
   text-underline-offset: .15em; text-decoration-thickness: 1px;
@@ -755,25 +614,17 @@ td form { display: inline; }
   text-decoration: none; color: var(--crimson-d);
 }
 
-/* =============================================================== cart */
-
-/* No align-items: start here. The cart column must STRETCH to the height of the
-   results beside it, because a sticky box can only travel inside its parent -
-   a content-height column gives it nowhere to go. */
-/* Chosen by eye (2026-09-12): the cards a touch short of their column. */
+/* No align-items: start. The column must stretch or the sticky box has nowhere to travel. */
 .with-cart { display: grid; grid-template-columns: minmax(0, 1fr) 21rem; gap: 1.5rem; }
 .with-cart .section-cards { max-width: 98%; }
 
 .cart {
   position: sticky; top: 1rem;
   display: flex; flex-direction: column;
-  /* Sized to its content, never taller than the viewport. A fixed 100vh left a
-     tall empty box with the button stranded at the bottom whenever the schedule
-     was short - which is most of the time. */
+  /* Sized to content, never taller than the viewport. 100vh stranded the button at the bottom. */
   max-height: calc(100vh - 2rem);
   background: var(--panel); border: 1px solid var(--border);
-  /* No overflow:hidden: it would make this the sticky footer's scrollport and
-     stop the footer sticking. The children round their own corners. */
+  /* No overflow:hidden: it would stop the footer sticking. Children round their own corners. */
   border-radius: 12px;
 }
 .cart-head {
@@ -787,13 +638,8 @@ td form { display: inline; }
   letter-spacing: .07em; color: var(--label);
 }
 
-/* The list is the only part that scrolls, so the heading and the button stay
-   put however long the schedule gets. */
-/* The list is the only part that scrolls, so the heading and the button stay
-   put however long the schedule gets. */
+/* Only the list scrolls. */
 .cart-body { flex: 1; min-height: 0; overflow-y: auto; padding: .8rem; }
-/* Directly below the list. No stickiness needed: the panel is only as tall as
-   its contents, so the button is never stranded away from them. */
 .cart-foot {
   flex: none; padding: .8rem;
   background: var(--panel); border-top: 1px solid var(--border);
@@ -812,7 +658,6 @@ td form { display: inline; }
 .cart-list li:last-child { border-bottom: none; }
 .cart-what { display: flex; align-items: baseline; gap: .5rem; }
 .cart-code { font-family: var(--mono); font-weight: 700; font-size: .92rem; color: var(--crimson); }
-/* A class's code is its course page; it looks the same until the mouse is on it. */
 
 .cart-sec, .cart-units { font-size: .68rem; font-weight: 700; text-transform: uppercase;
             letter-spacing: .05em; color: var(--label); }
@@ -828,24 +673,17 @@ td form { display: inline; }
 .cart-drop:hover { color: var(--crimson); }
 .cart-drop:disabled { opacity: .4; cursor: default; }
 
-/* ================================================= cart breaks + tabs */
-
 .cart-breaks {
   margin-top: .9rem; padding-top: .8rem; border-top: 1px solid var(--border);
   font-size: .78rem; color: var(--label);
 }
-/* First in the panel now, so it carries no rule above it - the divider belongs
-   between the two lists, not at the top of the box. */
 .cart-first { margin-top: 0; padding-top: 0; border-top: none; }
 .cart-courses { margin-top: .9rem; padding-top: .8rem; border-top: 1px solid var(--border); }
-/* With no breaks panel above it (a UOnline schedule), the list starts at the top. */
 .cart-body > .cart-courses:first-child { margin-top: 0; padding-top: 0; border-top: none; }
 .cart-breaks-head {
   display: flex; align-items: center; justify-content: space-between;
   gap: .5rem; margin-bottom: .4rem;
 }
-/* Nothing below it when no break is set, so the gap above the courses
-   divider should not grow. */
 .cart-breaks-head:last-child { margin-bottom: 0; }
 .cart-sub {
   font-size: .68rem; font-weight: 700; text-transform: uppercase;
@@ -864,8 +702,6 @@ td form { display: inline; }
 }
 .cart-dropbreak:hover { color: var(--crimson); }
 
-/* A bar fixed to the foot of the screen, the way a phone app switches views -
-   always reachable by thumb, and it does not scroll away with the content. */
 .tabs { display: none; }
 .tab {
   flex: 1; font: inherit; font-size: .78rem; font-weight: 700;
@@ -880,12 +716,7 @@ td form { display: inline; }
   border-radius: 999px; background: var(--crimson); color: #fff; font-size: .72rem;
 }
 
-/* Back to top: a small white disc with a red chevron, bottom-left so the
-   sticky cart on the right never covers it. Faded and inert until the page
-   has been scrolled a way down, then it rises in. */
 .to-top {
-  /* Outside the cards' left edge on a wide screen, and at the window's edge
-     when there is no room beside the column. */
   position: fixed; left: max(1.25rem, calc(50% - 42rem)); bottom: 1.25rem; z-index: 40;
   width: 2.75rem; height: 2.75rem; padding: 0; border-radius: 50%;
   display: grid; place-items: center;
@@ -903,51 +734,32 @@ td form { display: inline; }
 }
 
 @media (max-width: 900px) {
-  /* Safari's controls float over the foot of the page and collapse only when
-     the document itself scrolls, so a bar fixed to the bottom of the layout
-     viewport sits under them whenever they expand. So on the builder the
-     document does not scroll at all: the body is the scroller, sized to the
-     space the controls leave, and the bar is the last thing in the search
-     form, stuck to the foot of that scroller. */
+  /* Safari's controls float over the foot of the page, so on the builder the body is the scroller and the bar sticks to its foot. */
   html:has(.tabs) { height: 100dvh; overflow: hidden; }
   html:has(.tabs) body {
     height: 100dvh; overflow-y: auto; overscroll-behavior: contain;
     display: flex; flex-direction: column;
   }
   html:has(.tabs) header { flex: none; }
-  /* Without the footer the bar sits on the foot of the screen in every view.
-     With it, a short view - the schedule before anything is added - fits
-     whole, the footer shows beneath the bar and holds it higher than the
-     results view does. The line is on every other page still. */
   html:has(.tabs) footer { display: none; }
-  /* Both fill the height, so the bar reaches the foot when results are short.
-     A flex item with auto side margins would shrink to fit, hence the width. */
+  /* Both fill the height so the bar reaches the foot when results are short. */
   html:has(.tabs) main { flex: 1 0 auto; width: 100%; display: flex; flex-direction: column; padding-bottom: 0; }
   html:has(.tabs) #search { flex: 1 0 auto; display: flex; flex-direction: column; }
   .tabs {
     display: flex; position: sticky; bottom: 0; order: 99; z-index: 50;
-    /* Last in the form and pushed to its foot; edge to edge, out past the page's side padding. */
     margin: auto calc(50% - 50vw) 0;
     background: var(--panel); border-top: 1px solid var(--border);
     box-shadow: 0 -2px 12px rgb(0 0 0 / .08);
   }
-  /* Room at the foot of every other page, so the last of it can scroll up
-     clear of the browser's controls. */
+  /* Room at the foot so the end of the page clears the browser's controls. */
   main { padding-bottom: 5rem; }
-  /* A link that lands on the chart puts its foot at the foot of the screen -
-     which on a phone is under the browser's floating controls. This much
-     clear of the bottom keeps the whole chart, axis labels included, above
-     them. */
+  /* A link that lands on the chart keeps the whole chart above the browser's controls. */
   #grades { scroll-margin-bottom: 5.5rem; }
-  /* No back-to-top disc on a phone: the tab bar already owns the bottom
-     edge, and a flick of the thumb gets to the top. */
   .to-top { display: none; }
   .with-cart { grid-template-columns: 1fr; }
-  /* The filters drive the results, so they belong to that tab alone. */
   form.on-cart .filters { display: none; }
   .cart { position: static; height: auto; max-height: none; }
-  /* Only the chosen tab is in the document; the other is not merely hidden,
-     so a long results list cannot scroll past an off-screen panel. */
+  /* Only the chosen tab is in the document, so a long list can't scroll past the other. */
   .with-cart.show-results #cart-slot { display: none; }
   .with-cart.show-cart #results { display: none; }
 }
@@ -959,9 +771,6 @@ td form { display: inline; }
   max-width: 40rem;
 }
 
-/* A prerequisite course code, hoverable for its full title. Tinted and
-   underlined so it reads as interactive at a glance rather than only once the
-   pointer happens to land on it. */
 .course-ref {
   position: relative;
   display: inline-block;
@@ -969,21 +778,17 @@ td form { display: inline; }
   color: var(--crimson);
   font-weight: 600;
   cursor: pointer;
-  /* On a phone the first tap opens the tooltip rather than following the link,
-     so the browser's own grey flash over the code is the only other thing
-     that happens, and it reads as a stray box. The tooltip is the feedback. */
+  /* On a phone the first tap opens the tooltip, so the browser's grey flash is turned off. */
   -webkit-tap-highlight-color: transparent;
 }
 
 .course-ref:hover, .course-ref:focus-visible { text-decoration: underline; }
 
-/* Drawn here rather than by the browser: the native title attribute waits about
-   a second, which is long enough that most people never discover it. */
+/* Drawn here: the native title tooltip is too slow to discover. */
 .course-ref::after {
   content: attr(data-title);
   position: absolute; bottom: calc(100% + .35rem); left: 50%;
-  /* Centred on the code, then nudged by however much the script finds it
-     hanging off the screen - a bubble on a code near the edge would be cut. */
+  /* Centred on the code; the script nudges it in if it would hang off screen. */
   transform: translateX(calc(-50% + var(--tip-shift, 0px)));
   display: none; z-index: 30;
   padding: .35rem .6rem; border-radius: 6px;
@@ -995,13 +800,10 @@ td form { display: inline; }
 }
 .course-ref:hover::after, .course-ref:focus-visible::after, .course-ref.open::after { display: block; }
 
-/* The professor cards stack one per row. */
 #results .prof-card + .prof-card { margin-top: 1rem; }
 
-/* The week grid needs room for a block's label and time. */
 .week .hour, .week .cell { height: 3rem; }
-/* Six columns in 390px: three-letter days, and a block's text may not
-   push its column wider. */
+/* Six columns in 390px; a block's text may not widen its column. */
 .week .head { padding: .6rem .15rem; letter-spacing: .03em; }
 .week .day-long { display: none; }
 .week .day-short { display: inline; }
@@ -1009,16 +811,12 @@ td form { display: inline; }
 .week .col { min-height: 0; }
 .block-label { display: block; font-weight: 700; font-size: .72rem; }
 .block-time { display: block; font-size: .66rem; opacity: .85; }
-/* Breaks are the constraint, not the content, so they read as a backdrop. */
 .block-break {
   background: var(--label); color: #fff;
 }
 .clash-list { margin: .4rem 0 0; padding-left: 1.1rem; font-size: .85rem; }
 .clash-list li { margin: .15rem 0; }
 
-/* A clash has to be distinguishable from an ordinary block, and the ordinary
-   block is already crimson - so conflicts get a brighter red plus an outline,
-   which reads as wrong rather than merely as another class. */
 .block-clash {
   background: #ef3b2f;
   outline: 2px solid #7a0000;
@@ -1028,44 +826,31 @@ td form { display: inline; }
 .cart-clash { background: var(--crimson-l); }
 .cart-clash .cart-code { color: var(--crimson-d); }
 
-/* The panel on a course page is prose, so its codes need a little more air
-   between lines than the tighter card layout does. */
 .prereq-prose { line-height: 1.8; }
 
-/* At full width the links keep their original spacing; the wrapper is only
-   there so the narrow layout has something to distribute. */
+/* Wrapper only so the narrow layout has something to distribute. */
 
 .prof-dept {
   margin: -.4rem 0 .7rem; font-size: .78rem; color: var(--label);
 }
-/* Below this the three controls stop competing for one line: the box takes
-   the full width and the two filters share the row beneath it. */
 @media (max-width: 560px) {
   .search-bar { gap: .5rem; }
   .search-bar input { flex: 1 1 100%; }
   .search-bar select { flex: 1 1 0; }
 }
 
-/* Heading and the one line that qualifies it - which term, how many results. */
 .page-head { margin-bottom: 1.5rem; }
-/* Page titles in the display face, like the wordmark: a little larger,
-   tighter, and unmistakably the top of the page. */
 .page-head h1 {
   margin: 0; font-family: var(--display); font-weight: 800;
   font-size: 1.8rem; letter-spacing: -.02em; line-height: 1.15;
 }
 .page-sub { margin: .3rem 0 0; font-size: .9rem; color: var(--label); }
-/* A clear gap after the "MATH 1310:" code, wider than a bare space. */
 .page-sub .ps-title { margin-left: .4em; }
-/* A heading that opens with a round letter looks indented beside a straight
-   one below it, though the ink lines up; a pixel to the left settles the eye. */
+/* A round first letter looks indented; a pixel left fixes it. */
 .page-head h1.round-start { margin-left: -1px; }
 
-/* A back arrow on the heading's line: quiet until hovered. Every page with a
-   way back uses this one, as a link or as a history.back() button. */
 .page-head-back { display: flex; align-items: center; gap: .6rem; }
-/* An action beside the title block, its foot on the subtitle's line: the
-   subtitle carries a 1rem bottom margin, so the button carries the same. */
+/* Action beside the title, its foot on the subtitle's line. */
 .page-head .head-row { display: flex; align-items: flex-end; flex-wrap: wrap; gap: .5rem 1.25rem; flex: 1 1 auto; }
 .page-head .head-action { white-space: nowrap; margin-bottom: 1rem; margin-left: auto; }
 .back-arrow {
@@ -1076,17 +861,8 @@ td form { display: inline; }
 }
 .back-arrow:hover { color: var(--crimson); text-decoration: none; }
 
-/* The opening line of a page of prose - larger than the body, still quiet. */
-
-/* ================================================= course lookup results */
-
-/* One course per bar - code, title, average - not the tiles the
-   professor cards use. A lookup reads like a list, not a gallery. */
 .course-list { list-style: none; margin: 0; padding: 0; }
 .course-list li + li { border-top: 1px solid var(--border); }
-/* Code, title, average - one line at every width. The code column sizes to
-   its content rather than a fixed 8rem, so on a phone the title keeps the
-   room it needs and truncates rather than the row breaking into three. */
 .course-row {
   display: grid; align-items: baseline; gap: 1rem;
   grid-template-columns: max-content minmax(0, 1fr) auto;
@@ -1100,11 +876,9 @@ td form { display: inline; }
 @media (max-width: 640px) {
   .course-row { gap: .6rem; padding: .7rem .15rem; }
   .course-code { font-size: .85rem; }
-  /* Wrapped rather than cut off with an ellipsis: on a phone most titles do not fit one line. */
+  /* Wrapped, not cut off: most titles don't fit one line on a phone. */
   .course-title { font-size: .92rem; white-space: normal; overflow: visible; text-overflow: clip; line-height: 1.3; }
 }
-
-/* ====================================================== account pages */
 
 .account { max-width: 24rem; }
 .account label {
@@ -1126,19 +900,14 @@ label.check {
 .errors ul { margin: .6rem 0 0; padding-left: 1.1rem; color: var(--crimson); font-size: .9rem; }
 .btn.danger { color: var(--crimson); border-color: var(--crimson); background: transparent; }
 
-/* Sign-in providers above the email form, then "or use email". */
 .providers { margin: .25rem 0 0; }
 .providers form { margin: .5rem 0; }
 .btn.provider { display: block; width: 100%; text-align: center; }
 .small { font-size: .85rem; }
 .providers + .small { text-align: center; margin-top: .75rem; }
 
-/* ====================================================== the account page */
-
 .account-page { max-width: 32rem; margin: 0 auto; text-align: center; }
 .account-row { margin: 1.25rem 0 2.25rem; }
-/* Deleting the account is a real action but a rare one: a closed disclosure
-   at the foot of the page, not a red box competing with the schedule. */
 .account-danger { border-top: 1px solid var(--border); padding-top: 1.1rem; }
 .account-danger summary {
   cursor: pointer; list-style: none; display: inline-flex; gap: .4rem; align-items: center;
@@ -1151,19 +920,15 @@ label.check {
 .account-danger p { margin: .25rem 0 .75rem; }
 .account-danger .btn { margin-top: .9rem; }
 
-/* A phone with six columns: a block is about 40px wide, so the label must be
-   small enough that "CHIN" fits on a line of its own. */
+/* Six columns on a phone: the label must be small enough that "CHIN" fits. */
 @media (max-width: 480px) {
   .week .block { padding: .2rem .2rem; }
   .block-label { font-size: .64rem; }
   .block-time { font-size: .56rem; }
 }
 
-/* ---------------------------------------------------- the schedule home */
 .schedules { max-width: 46rem; margin: 0 auto; }
 .sched-empty { text-align: center; color: var(--label); margin: 2rem 0; }
-/* Nothing yet: a dashed placeholder the size of a row or two, holding the
-   one action, so the page never shows a button floating over blank space. */
 .sched-none {
   text-align: center; padding: 2.4rem 1.5rem;
   border: 1.5px dashed var(--border); border-radius: 12px;
@@ -1171,12 +936,8 @@ label.check {
 .sched-none-title { margin: 0 0 .3rem; font-weight: 700; color: var(--text-h); }
 .sched-none-sub { margin: 0 0 1.1rem; font-size: .9rem; color: var(--label); }
 
-/* The section bar: a small label left, the one action right. */
-/* The action sits on the card's left edge, just above it. */
 .sched-bar { margin: 0 0 .7rem; }
 
-/* The whole row is the way in, with a quiet lift under the pointer. Only the
-   menu at the right sits outside it. */
 .sched-list {
   list-style: none; margin: 0; padding: 0;
   background: var(--card); border: 1px solid var(--border); border-radius: 12px;
@@ -1195,7 +956,7 @@ label.check {
   width: 100%; padding: .95rem 1.1rem; text-align: left;
   font: inherit; color: inherit; background: none; border: none; cursor: pointer; text-decoration: none;
 }
-.sched-hit:hover, .sched-hit:focus { text-decoration: none; }   /* a link's hover underline would streak the whole row */
+.sched-hit:hover, .sched-hit:focus { text-decoration: none; }   
 .sched-hit:focus-visible { outline: 2px solid var(--crimson); outline-offset: -2px; border-radius: inherit; }
 .sched-dot {
   width: .55rem; height: .55rem; border-radius: 50%;
@@ -1209,7 +970,6 @@ label.check {
 .sched-actions { display: flex; align-items: center; padding-right: .6rem; }
 .sched-actions form { margin: 0; }
 
-/* The row menu: a details element drawn as a small popover, so it needs no script. */
 .row-menu { position: relative; }
 .row-menu summary {
   list-style: none; cursor: pointer; width: 2rem; height: 2rem; border-radius: 999px;
@@ -1233,18 +993,13 @@ label.check {
 .link-btn:hover { color: var(--crimson); }
 .link-btn.danger:hover { color: #9a3412; }
 
-/* The line under Export to calendar: quiet, and no wider than a sentence. */
 .ics-note { max-width: 26rem; margin-left: auto; margin-right: auto; font-size: .85rem; line-height: 1.45; }
 
-/* =================================================== phones: readability */
 @media (max-width: 720px) {
-  /* The smallest labels come up to a readable size. */
   .sc-label, .sc-section, .sc-units, .unit, .class-code { font-size: .72rem; }
   .week .hour { font-size: .72rem; }
 
-  /* The built schedule's table reads as stacked rows instead of scrolling
-     sideways: no header row, and each class as one wrapping line -
-     "CS 2420 · 001 · Daniel Kopta · TuTh/02:00PM-03:20PM · WEB L103". */
+  /* The built schedule's table becomes stacked rows on a phone: no header, one wrapping line per class. */
   table { display: block; overflow: visible; }
   thead { display: none; }
   tbody { display: block; }

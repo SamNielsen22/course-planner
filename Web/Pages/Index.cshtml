@@ -10,7 +10,6 @@
     <h1>Find a Course</h1>
 </div>
 
-@* The results are replaced as you type. Submitting still works without scripting. *@
 <form method="get" id="search">
     <div class="search-bar">
         <input name="q" value="@Model.Q" placeholder="CS 2420, calculus, ACCTG&hellip;"
@@ -18,7 +17,6 @@
         <noscript><button type="submit">Search</button></noscript>
     </div>
 
-    @* Inside the form, so the pager submits through it. *@
     <div id="results">
         <partial name="_CourseResults" model="Model"/>
     </div>
@@ -33,30 +31,24 @@
 
     async function refresh() {
         const params = new URLSearchParams(new FormData(form));
-        // Page is tracked here rather than in a hidden input: the pager buttons
-        // are also named "page", so form.elements['page'] returns a list of
-        // three and assigning to it does nothing at all.
+        // Page is tracked here: the pager buttons are also named "page", so a hidden input can't be set.
         params.set('pg', page);
         const mine = ++latest;
         const response = await fetch('?handler=Rows&' + params, {
             headers: { 'X-Requested-With': 'fetch' }
         });
-        // Responses can land out of order; only the newest may paint.
+        // Responses can land out of order; only the newest paints.
         if (!response.ok || mine !== latest) return;
         results.innerHTML = await response.text();
         history.replaceState(null, '', '?' + params);
     }
 
-    // Any change to the search itself starts again from the first page.
     form.addEventListener('input', function () {
         page = 1;
         clearTimeout(timer);
         timer = setTimeout(refresh, 180);
     });
-    // 'change' is for the selects and checkboxes. On the text box it also fires
-    // on blur - i.e. the mousedown of a click on a result - which re-rendered the
-    // results between mousedown and mouseup and ate the click. Typing is
-    // already covered by 'input'.
+    // 'change' is for selects and checkboxes. On the text box it fires on blur too, which ate clicks on results; typing is covered by 'input'.
     form.addEventListener('change', function (event) {
         if (event.target.name === 'q') return;
         page = 1; refresh();

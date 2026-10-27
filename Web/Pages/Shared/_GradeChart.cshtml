@@ -1,8 +1,6 @@
 @model CoursePlanner.Data.GradeDistribution
 @{
-    // An empty bucket is not a result, it is an absence. Dropping it keeps the
-    // chart to the outcomes that actually happened, and stops CR/NC occupying
-    // half the width of every course that never used them.
+    // Empty buckets are dropped, so CR/NC don't take half the width of courses that never used them.
     var bars = Model.Bars.Where(b => b.Count > 0).ToList();
     var peak = bars.Count == 0 ? 0 : bars.Max(b => b.Count);
     var step = peak switch
@@ -26,8 +24,7 @@ else
 {
     <div class="chart">
         <div class="chart-plot">
-            @* The lines sit above their tick to clear the axis band, which would put
-               the ceiling's line above the card; the plot's top edge needs none. *@
+            @* Lines sit above their tick to clear the axis band; the top edge needs none. *@
             @foreach (var tick in ticks.Where(t => t < ceiling))
             {
                 <div class="chart-grid" style="bottom: @(tick * 100.0 / ceiling)%"></div>
@@ -36,8 +33,7 @@ else
                 @foreach (var (label, count) in bars)
                 {
                     <div class="chart-bar" title="@label: @count">
-                        @* The height is a custom property the animation grows into, so a
-                           redraw reads as the same bars moving. *@
+                        @* Height is a custom property the animation grows into, so a redraw reads as the same bars moving. *@
                         <div class="chart-fill" style="--h: @(count * 100.0 / ceiling)%">
                             <span class="chart-value">@count</span>
                         </div>

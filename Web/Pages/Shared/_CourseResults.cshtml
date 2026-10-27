@@ -40,7 +40,6 @@ else
     </ul>
     @if (Model.LastPage > 1)
     {
-        @* The same chevrons as the builder's lists, either side of the page. *@
         <nav class="pager" aria-label="Pages">
             <button type="submit" name="pg" value="@(Model.Page - 1)" class="step"
                     disabled="@(!Model.HasPrevious)" aria-label="Previous page">

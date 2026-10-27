@@ -1,8 +1,6 @@
 @model Web.Pages.BuilderAddModel
 @inject Web.Pages.PrereqMarkup Prereqs
 
-@* The companion choices for this page's required lectures, so the chooser opens
-   with no round trip. Rebuilt with the results on every search. *@
 <script id="companion-data" type="application/json">@Html.Raw(Model.CompanionData)</script>
 
 @if (Model.Total == 0)
@@ -11,16 +9,14 @@
 }
 else
 {
-    @* A head only when there is more than one page. *@
     @if (Model.LastPage > 1)
     {
     <div class="results-head">
-        @* An unseen copy of the widest form holds the width, so the chevrons never move. *@
+        @* An unseen copy of the widest form holds the width so the chevrons never move. *@
         <p class="count">
             <span>Page @Model.Page of @Model.LastPage</span>
             <span class="count-widest" aria-hidden="true">Page @Model.LastPage of @Model.LastPage</span>
         </p>
-        @* The same steps as at the foot, compact enough for one line on a phone. *@
             <nav class="pager-top" aria-label="Pages">
                 <button type="submit" name="pg" value="@(Model.Page - 1)" class="step"
                         disabled="@(!Model.HasPrevious)" aria-label="Previous page">
@@ -38,7 +34,6 @@ else
         @foreach (var s in Model.Results)
         {
             <article class="section-card">
-                @* Add or remove, in the card's corner. *@
                 @{ var key = $"{Model.Term}|{s.Subject}|{s.CourseNumber}|{s.SectionNumber}"; }
                 @if (Model.Picked.Contains(key))
                 {
@@ -49,7 +44,6 @@ else
                 }
                 else if (s.RequiresCompanion)
                 {
-                    @* Adding a lecture opens a chooser for its required section. *@
                     <button class="sc-corner add-section add-pair" type="button"
                             title="Add this class and choose its @s.CompanionKind"
                             aria-label="Add @s.Subject @s.CourseNumber section @s.SectionNumber and choose its @s.CompanionKind"
@@ -79,7 +73,6 @@ else
                     <span class="sc-title">@s.Title</span>
                 </div>
 
-                @* Who teaches it, with their figures directly underneath. *@
                 <div class="sc-row">
                     <div class="sc-prof">
                         @if (s.Instructors.Count == 0)
@@ -88,7 +81,6 @@ else
                         }
                         else
                         {
-                            @* Everyone teaching it, as prose. Past three, the rest fold behind "and N more". *@
                             var total = s.Instructors.Count;
                             var shown = s.Instructors.Take(3).ToList();
                             var rest = s.Instructors.Skip(3).ToList();
@@ -116,7 +108,6 @@ else
                         }
                     </div>
 
-                    @* The course average, then each professor's, up to three. *@
                     <div class="sc-grades">
                         <div class="sc-fig">
                             <span class="sc-label">Course average</span>
@@ -143,13 +134,10 @@ else
                 </div>
 
                 <div class="sc-row sc-meet">
-                    @* A lecture whose course has a required lab, discussion or field-work
-                       section. The section itself is chosen in the popup when the class is added. *@
                     @if (s.RequiresCompanion)
                     {
                         <p class="sc-pair"><span class="sc-req">@(char.ToUpper(s.CompanionKind![0]) + s.CompanionKind[1..]) required</span></p>
                     }
-                    @* UOnline sections never meet at an hour or in a room. *@
                     @if (s.Campus != "online")
                     {
                         <p class="sc-when">
@@ -170,7 +158,6 @@ else
                                 }
                                 else
                                 {
-                                    @* Full: how many are waiting, and whether a wait list exists. *@
                                     <text>Full</text>
                                     @if (s.Waitlist is { } waiting && (waiting > 0 || s.HasWaitlist != false))
                                     {
@@ -186,7 +173,6 @@ else
                     </p>
                 </div>
 
-                @* The registrar's own prerequisite text, verbatim. *@
                 <div class="sc-row sc-prereq">
                     <span class="sc-label">Prerequisites</span>
                     @if (string.IsNullOrWhiteSpace(s.Prerequisites))
@@ -195,7 +181,7 @@ else
                     }
                     else
                     {
-                        @* Prerequisite links keep the builder's view of the course page too. *@
+                        @* Prerequisite links keep the builder's view of the course page. *@
                         <p>@Prereqs.Annotate(s.Prerequisites, "from=prereq")</p>
                     }
                 </div>
@@ -206,7 +192,6 @@ else
 
     @if (Model.LastPage > 1)
     {
-        @* The foot of the list: the same chevrons as the head, either side of the page. *@
         <nav class="pager" aria-label="Pages">
             <button type="submit" name="pg" value="@(Model.Page - 1)" class="step"
                     disabled="@(!Model.HasPrevious)" aria-label="Previous page">

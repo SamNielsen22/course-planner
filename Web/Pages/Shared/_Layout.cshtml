@@ -6,9 +6,7 @@
     <meta charset="utf-8"/>
     <meta name="viewport" content="width=device-width, initial-scale=1"/>
     <meta name="theme-color" content="#ffffff"/>
-    @* Public pages carry their own title; personal ones read the site's name. *@
     <title>@(ViewData["NoIndex"] is null && ViewData["Title"] is string title ? title : "Utah Course Compass")</title>
-    @* What a search engine shows: the description, the canonical address, and noindex on personal pages. *@
     @if (ViewData["Description"] is string description)
     {
         <meta name="description" content="@description"/>
@@ -20,18 +18,16 @@
     {
         <link rel="canonical" href="@($"{Context.Request.Scheme}://{Context.Request.Host}{canonical}")"/>
     }
-    @* Unlisted, a page may still opt in by setting Listed: the front page and About do. *@
+    @* Unlisted, a page may still opt in with Listed: the front page and About do. *@
     @if (ViewData["NoIndex"] is true || (Unlisted.Yes && ViewData["Listed"] is not true))
     {
         <meta name="robots" content="noindex"/>
     }
-    @* The compass rose. Browsers pick the size they want; iOS takes the padded one. *@
     <link rel="icon" href="/favicon.ico" sizes="48x48 32x32 16x16" asp-append-version="true"/>
     <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png" asp-append-version="true"/>
     <link rel="icon" type="image/png" sizes="192x192" href="/favicon-192x192.png" asp-append-version="true"/>
     <link rel="icon" type="image/png" sizes="512x512" href="/favicon-512x512.png" asp-append-version="true"/>
     <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png" asp-append-version="true"/>
-    @* Plus Jakarta Sans. Two weights, swapped in so text shows in the fallback first. *@
     <link rel="preconnect" href="https://fonts.googleapis.com"/>
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
     <link rel="stylesheet"
@@ -51,7 +47,6 @@
             <a asp-page="/Instructors">Professors</a>
             @if (Accounts.Enabled)
             {
-                @* Signed in: the account page. Otherwise straight to Google. *@
                 @if (User.Identity?.IsAuthenticated == true)
                 {
                     <a class="account-link" asp-page="/Account/Index">Account</a>
@@ -74,14 +69,13 @@
     <p>Utah Course Compass &middot; Not affiliated with the University of Utah.</p>
 </footer>
 
-@* The search box takes focus on desktop only: on a phone it would raise the
-   keyboard. The caret goes after any restored text. *@
+@* Search box takes focus on desktop only; on a phone it would raise the keyboard. *@
 <script>
 (function () {
     const desktop = matchMedia('(hover: hover) and (pointer: fine) and (min-width: 721px)');
     function focusSearch() {
         const box = document.querySelector('input[data-autofocus]');
-        // A page can decline the focus for one arrival: the builder does, opened from a course.
+        // A page can decline the focus once: the builder does, opened from a course.
         if (!box || box.dataset.autofocus === 'off' || !desktop.matches) return;
         box.focus({ preventScroll: true });
         if (!box.value) return;
@@ -92,12 +86,9 @@
     window.addEventListener('pageshow', focusSearch);
 })();
 </script>
-@* On a touch screen a course code shows its title on the first tap and
-   follows the link on the second. Delegated, so swapped-in cards get it too. *@
+@* On touch, a course code shows its title on the first tap and follows the link on the second. Delegated so swapped-in cards get it too. *@
 <script>
 (function () {
-    // The bubble is centred on the code; when that would hang off the screen,
-    // it is nudged back in by exactly the overhang.
     function keepOnScreen(ref) {
         ref.style.removeProperty('--tip-shift');
         const width = parseFloat(getComputedStyle(ref, '::after').width) || 0;
@@ -119,12 +110,7 @@
     });
 })();
 </script>
-@* A link can name the part of the page it is about - land=grades from the
-   builder - and on a phone the page opens on it, however that part asks to
-   land: the chart with its foot at the foot of the screen, everything above
-   it in view. A query rather than a fragment, because a fragment makes the
-   browser scroll by itself, on every device, after this has run. Once now
-   and once when everything has loaded, in case a late font moved things. *@
+@* land=grades opens the page on the chart with its foot at the foot of the screen. A query, not a fragment, because a fragment makes the browser scroll on its own. Run once now and once after load in case a late font moved things. *@
 <script>
 (function () {
     if (!matchMedia('(max-width: 900px)').matches) return;

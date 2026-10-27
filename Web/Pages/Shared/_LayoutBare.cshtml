@@ -1,4 +1,3 @@
-@* For the landing page, which carries its own wordmark instead of the banner. *@
 @inject Web.Unlisted Unlisted
 <!DOCTYPE html>
 <html lang="en">
@@ -6,9 +5,7 @@
     <meta charset="utf-8"/>
     <meta name="viewport" content="width=device-width, initial-scale=1"/>
     <meta name="theme-color" content="#ffffff"/>
-    @* Public pages carry their own title; personal ones read the site's name. *@
     <title>@(ViewData["NoIndex"] is null && ViewData["Title"] is string title ? title : "Utah Course Compass")</title>
-    @* What a search engine shows: the description, the canonical address, and noindex on personal pages. *@
     @if (ViewData["Description"] is string description)
     {
         <meta name="description" content="@description"/>
@@ -20,18 +17,16 @@
     {
         <link rel="canonical" href="@($"{Context.Request.Scheme}://{Context.Request.Host}{canonical}")"/>
     }
-    @* Unlisted, a page may still opt in by setting Listed: the front page and About do. *@
+    @* Unlisted, a page may still opt in with Listed: the front page and About do. *@
     @if (ViewData["NoIndex"] is true || (Unlisted.Yes && ViewData["Listed"] is not true))
     {
         <meta name="robots" content="noindex"/>
     }
-    @* The compass rose. Browsers pick the size they want; iOS takes the padded one. *@
     <link rel="icon" href="/favicon.ico" sizes="48x48 32x32 16x16" asp-append-version="true"/>
     <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png" asp-append-version="true"/>
     <link rel="icon" type="image/png" sizes="192x192" href="/favicon-192x192.png" asp-append-version="true"/>
     <link rel="icon" type="image/png" sizes="512x512" href="/favicon-512x512.png" asp-append-version="true"/>
     <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png" asp-append-version="true"/>
-    @* Plus Jakarta Sans. Two weights, swapped in so text shows in the fallback first. *@
     <link rel="preconnect" href="https://fonts.googleapis.com"/>
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
     <link rel="stylesheet"
@@ -47,8 +42,7 @@
     <p>Utah Course Compass &middot; Not affiliated with the University of Utah.</p>
 </footer>
 
-@* The search box takes focus on desktop only: on a phone it would raise the
-   keyboard. The caret goes after any restored text. *@
+@* Search box takes focus on desktop only; on a phone it would raise the keyboard. *@
 <script>
 (function () {
     const desktop = matchMedia('(hover: hover) and (pointer: fine) and (min-width: 721px)');

@@ -7,7 +7,6 @@
     ViewData["Canonical"] = Model.Canonical;
 }
 
-@* Back to wherever you came from, rather than a fixed page. *@
 <div class="page-head page-head-back">
     <button type="button" class="back-arrow" onclick="history.back()" aria-label="Back" title="Back">&larr;</button>
     <div class="head-row">
@@ -20,7 +19,6 @@
         </div>
         @if (Model.FromPrerequisite)
         {
-            @* A prerequisite followed from the builder: the way back is a search for it. *@
             <a class="btn small-btn head-action" asp-page="/BuilderAdd" asp-route-q="@($"{Model.Subject} {Model.Number}")" asp-route-from="course">Search in schedule builder</a>
         }
     </div>
@@ -52,8 +50,6 @@
     </section>
 </div>
 
-@* The term and section filters, only when the course has grades to filter.
-   Every term is pooled by default; one term alone is often a single small section. *@
 @if (Model.Terms.Count > 0)
 {
 <form method="get" class="inline-form">
@@ -68,8 +64,6 @@
             <option value="@t" selected="@(t == Model.Term)">@Terms.Display(t)</option>
         }
     </select>
-    @* The section picker, listed by professor. Live once a term is picked,
-       and hidden for visitors from the builder. *@
     @if (!Model.ShowSections)
     {
     }
@@ -101,19 +95,15 @@
 </form>
 }
 
-@* The builder's course links land here, the chart's foot at the foot of the screen. *@
 <div id="grades" data-land="end">
     <partial name="_GradeChart" model="Model.Grades"/>
 </div>
 
 @if (Model.Grades.Any)
 {
-    @* Published figures for a term or a section; pooled across terms until the
-       registrar's own all-terms row exists. *@
     <partial name="_GradeStats" model="Model.Grades"/>
 
-    @* The average counts every student, the bars only groups of five or more.
-       Far apart means the chart is missing grades, so say so. *@
+    @* The average counts every student, the bars only groups of five or more. If they're far apart, say so. *@
     @if (Model.Grades.HasHiddenGrades)
     {
         <p class="note">
