@@ -1,6 +1,9 @@
 using System.Net;
 using System.Text;
 using HtmlAgilityPack;
+using Microsoft.AspNetCore.DataProtection;
+using Microsoft.AspNetCore.Mvc.Testing;
+using Microsoft.Extensions.DependencyInjection;
 using Web.Pages;
 using Web.Schedule;
 
@@ -327,16 +330,33 @@ public class ScheduleTests(Site site) : IClassFixture<Site>
     }
 
     [Fact]
-    public async Task OneTermPerSchedule()
+    public async Task EachTermKeepsItsOwnSchedule()
     {
         var current = site.Catalogue.Timed(Term);
         var other = site.Catalogue.One("term <> @term AND times LIKE '%/%'", new { term = Term });
         var visitor = site.Visitor();
         await visitor.Add(current);
         await visitor.Add(other);
-        Assert.Equal([other.Code], await visitor.Cart());   // the newer add starts a new schedule
+        // The builder follows the newer add to its term, whose schedule is its own.
+        Assert.Equal([other.Code], await visitor.Cart());
         var doc = await visitor.Page("/BuilderSchedule");
         Assert.Equal(Terms.Display(other.Term), doc.DocumentNode.SelectSingleNode("//p[@class='page-sub']")?.InnerText.Trim());
+        // Back on the first term, its class is still there.
+        await Browse(visitor, "main", Term);
+        Assert.Equal([current.Code], await visitor.Cart());
+    }
+
+    [Fact]
+    public async Task ACookieFromBeforePerTermSchedulesStillReads()
+    {
+        // The one list those cookies held becomes the schedule of the term it was built in.
+        var s = site.Catalogue.Timed(Term);
+        var old = site.Services.GetRequiredService<IDataProtectionProvider>().CreateProtector("Web.Schedule.v1")
+            .Protect($$"""{"S":["{{s.Term}}|{{s.Subject}}|{{s.Number}}|{{s.Number2}}"],"B":[],"T":"{{s.Term}}","C":"main"}""");
+        var client = site.CreateClient(new WebApplicationFactoryClientOptions { HandleCookies = false, AllowAutoRedirect = false });
+        client.DefaultRequestHeaders.Add("Cookie", "schedule=" + old);
+        var cart = Browser.Html(await client.GetStringAsync("/builder?handler=Cart"));
+        Assert.Equal([s.Code], cart.DocumentNode.SelectNodes("//a[@class='cart-code']")?.Select(n => n.InnerText.Trim()).ToList());
     }
 
     [Fact]
@@ -516,7 +536,7 @@ public class ScheduleTests(Site site) : IClassFixture<Site>
         doc.DocumentNode.SelectSingleNode($"//form[@id='browse']//select[@name='{name}']/option[@selected]")?.GetAttributeValue("value", null);
 
     [Fact]
-    public async Task TheTermIsPickedInTheSubtitleAndAnotherTermStartsAfresh()
+    public async Task TheTermIsPickedInTheSubtitleAndEachTermKeepsItsSchedule()
     {
         var newest = Term;
         var older = site.Catalogue.One("term <> @term AND times LIKE '%/%'", new { term = newest }).Term;
@@ -531,10 +551,12 @@ public class ScheduleTests(Site site) : IClassFixture<Site>
         await visitor.Add(site.Catalogue.Timed(older));
         await Browse(visitor, "main", older);
         Assert.Single(await visitor.Cart());
-        // Another term starts afresh: one schedule is one term.
+        // Another term has its own, empty, schedule; coming back finds the class still there.
         await Browse(visitor, "main", newest);
         Assert.Empty(await visitor.Cart());
         Assert.Equal(newest, Selected(await visitor.Page("/builder"), "term"));
+        await Browse(visitor, "main", older);
+        Assert.Single(await visitor.Cart());
     }
 
     [Fact]
@@ -548,12 +570,14 @@ public class ScheduleTests(Site site) : IClassFixture<Site>
         var asia = site.Catalogue.OnAsiaCampus(term);
         await visitor.Add(asia);
         Assert.Equal([asia.Code], await visitor.Cart());
-        // The same campus keeps the schedule; another starts afresh: one schedule is one campus.
+        // Each campus has its own schedule for the term: main's is empty, and the Asia one is still there on return.
         await Browse(visitor, "uac");
         Assert.Equal([asia.Code], await visitor.Cart());
         await Browse(visitor, "main");
         Assert.Empty(await visitor.Cart());
         Assert.Equal("main", Selected(await visitor.Page("/builder"), "campus"));
+        await Browse(visitor, "uac");
+        Assert.Equal([asia.Code], await visitor.Cart());
     }
 
     [Fact]

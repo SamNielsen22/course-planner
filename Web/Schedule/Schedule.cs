@@ -44,15 +44,16 @@ public record BuiltSchedule
 }
 
 /// <summary>
-/// Where a schedule lives: a signed cookie holding section keys and breaks for
-/// one term and campus. The details are looked up fresh on every read, so a
-/// re-crawl changes what the cart shows and never what it holds.
+/// Where the schedules live: a signed cookie holding section keys for each
+/// term and campus the visitor has built in, the breaks (shared by all), and
+/// which term and campus the builder is on. The details are looked up fresh on
+/// every read, so a re-crawl changes what the cart shows and never what it holds.
 /// </summary>
 public class ScheduleStore(IHttpContextAccessor accessor, IDataProtectionProvider protection, SectionIndex sections)
 {
     private const string CookieName = "schedule";
 
-    // Caps keep the cookie under the browser's 4KB limit.
+    // Caps keep the cookie under the browser's 4KB limit. Sections are counted across every term.
     private const int MaxSections = 40;
     private const int MaxBreaks = 12;
     private const int MaxBreakName = 40;
@@ -63,35 +64,73 @@ public class ScheduleStore(IHttpContextAccessor accessor, IDataProtectionProvide
     // Bumping "v1" retires every old cookie at once.
     private readonly IDataProtector _protector = protection.CreateProtector("Web.Schedule.v1");
 
-    /// <summary>The cookie's contents: section keys, breaks, term and campus.</summary>
-    private sealed record Stored(List<string> S, List<Break> B, string? T = null, string? C = null);
+    /// <summary>
+    /// The cookie's contents: the section keys of each schedule under "term|campus",
+    /// the breaks, and the term and campus the builder is on. S is the one list
+    /// cookies held before schedules were kept per term (2026-10-19); it is read
+    /// once and moved into P.
+    /// </summary>
+    private sealed record Jar(Dictionary<string, List<string>> P, List<Break> B, string? T = null, string? C = null,
+                              List<string>? S = null);
 
-    // A write earlier in this request, since Request.Cookies still holds what the browser sent.
-    private Stored? _written;
+    /// <summary>One schedule as the rest of this class works on it: its sections, the breaks, its term and campus.</summary>
+    private sealed record Stored(List<string> S, List<Break> B, string? T, string C);
+
+    // The cookie as read, or as written earlier in this request (Request.Cookies still holds what the browser sent).
+    private Jar? _jar;
 
     private HttpContext Http =>
         accessor.HttpContext ?? throw new InvalidOperationException("no request in progress");
 
-    private Stored Read()
+    private static string Slot(string? term, string campus) => $"{term}|{campus}";
+
+    private Jar ReadJar()
     {
-        if (_written is not null) return _written;
+        if (_jar is not null) return _jar;
+        var jar = new Jar([], []);
         var raw = Http.Request.Cookies[CookieName];
-        if (string.IsNullOrEmpty(raw)) return new([], []);
         // An unreadable cookie is an empty schedule, not an error.
-        try
+        if (!string.IsNullOrEmpty(raw))
         {
-            return JsonSerializer.Deserialize<Stored>(_protector.Unprotect(raw)) ?? new([], []);
+            try { jar = JsonSerializer.Deserialize<Jar>(_protector.Unprotect(raw)) ?? jar; }
+            catch (Exception e) when (e is System.Security.Cryptography.CryptographicException or JsonException) { }
         }
-        catch (Exception e) when (e is System.Security.Cryptography.CryptographicException or JsonException)
+        // A field the cookie lacks (P, on cookies from before) deserialises as null.
+        jar = jar with { P = jar.P ?? [], B = jar.B ?? [] };
+        if (jar.S is { Count: > 0 })
         {
-            return new([], []);
+            // A cookie from before: its one list belongs to the term and campus it was built in.
+            var first = jar.S.FirstOrDefault(k => !IsMarker(k));
+            var term = jar.T ?? (first is null ? null : TermOf(first));
+            var campus = jar.C ?? (first is null ? null : sections.Find(first)?.Campus) ?? Web.Pages.Campus.Main;
+            jar.P[Slot(term, campus)] = jar.S;
+            jar = jar with { T = term, C = campus, S = null };
         }
+        return _jar = jar;
     }
 
+    /// <summary>The schedule for a term on the current campus; the builder's own term when none is named.</summary>
+    private Stored Read(string? term = null)
+    {
+        var jar = ReadJar();
+        var campus = jar.C ?? Web.Pages.Campus.Main;
+        term ??= jar.T;
+        return new Stored(jar.P.GetValueOrDefault(Slot(term, campus)) ?? [], jar.B, term, campus);
+    }
+
+    /// <summary>Put a schedule back and make its term and campus the builder's.</summary>
     private void Write(Stored stored)
     {
-        _written = stored;
-        Http.Response.Cookies.Append(CookieName, _protector.Protect(JsonSerializer.Serialize(stored)), new CookieOptions
+        var jar = ReadJar();
+        var slot = Slot(stored.T, stored.C);
+        if (stored.S.Count == 0) jar.P.Remove(slot); else jar.P[slot] = stored.S;
+        WriteJar(jar with { B = stored.B, T = stored.T, C = stored.C });
+    }
+
+    private void WriteJar(Jar jar)
+    {
+        _jar = jar;
+        Http.Response.Cookies.Append(CookieName, _protector.Protect(JsonSerializer.Serialize(jar)), new CookieOptions
         {
             HttpOnly = true,
             SameSite = SameSiteMode.Lax,
@@ -104,20 +143,14 @@ public class ScheduleStore(IHttpContextAccessor accessor, IDataProtectionProvide
 
     private static string TermOf(string key) => key[..key.IndexOf('|')];
 
-    /// <summary>The campus: as chosen, else that of the first class, else main.</summary>
-    private string CampusOf(Stored stored) =>
-        stored.C ?? stored.S.Select(k => sections.Find(k)?.Campus).FirstOrDefault(c => c is not null) ?? Web.Pages.Campus.Main;
-
-    /// <summary>The term and campus to build for. A different campus or term starts a new schedule; breaks stay.</summary>
+    /// <summary>The term and campus to build for. Each keeps its own schedule, so switching loses nothing.</summary>
     public void Start(string campus, string? term)
     {
-        var stored = Read();
-        if (CampusOf(stored) != campus) stored.S.Clear();
-        if (term is not null && stored.S.Any(k => !IsMarker(k) && TermOf(k) != term)) stored.S.Clear();
-        Write(stored with { C = campus, T = term ?? stored.T });
+        var jar = ReadJar();
+        WriteJar(jar with { C = campus, T = term ?? jar.T });
     }
 
-    /// <summary>The schedule, filled in from the current catalogue.</summary>
+    /// <summary>The schedule the builder is on, filled in from the current catalogue.</summary>
     public BuiltSchedule Current => Hydrate(Read());
 
     /// <summary>Keys to sections, with today's titles, times, rooms and professors.</summary>
@@ -134,7 +167,7 @@ public class ScheduleStore(IHttpContextAccessor accessor, IDataProtectionProvide
         return new BuiltSchedule
         {
             Term = stored.T ?? picked.FirstOrDefault()?.Term,
-            Campus = CampusOf(stored),
+            Campus = stored.C,
             Sections = picked,
             Breaks = stored.B,
         };
@@ -158,19 +191,18 @@ public class ScheduleStore(IHttpContextAccessor accessor, IDataProtectionProvide
         return sep < 0 ? null : (rest[..sep], rest[(sep + 1)..]);
     }
 
-    /// <summary>How many real sections are in the schedule, markers aside.</summary>
-    private static int SectionCount(Stored s) => s.S.Count(k => !IsMarker(k));
+    /// <summary>How many real sections the cookie holds across every term, markers aside.</summary>
+    private int SectionCount() => ReadJar().P.Values.Sum(s => s.Count(k => !IsMarker(k)));
 
+    /// <summary>Add a section to its term's schedule, which the builder then shows.</summary>
     public void Add(string key)
     {
         if (sections.Find(key) is not { } section) return;
-        var stored = Read();
+        var stored = Read(TermOf(key));
         if (stored.S.Contains(key)) return;
         // One schedule is one campus; a key from another is ignored.
-        if (CampusOf(stored) != section.Campus) return;
-        stored = stored with { C = section.Campus };
-        RemoveForNewTerm(stored, TermOf(key));   // a new term starts a new schedule
-        if (SectionCount(stored) >= MaxSections) return;
+        if (stored.C != section.Campus) return;
+        if (SectionCount() >= MaxSections) return;
         stored.S.Add(key);
         Write(stored);
     }
@@ -183,14 +215,12 @@ public class ScheduleStore(IHttpContextAccessor accessor, IDataProtectionProvide
     public void AddPair(string lectureKey, string companionKey)
     {
         if (sections.Find(lectureKey) is not { } lecture || sections.Find(companionKey) is null) return;
-        var stored = Read();
-        if (CampusOf(stored) != lecture.Campus) return;
-        stored = stored with { C = lecture.Campus };
-        RemoveForNewTerm(stored, TermOf(lectureKey));
+        var stored = Read(TermOf(lectureKey));
+        if (stored.C != lecture.Campus) return;
 
         // Drop any earlier choice for this lecture, then add the two together.
         DetachLecture(stored, lectureKey);
-        if (SectionCount(stored) >= MaxSections) return;
+        if (SectionCount() >= MaxSections) return;
         if (!stored.S.Contains(lectureKey)) stored.S.Add(lectureKey);
         if (!stored.S.Contains(companionKey)) stored.S.Add(companionKey);
         stored.S.Add(Marker(companionKey, lectureKey));
@@ -227,11 +257,6 @@ public class ScheduleStore(IHttpContextAccessor accessor, IDataProtectionProvide
         stored.S.RemoveAll(e => e == lectureKey || companions.Contains(e)
             || (ParseMarker(e) is { } m && m.Lecture == lectureKey));
     }
-
-    /// <summary>Clear the schedule when the added key is in a different term. Markers of dropped sections go too.</summary>
-    private static void RemoveForNewTerm(Stored stored, string term) =>
-        stored.S.RemoveAll(k => IsMarker(k) ? ParseMarker(k) is { } m && (TermOf(m.Companion) != term || TermOf(m.Lecture) != term)
-                                            : TermOf(k) != term);
 
     public void AddBreak(string name, string days, string from, string until)
     {
