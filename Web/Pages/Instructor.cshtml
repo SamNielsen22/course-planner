@@ -56,16 +56,6 @@ else
             {
                 <partial name="_GradeStats" model="block.Grades"/>
 
-                @* The average counts every student, the bars only groups of five or more. If they're far apart, say so. *@
-                @if (block.Grades.HasHiddenGrades)
-                {
-                    <p class="note">
-                        The bars total fewer students than the average is computed over. The
-                        University withholds any grade group with fewer than five students,
-                        so small groups of lower grades are missing from the chart while
-                        still counting toward the average.
-                    </p>
-                }
             }
         </div>
     }
