@@ -13,9 +13,20 @@ public class GradeIndex(CourseQueries db)
         double Avg, double? P25, double? P50, double? P75, double? Sd,
         int A, int B, int C, int D, int E, int Cr, int Nc, int W, int Other)
     {
-        /// <summary>Students with a letter grade, the weight for pooling.</summary>
+        /// <summary>Students with a letter grade, as published.</summary>
         public int Graded => A + B + C + D + E;
+
+        /// <summary>
+        /// The row's weight when pooled. A section whose every count was blanked
+        /// still had students - between one and four per grade - and its average
+        /// is published; weighing it as nothing would drop it from the pool
+        /// entirely. Five, the suppression threshold, matches the registrar's
+        /// own course totals best (checked 2026-10-21 against 6,000 of them).
+        /// </summary>
+        public int Weight => Graded > 0 ? Graded : SuppressedWeight;
     }
+
+    public const int SuppressedWeight = 5;
 
     private sealed record Snapshot(
         Dictionary<string, Row> Sections,                  // term|subject|number|section
@@ -135,8 +146,8 @@ public class GradeIndex(CourseQueries db)
             return new GradeDistribution(r.A, r.B, r.C, r.D, r.E, r.Cr, r.Nc, r.W, r.Other,
                                          r.Avg, r.P25, r.P50, r.P75, r.Sd);
         }
-        var graded = rows.Sum(r => (double)r.Graded);
-        double? avg = graded > 0 ? rows.Sum(r => r.Avg * r.Graded) / graded : null;
+        var weight = rows.Sum(r => (double)r.Weight);
+        double? avg = rows.Sum(r => r.Avg * r.Weight) / weight;
         return new GradeDistribution(
             rows.Sum(r => r.A), rows.Sum(r => r.B), rows.Sum(r => r.C), rows.Sum(r => r.D), rows.Sum(r => r.E),
             rows.Sum(r => r.Cr), rows.Sum(r => r.Nc), rows.Sum(r => r.W), rows.Sum(r => r.Other),
