@@ -333,13 +333,16 @@
         for (const c of choices) {
             const li = document.createElement('li');
             const full = (c.seats !== null && c.seats <= 0);
+            const dim = full || c.clashes;
             li.innerHTML =
-                '<button type="button" class="companion-pick" data-section="' + c.section + '"' + (full ? ' data-full="1"' : '') + '>'
+                '<button type="button" class="companion-pick" data-section="' + c.section + '"' + (dim ? ' data-full="1"' : '') + '>'
                 + '<span class="companion-sec">Section ' + c.section + '</span>'
                 + '<span class="companion-when">' + (c.times ? c.times : 'No meeting time')
                 + (c.location ? ' &middot; ' + c.location : '') + '</span>'
                 + (c.professor ? '<span class="companion-who">' + c.professor + '</span>' : '')
-                + '<span class="companion-seats ' + (full ? 'full' : 'open') + '">' + seatLabel(c.seats) + '</span>'
+                + (c.clashes
+                    ? '<span class="companion-seats clash">Time conflict</span>'
+                    : '<span class="companion-seats ' + (full ? 'full' : 'open') + '">' + seatLabel(c.seats) + '</span>')
                 + '</button>';
             companionList.appendChild(li);
         }

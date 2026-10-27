@@ -495,6 +495,7 @@ main:has(> .hero) {
 .companion-seats { grid-column: 2; grid-row: 1 / span 3; align-self: center; font-size: .72rem; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; }
 .companion-seats.open { color: var(--ok, #2e7d32); }
 .companion-seats.full { color: var(--label); }
+.companion-seats.clash { color: var(--label); }
 .sc-meet { background: var(--panel); }
 
 .sc-units {

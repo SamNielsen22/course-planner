@@ -115,6 +115,26 @@ public class ScheduleTests(Site site) : IClassFixture<Site>
     }
 
     [Fact]
+    public async Task TheChooserMarksACompanionThatRunsIntoABreak()
+    {
+        var (lecture, companion) = site.Catalogue.LectureWithCompanion(Term);
+        var times = site.Catalogue.One("term = @term AND subject = @subject AND course_number = @number AND section_number = @section",
+                                       new { term = Term, subject = lecture.Subject, number = lecture.Number, section = companion }).Times;
+        var meeting = Meetings.Parse(times)[0];
+        var key = $"{lecture.Term}|{lecture.Subject}|{lecture.Number}|{lecture.Number2}";
+        static bool Clashes(System.Text.Json.JsonElement choices, string section) =>
+            choices.EnumerateArray().First(c => c.GetProperty("section").GetString() == section).GetProperty("clashes").GetBoolean();
+
+        var visitor = site.Visitor();
+        Assert.False(Clashes((await visitor.CompanionData(lecture.Code, Term)).GetProperty(key), companion));
+        // A break over the companion's first meeting: the choice is marked, not removed.
+        await visitor.AddBreak("Skiing", meeting.DayCodes[0], $"{meeting.Start / 60:00}:{meeting.Start % 60:00}", $"{meeting.End / 60:00}:{meeting.End % 60:00}");
+        var choices = (await visitor.CompanionData(lecture.Code, Term)).GetProperty(key);
+        Assert.True(Clashes(choices, companion));
+        Assert.Contains(companion, choices.EnumerateArray().Select(c => c.GetProperty("section").GetString()));
+    }
+
+    [Fact]
     public async Task AnAddedSectionIsInTheCartAndOnTheGrid()
     {
         var s = site.Catalogue.OnWeekdaysOnly(Term);

@@ -248,6 +248,8 @@ public class BuilderAddModel(CourseQueries db, SiteIndex site, SectionIndex sect
                     seats = s.SeatsAvailable,
                     professor = Names.Line(s.Instructors.Select(i => Names.Natural(i.Name)).ToList()),
                     published,
+                    // Against the schedule and its breaks, as the cards are; the chooser dims these.
+                    clashes = Meetings.Clashes(s.Times, Cart),
                 };
             }).ToList();
         }
