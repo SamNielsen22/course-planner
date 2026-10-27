@@ -29,3 +29,5 @@ skills-lock.json
 
 # Build output, produced by dotnet publish.
 publish/
+
+.DS_Store
