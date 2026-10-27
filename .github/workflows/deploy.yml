@@ -1,12 +1,11 @@
-# Build a container image on every push to main, but only after the tests that
-# can run without the crawled catalogue have passed.
+# Run the tests that can run without the crawled catalogue on every push to main.
 #
 # Web.Tests is deliberately not run here: it needs data/courseplanner.db, which
 # is 58 MB of crawled data and rightly not in git, and its fixture throws rather
 # than skips when the file is absent. Run it locally before pushing.
 # ScraperTests builds its own synthetic database, so it runs anywhere.
 
-name: build
+name: test
 
 on:
   push:
@@ -14,11 +13,10 @@ on:
   workflow_dispatch:
 
 jobs:
-  test-and-publish:
+  test:
     runs-on: ubuntu-latest
     permissions:
       contents: read
-      packages: write        # to push to ghcr.io
 
     steps:
       - uses: actions/checkout@v4
@@ -29,31 +27,3 @@ jobs:
 
       - name: Test the ingest and query logic
         run: dotnet test ScraperTests -c Release
-
-      - name: Log in to the container registry
-        uses: docker/login-action@v3
-        with:
-          registry: ghcr.io
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
-
-      # Docker requires a lowercase repository name, and a GitHub username may
-      # carry capitals - SamNielsen22 here - so github.repository_owner cannot
-      # be used in a tag directly.
-      - name: Lowercase the owner for the image name
-        run: echo "owner=${GITHUB_REPOSITORY_OWNER,,}" >> "$GITHUB_ENV"
-
-      # Tagged with the commit as well as latest, so a server can be pinned to
-      # a known-good build and rolled back by changing one line in its .env.
-      - name: Build and push the image
-        uses: docker/build-push-action@v6
-        with:
-          context: .
-          push: true
-          tags: |
-            ghcr.io/${{ env.owner }}/coursecompass:latest
-            ghcr.io/${{ env.owner }}/coursecompass:${{ github.sha }}
-          # No layer cache: the GitHub Actions cache backend fails the build
-          # outright ("buildx failed ... build-cache-backends"), and a cold
-          # .NET build here takes a couple of minutes, which costs nothing on
-          # a push-to-deploy flow.
